@@ -1,21 +1,21 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { AmbientLight, BackSide, Box3, BoxGeometry, Color, DirectionalLight, Euler, Material, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, Object3D, PerspectiveCamera, PlaneGeometry, Raycaster, Scene, SpotLight, Vector2, Vector3, WebGLRenderer, AdditiveBlending } from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Injectable } from '@angular/core';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SceneService {
-  private scene!: THREE.Scene;
-  private camera!: THREE.PerspectiveCamera;
-  private renderer!: THREE.WebGLRenderer;
+  private scene!: Scene;
+  private camera!: PerspectiveCamera;
+  private renderer!: WebGLRenderer;
   private controls!: OrbitControls;
-  private raycaster: THREE.Raycaster;
+  private raycaster: Raycaster;
   private loader: GLTFLoader;
-  private objects: Map<THREE.Object3D, { name: string; description: string }>;
-  private outlineMaterial: THREE.Material;
-  private outlineMesh: THREE.Mesh | null = null;
+  private objects: Map<Object3D, { name: string; description: string }>;
+  private outlineMaterial: Material;
+  private outlineMesh: Mesh | null = null;
   private initialCameraHeight = 1.7; // Store initial camera height
   private isAnimating = false;
   private isOrbitEnabled = true;
@@ -28,32 +28,32 @@ export class SceneService {
   };
 
   constructor() {
-    this.raycaster = new THREE.Raycaster();
+    this.raycaster = new Raycaster();
     this.loader = new GLTFLoader();
     this.objects = new Map();
     
     // Create outline material for selected objects with a more elegant style
-    this.outlineMaterial = new THREE.MeshBasicMaterial({
+    this.outlineMaterial = new MeshBasicMaterial({
       color: 0x2c4a52, // Deep teal color matching our UI
-      side: THREE.BackSide,
+      side: BackSide,
       transparent: true,
       opacity: 0.3,
-      blending: THREE.AdditiveBlending,
+      blending: AdditiveBlending,
       depthWrite: false
     });
   }
 
   public initialize(canvas: HTMLCanvasElement): void {
     // Scene setup
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xf0f0f0);
+    this.scene = new Scene();
+    this.scene.background = new Color(0xf0f0f0);
 
     // Camera setup with better initial position
-    this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.camera = new PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.set(0, this.initialCameraHeight, 3);
 
     // Renderer setup
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer = new WebGLRenderer({ canvas, antialias: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
 
@@ -77,10 +77,10 @@ export class SceneService {
     });
 
     // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new AmbientLight(0xffffff, 0.5);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(5, 5, 5);
     directionalLight.castShadow = true;
     this.scene.add(directionalLight);
@@ -112,7 +112,7 @@ export class SceneService {
     const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+    this.raycaster.setFromCamera(new Vector2(x, y), this.camera);
     
     // Get all intersected objects
     const intersects = this.raycaster.intersectObjects(this.scene.children, true);
@@ -162,24 +162,24 @@ export class SceneService {
     return null;
   }
 
-  private createOutline(object: THREE.Object3D): void {
+  private createOutline(object: Object3D): void {
     // Get the bounding box of the object
-    const bbox = new THREE.Box3().setFromObject(object);
-    const size = new THREE.Vector3();
+    const bbox = new Box3().setFromObject(object);
+    const size = new Vector3();
     bbox.getSize(size);
     
     // Create slightly larger geometry for outline
-    const outlineGeometry = new THREE.BoxGeometry(
+    const outlineGeometry = new BoxGeometry(
       size.x * 1.02, // Reduced scale for more subtle effect
       size.y * 1.02,
       size.z * 1.02
     );
     
     // Create outline mesh
-    this.outlineMesh = new THREE.Mesh(outlineGeometry, this.outlineMaterial);
+    this.outlineMesh = new Mesh(outlineGeometry, this.outlineMaterial);
     
     // Position outline at object's center
-    const center = new THREE.Vector3();
+    const center = new Vector3();
     bbox.getCenter(center);
     this.outlineMesh.position.copy(center);
     this.outlineMesh.quaternion.copy(object.quaternion);
@@ -196,7 +196,7 @@ export class SceneService {
     this.scene.add(this.outlineMesh);
   }
 
-  private teleportTo(position: THREE.Vector3): void {
+  private teleportTo(position: Vector3): void {
     if (this.isAnimating) return;
     
     // Validación final de posición más permisiva
@@ -232,7 +232,7 @@ export class SceneService {
       this.camera.position.copy(newPosition);
 
       // Actualizar el target de manera más suave
-      const targetPosition = new THREE.Vector3(
+      const targetPosition = new Vector3(
         newPosition.x,
         this.initialCameraHeight * 0.8,
         newPosition.z - 2 // Mirar siempre un poco hacia adelante
@@ -260,7 +260,7 @@ export class SceneService {
     return -0.5 * (t * (t - 2) - 1);
   }
 
-  public addObject(object: THREE.Object3D, name: string, description: string): void {
+  public addObject(object: Object3D, name: string, description: string): void {
     this.objects.set(object, { name, description });
   }
 
@@ -284,7 +284,7 @@ export class SceneService {
     const roomDepth = 16;
 
     // Create materials with better lighting properties
-    const floorMaterial = new THREE.MeshPhysicalMaterial({
+    const floorMaterial = new MeshPhysicalMaterial({
       color: floorColor,
       roughness: 0.7,
       metalness: 0.2,
@@ -292,7 +292,7 @@ export class SceneService {
       clearcoatRoughness: 0.4
     });
 
-    const mainWallMaterial = new THREE.MeshPhysicalMaterial({
+    const mainWallMaterial = new MeshPhysicalMaterial({
       color: mainWallColor,
       roughness: 0.95,
       metalness: 0.1,
@@ -300,7 +300,7 @@ export class SceneService {
       clearcoatRoughness: 0.5
     });
 
-    const accentWallMaterial = new THREE.MeshPhysicalMaterial({
+    const accentWallMaterial = new MeshPhysicalMaterial({
       color: accentWallColor,
       roughness: 0.9,
       metalness: 0.15,
@@ -308,7 +308,7 @@ export class SceneService {
       clearcoatRoughness: 0.3
     });
 
-    const secondaryWallMaterial = new THREE.MeshPhysicalMaterial({
+    const secondaryWallMaterial = new MeshPhysicalMaterial({
       color: secondaryWallColor,
       roughness: 0.95,
       metalness: 0.1,
@@ -316,7 +316,7 @@ export class SceneService {
       clearcoatRoughness: 0.5
     });
 
-    const ceilingMaterial = new THREE.MeshPhysicalMaterial({
+    const ceilingMaterial = new MeshPhysicalMaterial({
       color: ceilingColor,
       roughness: 0.9,
       metalness: 0.1,
@@ -325,16 +325,16 @@ export class SceneService {
     });
 
     // Create floor
-    const floorGeometry = new THREE.PlaneGeometry(roomWidth, roomDepth);
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    const floorGeometry = new PlaneGeometry(roomWidth, roomDepth);
+    const floor = new Mesh(floorGeometry, floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     floor.name = 'floor';
     this.scene.add(floor);
 
     // Create ceiling
-    const ceilingGeometry = new THREE.PlaneGeometry(roomWidth, roomDepth);
-    const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+    const ceilingGeometry = new PlaneGeometry(roomWidth, roomDepth);
+    const ceiling = new Mesh(ceilingGeometry, ceilingMaterial);
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = roomHeight;
     ceiling.receiveShadow = true;
@@ -342,16 +342,16 @@ export class SceneService {
 
     // Create walls
     // Back wall (accent wall - deep teal)
-    const backWallGeometry = new THREE.PlaneGeometry(roomWidth, roomHeight);
-    const backWall = new THREE.Mesh(backWallGeometry, accentWallMaterial);
+    const backWallGeometry = new PlaneGeometry(roomWidth, roomHeight);
+    const backWall = new Mesh(backWallGeometry, accentWallMaterial);
     backWall.position.z = -roomDepth / 2;
     backWall.position.y = roomHeight / 2;
     backWall.receiveShadow = true;
     this.scene.add(backWall);
 
     // Front wall (main wall - warm beige)
-    const frontWallGeometry = new THREE.PlaneGeometry(roomWidth, roomHeight);
-    const frontWall = new THREE.Mesh(frontWallGeometry, mainWallMaterial);
+    const frontWallGeometry = new PlaneGeometry(roomWidth, roomHeight);
+    const frontWall = new Mesh(frontWallGeometry, mainWallMaterial);
     frontWall.position.z = roomDepth / 2;
     frontWall.position.y = roomHeight / 2;
     frontWall.rotation.y = Math.PI;
@@ -359,8 +359,8 @@ export class SceneService {
     this.scene.add(frontWall);
 
     // Left wall (secondary wall - soft terracotta)
-    const leftWallGeometry = new THREE.PlaneGeometry(roomDepth, roomHeight);
-    const leftWall = new THREE.Mesh(leftWallGeometry, secondaryWallMaterial);
+    const leftWallGeometry = new PlaneGeometry(roomDepth, roomHeight);
+    const leftWall = new Mesh(leftWallGeometry, secondaryWallMaterial);
     leftWall.position.x = -roomWidth / 2;
     leftWall.position.y = roomHeight / 2;
     leftWall.rotation.y = Math.PI / 2;
@@ -368,8 +368,8 @@ export class SceneService {
     this.scene.add(leftWall);
 
     // Right wall (main wall - warm beige)
-    const rightWallGeometry = new THREE.PlaneGeometry(roomDepth, roomHeight);
-    const rightWall = new THREE.Mesh(rightWallGeometry, mainWallMaterial);
+    const rightWallGeometry = new PlaneGeometry(roomDepth, roomHeight);
+    const rightWall = new Mesh(rightWallGeometry, mainWallMaterial);
     rightWall.position.x = roomWidth / 2;
     rightWall.position.y = roomHeight / 2;
     rightWall.rotation.y = -Math.PI / 2;
@@ -378,12 +378,12 @@ export class SceneService {
 
     // Modern lighting setup
     // Main ceiling light with warmer tone
-    const mainLight = new THREE.SpotLight(0xfff4e6, 1);
+    const mainLight = new SpotLight(0xfff4e6, 1);
     mainLight.position.set(0, roomHeight - 0.1, 0);
     mainLight.angle = Math.PI / 3;
     mainLight.penumbra = 0.7;
     mainLight.decay = 1.5;
-    mainLight.distance = roomWidth;
+    mainLight.distance = roomHeight * 2;
     mainLight.castShadow = true;
     mainLight.shadow.bias = -0.001;
     mainLight.shadow.mapSize.width = 2048;
@@ -391,52 +391,54 @@ export class SceneService {
     this.scene.add(mainLight);
 
     // Accent lighting for the teal wall
-    const accentLight1 = new THREE.SpotLight(0xffffff, 0.6);
+    const accentLight1 = new SpotLight(0xffffff, 0.6);
     accentLight1.position.set(-roomWidth / 4, roomHeight - 0.2, -roomDepth / 2 + 1);
     accentLight1.target.position.set(-roomWidth / 4, 0, -roomDepth / 2);
     accentLight1.angle = Math.PI / 6;
-    accentLight1.penumbra = 0.8;
+    accentLight1.penumbra = 0.5;
     accentLight1.decay = 1.5;
-    accentLight1.distance = roomHeight * 2;
+    accentLight1.distance = roomHeight * 1.5;
+    accentLight1.castShadow = true;
     this.scene.add(accentLight1);
     this.scene.add(accentLight1.target);
 
-    const accentLight2 = new THREE.SpotLight(0xffffff, 0.6);
+    const accentLight2 = new SpotLight(0xffffff, 0.6);
     accentLight2.position.set(roomWidth / 4, roomHeight - 0.2, -roomDepth / 2 + 1);
     accentLight2.target.position.set(roomWidth / 4, 0, -roomDepth / 2);
     accentLight2.angle = Math.PI / 6;
-    accentLight2.penumbra = 0.8;
+    accentLight2.penumbra = 0.5;
     accentLight2.decay = 1.5;
-    accentLight2.distance = roomHeight * 2;
+    accentLight2.distance = roomHeight * 1.5;
+    accentLight2.castShadow = true;
     this.scene.add(accentLight2);
     this.scene.add(accentLight2.target);
 
     // Warm ambient light for better overall illumination
-    const ambientLight = new THREE.AmbientLight(0xfff4e6, 0.4);
+    const ambientLight = new AmbientLight(0xfff4e6, 0.4);
     this.scene.add(ambientLight);
 
     // Add subtle ambient occlusion with warmer undertones
-    const aoLight = new THREE.HemisphereLight(0xfff4e6, 0x444444, 0.5);
+    const aoLight = new AmbientLight(0xfff4e6, 0.4);
     this.scene.add(aoLight);
   }
 
-  getObjectInfo(object: THREE.Object3D): { name: string, description: string } | undefined {
+  getObjectInfo(object: Object3D): { name: string, description: string } | undefined {
     return this.objects.get(object);
   }
 
-  getRaycaster(): THREE.Raycaster {
+  getRaycaster(): Raycaster {
     return this.raycaster;
   }
 
-  getScene(): THREE.Scene {
+  getScene(): Scene {
     return this.scene;
   }
 
-  getCamera(): THREE.PerspectiveCamera {
+  getCamera(): PerspectiveCamera {
     return this.camera;
   }
 
-  public async loadModel(path: string, position: THREE.Vector3, scale: number = 1, rotation: THREE.Euler = new THREE.Euler()): Promise<THREE.Object3D> {
+  public async loadModel(path: string, position: Vector3, scale: number = 1, rotation: Euler = new Euler()): Promise<Object3D> {
     return new Promise((resolve, reject) => {
       const cleanPath = path.replace(/^\/+/, '');
       
@@ -451,20 +453,20 @@ export class SceneService {
           model.scale.setScalar(scale);
 
           // Center model if needed
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
+          const box = new Box3().setFromObject(model);
+          const center = box.getCenter(new Vector3());
           model.position.sub(center).add(position);
 
           // Apply shadows to all meshes
           model.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              const mesh = child as THREE.Mesh;
+            if ((child as Mesh).isMesh) {
+              const mesh = child as Mesh;
               mesh.castShadow = true;
               mesh.receiveShadow = true;
 
               // Update materials for better rendering
               if (mesh.material) {
-                const material = mesh.material as THREE.Material;
+                const material = mesh.material as Material;
                 material.needsUpdate = true;
               }
             }
@@ -499,7 +501,7 @@ export class SceneService {
 
     // Clean up geometries and materials
     this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
+      if (object instanceof Mesh) {
         if (object.geometry) {
           object.geometry.dispose();
         }

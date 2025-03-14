@@ -18,6 +18,13 @@
     "target": "ES2022",
     "module": "ES2022",
     "useDefineForClassFields": false,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "./",
+    "paths": {
+      "three": ["node_modules/three"],
+      "three/*": ["node_modules/three/*"]
+    },
+    "types": ["three"],
     "lib": [
       "ES2022",
       "dom"
