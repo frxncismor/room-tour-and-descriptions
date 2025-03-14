@@ -1,13 +1,27 @@
-<div class="viewer-container" (click)="onClick($event)">
-  <canvas #rendererCanvas></canvas>
+<div class="viewer-container">
+  <canvas #canvas class="scene-canvas"></canvas>
+
   <div class="object-info" *ngIf="selectedObject">
     <h3>{{ selectedObject.name }}</h3>
     <p>{{ selectedObject.description }}</p>
   </div>
-  <div class="controls-info" *ngIf="!isLocked">
-    <p>Haz click para iniciar</p>
-    <p>Usa W/A/S/D o las flechas para moverte</p>
-    <p>ESC para salir</p>
-    <p>Click en los objetos para ver su información</p>
+
+  <div class="controls-info" *ngIf="!hideInstructions">
+    <div class="controls-content">
+      <h2>Navegación</h2>
+      <div class="control-item">
+        <span class="icon">🖱️</span>
+        <p>Click izquierdo + arrastrar para rotar la vista</p>
+      </div>
+      <div class="control-item">
+        <span class="icon">👆</span>
+        <p>Click en el suelo para moverte</p>
+      </div>
+      <div class="control-item">
+        <span class="icon">🔍</span>
+        <p>Click en los muebles para ver detalles</p>
+      </div>
+      <button class="close-button" (click)="hideInstructions = true">Entendido</button>
+    </div>
   </div>
 </div>

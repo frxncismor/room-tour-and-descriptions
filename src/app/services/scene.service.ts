@@ -1,266 +1,273 @@
-import { Injectable } from '@angular/core';
 import * as THREE from 'three';
-import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { Injectable } from '@angular/core';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SceneService {
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private renderer: THREE.WebGLRenderer;
-  private controls!: PointerLockControls;
+  private scene!: THREE.Scene;
+  private camera!: THREE.PerspectiveCamera;
+  private renderer!: THREE.WebGLRenderer;
+  private controls!: OrbitControls;
   private raycaster: THREE.Raycaster;
-  private selectedObject: THREE.Object3D | null = null;
-  private objects: Map<THREE.Object3D, { name: string, description: string }> = new Map();
-  private walls: THREE.Mesh[] = [];
-  private clickableObjects = new Map<THREE.Object3D, { name: string; description: string }>();
-  private prevTime = performance.now();
-  private moveForward = false;
-  private moveBackward = false;
-  private moveLeft = false;
-  private moveRight = false;
-  private moveSpeed = 0.1;
-  private direction = new THREE.Vector3();
-  private velocity = new THREE.Vector3();
+  private loader: GLTFLoader;
+  private objects: Map<THREE.Object3D, { name: string; description: string }>;
+  private outlineMaterial: THREE.Material;
+  private outlineMesh: THREE.Mesh | null = null;
+  private initialCameraHeight = 1.7; // Store initial camera height
+  private isAnimating = false;
+  private isOrbitEnabled = true;
+
+  private readonly ROOM_LIMITS = {
+    minX: -8,
+    maxX: 8,
+    minZ: -8,
+    maxZ: 8
+  };
 
   constructor() {
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.raycaster = new THREE.Raycaster();
+    this.loader = new GLTFLoader();
+    this.objects = new Map();
+    
+    // Create outline material for selected objects with a more elegant style
+    this.outlineMaterial = new THREE.MeshBasicMaterial({
+      color: 0x2c4a52, // Deep teal color matching our UI
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.3,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
   }
 
-  public initialize(container: HTMLElement): void {
-    console.log('Initializing scene with container:', container);
-    
-    // Setup scene
+  public initialize(canvas: HTMLCanvasElement): void {
+    // Scene setup
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xf0f0f0);
 
-    // Setup camera with better initial position for viewing the room
-    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    this.camera.position.set(0, 1.6, 5); // Move camera back to see the room
-    this.camera.lookAt(new THREE.Vector3(0, 1.6, 0));
+    // Camera setup with better initial position
+    this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.camera.position.set(0, this.initialCameraHeight, 3);
 
-    // Setup renderer with better quality
-    if (!(container instanceof HTMLCanvasElement)) {
-      console.error('Container is not a canvas element:', container);
-      return;
-    }
-    
-    this.renderer = new THREE.WebGLRenderer({ 
-      canvas: container,
-      antialias: true,
-      alpha: true,
-      preserveDrawingBuffer: true
-    });
-    
-    // Set renderer size and pixel ratio
-    const rect = container.getBoundingClientRect();
-    this.renderer.setSize(rect.width, rect.height, false);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    
-    // Enable shadows
+    // Renderer setup
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // Setup controls
-    this.controls = new PointerLockControls(this.camera, this.renderer.domElement);
-    
-    // Setup lighting for better visibility
-    const ambientLight = new THREE.AmbientLight(0x404040, 2);
+    // Controls setup with smoother constraints
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.1;
+    this.controls.minDistance = 1;
+    this.controls.maxDistance = 10;
+    this.controls.maxPolarAngle = Math.PI / 2.1;
+    this.controls.minPolarAngle = 0.1;
+    this.controls.target.y = this.initialCameraHeight * 0.8;
+    this.controls.rotateSpeed = 0.7;
+    this.controls.enablePan = false; // Disable panning
+
+    // Add event listener for control changes
+    this.controls.addEventListener('change', () => {
+      // Maintain camera height during orbit
+      this.camera.position.y = this.initialCameraHeight;
+      this.controls.target.y = this.initialCameraHeight * 0.8;
+    });
+
+    // Add lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(5, 5, 5);
     directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 50;
-    directionalLight.shadow.bias = -0.0001;
     this.scene.add(directionalLight);
 
-    // Add fill lights for better visibility
-    const fillLight1 = new THREE.DirectionalLight(0xffffff, 1);
-    fillLight1.position.set(-5, 3, -5);
-    this.scene.add(fillLight1);
-
-    const fillLight2 = new THREE.DirectionalLight(0xffffff, 1);
-    fillLight2.position.set(5, 3, -5);
-    this.scene.add(fillLight2);
-
-    // Create room
+    // Create room and start animation
     this.createRoom();
-
-    // Start animation loop
     this.animate();
 
     // Handle window resize
-    window.addEventListener('resize', () => this.onWindowResize());
-    
-    console.log('Scene initialized with camera position:', this.camera.position);
-  }
-
-  public async loadModel(path: string, position: THREE.Vector3, scale: number = 1, rotation: THREE.Euler = new THREE.Euler()): Promise<THREE.Object3D> {
-    return new Promise((resolve, reject) => {
-      const cleanPath = path.replace(/^\/+/, '');
-      const loader = new GLTFLoader();
-      
-      console.log('Loading model from path:', cleanPath);
-      
-      loader.load(
-        cleanPath,
-        (gltf: GLTF) => {
-          const model = gltf.scene;
-          
-          // Apply transformations
-          model.position.copy(position);
-          model.rotation.copy(rotation);
-          model.scale.setScalar(scale);
-
-          // Center model if needed
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          model.position.sub(center).add(position);
-
-          // Apply shadows to all meshes
-          model.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              const mesh = child as THREE.Mesh;
-              mesh.castShadow = true;
-              mesh.receiveShadow = true;
-
-              // Update materials for better rendering
-              if (mesh.material) {
-                const material = mesh.material as THREE.Material;
-                material.needsUpdate = true;
-              }
-            }
-          });
-
-          this.scene.add(model);
-          console.log(`Model loaded successfully: ${path}`);
-          resolve(model);
-        },
-        (progress) => {
-          const percent = (progress.loaded / progress.total) * 100;
-          console.log(`Loading progress for ${path}: ${percent.toFixed(2)}%`);
-        },
-        (error) => {
-          console.error(`Error loading model ${path}:`, error);
-          reject(error);
-        }
-      );
+    window.addEventListener('resize', () => {
+      this.camera.aspect = window.innerWidth / window.innerHeight;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
   }
 
-  // Movement control methods
-  public setMoveForward(moving: boolean): void {
-    this.moveForward = moving;
-  }
-
-  public setMoveBackward(moving: boolean): void {
-    this.moveBackward = moving;
-  }
-
-  public setMoveLeft(moving: boolean): void {
-    this.moveLeft = moving;
-  }
-
-  public setMoveRight(moving: boolean): void {
-    this.moveRight = moving;
-  }
-
-  public lockControls(): void {
-    this.controls.lock();
-  }
-
-  public isLocked(): boolean {
-    return this.controls.isLocked;
+  private onWindowResize(): void {
+    if (this.camera && this.renderer) {
+      this.camera.aspect = window.innerWidth / window.innerHeight;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
   }
 
   public onMouseClick(event: MouseEvent): { name: string; description: string } | null {
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
+    if (this.isAnimating) return null; // Prevent clicks during animation
 
-    // Calculate mouse position in normalized device coordinates
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-    raycaster.setFromCamera(mouse, this.camera);
+    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+    
+    // Get all intersected objects
+    const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+    
+    // Remove previous outline if it exists
+    if (this.outlineMesh) {
+      this.scene.remove(this.outlineMesh);
+      this.outlineMesh = null;
+    }
 
-    // Get all objects that can be clicked
-    const objects = Array.from(this.clickableObjects.keys());
-    const intersects = raycaster.intersectObjects(objects, true);
+    for (const intersect of intersects) {
+      let object = intersect.object;
+      
+      // Check if we clicked on the floor for teleportation
+      if (object.name === 'floor') {
+        const targetPosition = intersect.point.clone();
+        
+        // Más permisivo con los límites pero manteniendo seguridad
+        const clampedX = Math.max(this.ROOM_LIMITS.minX + 1.5, Math.min(this.ROOM_LIMITS.maxX - 1.5, targetPosition.x));
+        const clampedZ = Math.max(this.ROOM_LIMITS.minZ + 1.5, Math.min(this.ROOM_LIMITS.maxZ - 1.5, targetPosition.z));
+        
+        // Solo validamos si está muy fuera de los límites
+        if (Math.abs(clampedX - targetPosition.x) > 2 || Math.abs(clampedZ - targetPosition.z) > 2) {
+          return null; // Prevent teleportation outside bounds
+        }
 
-    if (intersects.length > 0) {
-      // Find the parent object that is in our clickableObjects map
-      let clickedObject = intersects[0].object;
-      while (clickedObject && !this.clickableObjects.has(clickedObject)) {
-        clickedObject = clickedObject.parent!;
+        targetPosition.x = clampedX;
+        targetPosition.z = clampedZ;
+        targetPosition.y = this.initialCameraHeight;
+
+        this.teleportTo(targetPosition);
+        return null;
       }
 
-      if (clickedObject && this.clickableObjects.has(clickedObject)) {
-        return this.clickableObjects.get(clickedObject)!;
+      // Find the root object (the loaded model)
+      while (object.parent && !this.objects.has(object)) {
+        object = object.parent;
+      }
+
+      if (this.objects.has(object)) {
+        // Create outline for selected object
+        this.createOutline(object);
+        return this.objects.get(object) || null;
       }
     }
 
     return null;
   }
 
+  private createOutline(object: THREE.Object3D): void {
+    // Get the bounding box of the object
+    const bbox = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+    
+    // Create slightly larger geometry for outline
+    const outlineGeometry = new THREE.BoxGeometry(
+      size.x * 1.02, // Reduced scale for more subtle effect
+      size.y * 1.02,
+      size.z * 1.02
+    );
+    
+    // Create outline mesh
+    this.outlineMesh = new THREE.Mesh(outlineGeometry, this.outlineMaterial);
+    
+    // Position outline at object's center
+    const center = new THREE.Vector3();
+    bbox.getCenter(center);
+    this.outlineMesh.position.copy(center);
+    this.outlineMesh.quaternion.copy(object.quaternion);
+
+    // Add subtle animation
+    const animate = () => {
+      if (this.outlineMesh) {
+        this.outlineMaterial.opacity = 0.3 + Math.sin(Date.now() * 0.002) * 0.1;
+        requestAnimationFrame(animate);
+      }
+    };
+    animate();
+    
+    this.scene.add(this.outlineMesh);
+  }
+
+  private teleportTo(position: THREE.Vector3): void {
+    if (this.isAnimating) return;
+    
+    // Validación final de posición más permisiva
+    const clampedX = Math.max(this.ROOM_LIMITS.minX + 1.5, Math.min(this.ROOM_LIMITS.maxX - 1.5, position.x));
+    const clampedZ = Math.max(this.ROOM_LIMITS.minZ + 1.5, Math.min(this.ROOM_LIMITS.maxZ - 1.5, position.z));
+    
+    // Solo cancelamos si está muy fuera de los límites
+    if (Math.abs(clampedX - position.x) > 2 || Math.abs(clampedZ - position.z) > 2) {
+      return;
+    }
+
+    position.x = clampedX;
+    position.z = clampedZ;
+    position.y = this.initialCameraHeight;
+
+    this.isAnimating = true;
+    this.isOrbitEnabled = false;
+
+    const duration = 1200; // Movimiento más suave
+    const startPosition = this.camera.position.clone();
+    const startTime = Date.now();
+    const startRotation = this.camera.quaternion.clone();
+
+    const animate = () => {
+      const currentTime = Date.now();
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeProgress = this.easeInOutQuad(progress);
+
+      // Movimiento más suave de la cámara
+      const newPosition = startPosition.clone().lerp(position, easeProgress);
+      newPosition.y = this.initialCameraHeight;
+      this.camera.position.copy(newPosition);
+
+      // Actualizar el target de manera más suave
+      const targetPosition = new THREE.Vector3(
+        newPosition.x,
+        this.initialCameraHeight * 0.8,
+        newPosition.z - 2 // Mirar siempre un poco hacia adelante
+      );
+      this.controls.target.lerp(targetPosition, easeProgress);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        this.isAnimating = false;
+        this.isOrbitEnabled = true;
+        this.camera.position.y = this.initialCameraHeight;
+        this.controls.target.y = this.initialCameraHeight * 0.8;
+      }
+    };
+
+    animate();
+  }
+
+  // Función de suavizado mejorada
+  private easeInOutQuad(t: number): number {
+    t *= 2;
+    if (t < 1) return 0.5 * t * t;
+    t--;
+    return -0.5 * (t * (t - 2) - 1);
+  }
+
   public addObject(object: THREE.Object3D, name: string, description: string): void {
-    this.clickableObjects.set(object, { name, description });
+    this.objects.set(object, { name, description });
   }
 
   private animate(): void {
     requestAnimationFrame(() => this.animate());
-
-    // Handle movement
-    if (this.controls.isLocked) {
-      const velocity = new THREE.Vector3();
-      const direction = new THREE.Vector3();
-
-      // Get current camera direction
-      this.camera.getWorldDirection(direction);
-      direction.y = 0; // Keep movement in horizontal plane
-      direction.normalize();
-
-      // Calculate right vector (perpendicular to camera direction)
-      const right = new THREE.Vector3();
-      right.crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize(); // FORWARD × UP = RIGHT
-
-      // Apply movement based on key states
-      if (this.moveForward) velocity.add(direction.clone().multiplyScalar(this.moveSpeed));
-      if (this.moveBackward) velocity.add(direction.clone().multiplyScalar(-this.moveSpeed));
-      if (this.moveRight) velocity.add(right.clone().multiplyScalar(this.moveSpeed));
-      if (this.moveLeft) velocity.add(right.clone().multiplyScalar(-this.moveSpeed));
-
-      // Check collision before applying movement
-      const nextPosition = this.camera.position.clone().add(velocity);
-      if (!this.checkCollision(nextPosition)) {
-        this.camera.position.add(velocity);
-      }
-    }
-
+    this.controls.update();
     this.renderer.render(this.scene, this.camera);
-  }
-
-  private checkCollision(position: THREE.Vector3): boolean {
-    const playerRadius = 0.5;
-    const playerBoundingSphere = new THREE.Sphere(position, playerRadius);
-
-    // Check collision with walls
-    for (const wall of this.walls) {
-      const wallBox = new THREE.Box3().setFromObject(wall);
-      if (wallBox.intersectsSphere(playerBoundingSphere)) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   private createRoom(): void {
@@ -272,9 +279,9 @@ export class SceneService {
     const ceilingColor = 0xfaf4ec; // Warm off-white
 
     // Room dimensions
-    const roomWidth = 20;
+    const roomWidth = 16;
     const roomHeight = 4;
-    const roomDepth = 20;
+    const roomDepth = 16;
 
     // Create materials with better lighting properties
     const floorMaterial = new THREE.MeshPhysicalMaterial({
@@ -322,6 +329,7 @@ export class SceneService {
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
+    floor.name = 'floor';
     this.scene.add(floor);
 
     // Create ceiling
@@ -410,23 +418,6 @@ export class SceneService {
     // Add subtle ambient occlusion with warmer undertones
     const aoLight = new THREE.HemisphereLight(0xfff4e6, 0x444444, 0.5);
     this.scene.add(aoLight);
-
-    // Store walls for collision detection
-    this.walls = [backWall, frontWall, leftWall, rightWall];
-  }
-
-  private onWindowResize(): void {
-    if (!(this.renderer.domElement instanceof HTMLCanvasElement)) {
-      return;
-    }
-
-    const canvas = this.renderer.domElement;
-    const rect = canvas.getBoundingClientRect();
-    
-    this.camera.aspect = rect.width / rect.height;
-    this.camera.updateProjectionMatrix();
-    
-    this.renderer.setSize(rect.width, rect.height, false);
   }
 
   getObjectInfo(object: THREE.Object3D): { name: string, description: string } | undefined {
@@ -443,5 +434,86 @@ export class SceneService {
 
   getCamera(): THREE.PerspectiveCamera {
     return this.camera;
+  }
+
+  public async loadModel(path: string, position: THREE.Vector3, scale: number = 1, rotation: THREE.Euler = new THREE.Euler()): Promise<THREE.Object3D> {
+    return new Promise((resolve, reject) => {
+      const cleanPath = path.replace(/^\/+/, '');
+      
+      this.loader.load(
+        cleanPath,
+        (gltf) => {
+          const model = gltf.scene;
+          
+          // Apply transformations
+          model.position.copy(position);
+          model.rotation.copy(rotation);
+          model.scale.setScalar(scale);
+
+          // Center model if needed
+          const box = new THREE.Box3().setFromObject(model);
+          const center = box.getCenter(new THREE.Vector3());
+          model.position.sub(center).add(position);
+
+          // Apply shadows to all meshes
+          model.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              const mesh = child as THREE.Mesh;
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+
+              // Update materials for better rendering
+              if (mesh.material) {
+                const material = mesh.material as THREE.Material;
+                material.needsUpdate = true;
+              }
+            }
+          });
+
+          this.scene.add(model);
+          resolve(model);
+        },
+        (progress) => {
+          const percent = (progress.loaded / progress.total) * 100;
+          console.log(`Loading progress for ${path}: ${percent.toFixed(2)}%`);
+        },
+        (error) => {
+          console.error(`Error loading model ${path}:`, error);
+          reject(error);
+        }
+      );
+    });
+  }
+
+  public dispose(): void {
+    // Clean up Three.js resources
+    if (this.renderer) {
+      this.renderer.dispose();
+      this.renderer.forceContextLoss();
+    }
+
+    // Clean up controls
+    if (this.controls) {
+      this.controls.dispose();
+    }
+
+    // Clean up geometries and materials
+    this.scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        if (object.geometry) {
+          object.geometry.dispose();
+        }
+        if (object.material) {
+          if (Array.isArray(object.material)) {
+            object.material.forEach(material => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+      }
+    });
+
+    // Remove event listeners
+    window.removeEventListener('resize', this.onWindowResize);
   }
 }
