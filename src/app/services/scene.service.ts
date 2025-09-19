@@ -1,10 +1,32 @@
-import { AmbientLight, BackSide, Box3, BoxGeometry, Color, DirectionalLight, Euler, Material, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, Object3D, PerspectiveCamera, PlaneGeometry, Raycaster, Scene, SpotLight, Vector2, Vector3, WebGLRenderer, AdditiveBlending } from 'three';
+import { Injectable } from '@angular/core';
+import {
+  AdditiveBlending,
+  AmbientLight,
+  BackSide,
+  Box3,
+  BoxGeometry,
+  Color,
+  DirectionalLight,
+  Euler,
+  Material,
+  Mesh,
+  MeshBasicMaterial,
+  MeshPhysicalMaterial,
+  Object3D,
+  PerspectiveCamera,
+  PlaneGeometry,
+  Raycaster,
+  Scene,
+  SpotLight,
+  Vector2,
+  Vector3,
+  WebGLRenderer,
+} from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { Injectable } from '@angular/core';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class SceneService {
   private scene!: Scene;
@@ -24,14 +46,14 @@ export class SceneService {
     minX: -8,
     maxX: 8,
     minZ: -8,
-    maxZ: 8
+    maxZ: 8,
   };
 
   constructor() {
     this.raycaster = new Raycaster();
     this.loader = new GLTFLoader();
     this.objects = new Map();
-    
+
     // Create outline material for selected objects with a more elegant style
     this.outlineMaterial = new MeshBasicMaterial({
       color: 0x2c4a52, // Deep teal color matching our UI
@@ -39,7 +61,7 @@ export class SceneService {
       transparent: true,
       opacity: 0.3,
       blending: AdditiveBlending,
-      depthWrite: false
+      depthWrite: false,
     });
   }
 
@@ -49,7 +71,12 @@ export class SceneService {
     this.scene.background = new Color(0xf0f0f0);
 
     // Camera setup with better initial position
-    this.camera = new PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.camera = new PerspectiveCamera(
+      65,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
     this.camera.position.set(0, this.initialCameraHeight, 3);
 
     // Renderer setup
@@ -105,7 +132,9 @@ export class SceneService {
     }
   }
 
-  public onMouseClick(event: MouseEvent): { name: string; description: string } | null {
+  public onMouseClick(
+    event: MouseEvent
+  ): { name: string; description: string } | null {
     if (this.isAnimating) return null; // Prevent clicks during animation
 
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -113,10 +142,13 @@ export class SceneService {
     const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(new Vector2(x, y), this.camera);
-    
+
     // Get all intersected objects
-    const intersects = this.raycaster.intersectObjects(this.scene.children, true);
-    
+    const intersects = this.raycaster.intersectObjects(
+      this.scene.children,
+      true
+    );
+
     // Remove previous outline if it exists
     if (this.outlineMesh) {
       this.scene.remove(this.outlineMesh);
@@ -125,17 +157,26 @@ export class SceneService {
 
     for (const intersect of intersects) {
       let object = intersect.object;
-      
+
       // Check if we clicked on the floor for teleportation
       if (object.name === 'floor') {
         const targetPosition = intersect.point.clone();
-        
+
         // Más permisivo con los límites pero manteniendo seguridad
-        const clampedX = Math.max(this.ROOM_LIMITS.minX + 1.5, Math.min(this.ROOM_LIMITS.maxX - 1.5, targetPosition.x));
-        const clampedZ = Math.max(this.ROOM_LIMITS.minZ + 1.5, Math.min(this.ROOM_LIMITS.maxZ - 1.5, targetPosition.z));
-        
+        const clampedX = Math.max(
+          this.ROOM_LIMITS.minX + 1.5,
+          Math.min(this.ROOM_LIMITS.maxX - 1.5, targetPosition.x)
+        );
+        const clampedZ = Math.max(
+          this.ROOM_LIMITS.minZ + 1.5,
+          Math.min(this.ROOM_LIMITS.maxZ - 1.5, targetPosition.z)
+        );
+
         // Solo validamos si está muy fuera de los límites
-        if (Math.abs(clampedX - targetPosition.x) > 2 || Math.abs(clampedZ - targetPosition.z) > 2) {
+        if (
+          Math.abs(clampedX - targetPosition.x) > 2 ||
+          Math.abs(clampedZ - targetPosition.z) > 2
+        ) {
           return null; // Prevent teleportation outside bounds
         }
 
@@ -167,17 +208,17 @@ export class SceneService {
     const bbox = new Box3().setFromObject(object);
     const size = new Vector3();
     bbox.getSize(size);
-    
+
     // Create slightly larger geometry for outline
     const outlineGeometry = new BoxGeometry(
       size.x * 1.02, // Reduced scale for more subtle effect
       size.y * 1.02,
       size.z * 1.02
     );
-    
+
     // Create outline mesh
     this.outlineMesh = new Mesh(outlineGeometry, this.outlineMaterial);
-    
+
     // Position outline at object's center
     const center = new Vector3();
     bbox.getCenter(center);
@@ -192,19 +233,28 @@ export class SceneService {
       }
     };
     animate();
-    
+
     this.scene.add(this.outlineMesh);
   }
 
   private teleportTo(position: Vector3): void {
     if (this.isAnimating) return;
-    
+
     // Validación final de posición más permisiva
-    const clampedX = Math.max(this.ROOM_LIMITS.minX + 1.5, Math.min(this.ROOM_LIMITS.maxX - 1.5, position.x));
-    const clampedZ = Math.max(this.ROOM_LIMITS.minZ + 1.5, Math.min(this.ROOM_LIMITS.maxZ - 1.5, position.z));
-    
+    const clampedX = Math.max(
+      this.ROOM_LIMITS.minX + 1.5,
+      Math.min(this.ROOM_LIMITS.maxX - 1.5, position.x)
+    );
+    const clampedZ = Math.max(
+      this.ROOM_LIMITS.minZ + 1.5,
+      Math.min(this.ROOM_LIMITS.maxZ - 1.5, position.z)
+    );
+
     // Solo cancelamos si está muy fuera de los límites
-    if (Math.abs(clampedX - position.x) > 2 || Math.abs(clampedZ - position.z) > 2) {
+    if (
+      Math.abs(clampedX - position.x) > 2 ||
+      Math.abs(clampedZ - position.z) > 2
+    ) {
       return;
     }
 
@@ -218,7 +268,6 @@ export class SceneService {
     const duration = 1200; // Movimiento más suave
     const startPosition = this.camera.position.clone();
     const startTime = Date.now();
-    const startRotation = this.camera.quaternion.clone();
 
     const animate = () => {
       const currentTime = Date.now();
@@ -289,7 +338,7 @@ export class SceneService {
       roughness: 0.7,
       metalness: 0.2,
       clearcoat: 0.1,
-      clearcoatRoughness: 0.4
+      clearcoatRoughness: 0.4,
     });
 
     const mainWallMaterial = new MeshPhysicalMaterial({
@@ -297,7 +346,7 @@ export class SceneService {
       roughness: 0.95,
       metalness: 0.1,
       clearcoat: 0.05,
-      clearcoatRoughness: 0.5
+      clearcoatRoughness: 0.5,
     });
 
     const accentWallMaterial = new MeshPhysicalMaterial({
@@ -305,7 +354,7 @@ export class SceneService {
       roughness: 0.9,
       metalness: 0.15,
       clearcoat: 0.1,
-      clearcoatRoughness: 0.3
+      clearcoatRoughness: 0.3,
     });
 
     const secondaryWallMaterial = new MeshPhysicalMaterial({
@@ -313,7 +362,7 @@ export class SceneService {
       roughness: 0.95,
       metalness: 0.1,
       clearcoat: 0.05,
-      clearcoatRoughness: 0.5
+      clearcoatRoughness: 0.5,
     });
 
     const ceilingMaterial = new MeshPhysicalMaterial({
@@ -321,7 +370,7 @@ export class SceneService {
       roughness: 0.9,
       metalness: 0.1,
       clearcoat: 0.05,
-      clearcoatRoughness: 0.5
+      clearcoatRoughness: 0.5,
     });
 
     // Create floor
@@ -392,7 +441,11 @@ export class SceneService {
 
     // Accent lighting for the teal wall
     const accentLight1 = new SpotLight(0xffffff, 0.6);
-    accentLight1.position.set(-roomWidth / 4, roomHeight - 0.2, -roomDepth / 2 + 1);
+    accentLight1.position.set(
+      -roomWidth / 4,
+      roomHeight - 0.2,
+      -roomDepth / 2 + 1
+    );
     accentLight1.target.position.set(-roomWidth / 4, 0, -roomDepth / 2);
     accentLight1.angle = Math.PI / 6;
     accentLight1.penumbra = 0.5;
@@ -403,7 +456,11 @@ export class SceneService {
     this.scene.add(accentLight1.target);
 
     const accentLight2 = new SpotLight(0xffffff, 0.6);
-    accentLight2.position.set(roomWidth / 4, roomHeight - 0.2, -roomDepth / 2 + 1);
+    accentLight2.position.set(
+      roomWidth / 4,
+      roomHeight - 0.2,
+      -roomDepth / 2 + 1
+    );
     accentLight2.target.position.set(roomWidth / 4, 0, -roomDepth / 2);
     accentLight2.angle = Math.PI / 6;
     accentLight2.penumbra = 0.5;
@@ -422,7 +479,9 @@ export class SceneService {
     this.scene.add(aoLight);
   }
 
-  getObjectInfo(object: Object3D): { name: string, description: string } | undefined {
+  getObjectInfo(
+    object: Object3D
+  ): { name: string; description: string } | undefined {
     return this.objects.get(object);
   }
 
@@ -438,15 +497,20 @@ export class SceneService {
     return this.camera;
   }
 
-  public async loadModel(path: string, position: Vector3, scale: number = 1, rotation: Euler = new Euler()): Promise<Object3D> {
+  public async loadModel(
+    path: string,
+    position: Vector3,
+    scale: number = 1,
+    rotation: Euler = new Euler()
+  ): Promise<Object3D> {
     return new Promise((resolve, reject) => {
       const cleanPath = path.replace(/^\/+/, '');
-      
+
       this.loader.load(
         cleanPath,
-        (gltf) => {
+        gltf => {
           const model = gltf.scene;
-          
+
           // Apply transformations
           model.position.copy(position);
           model.rotation.copy(rotation);
@@ -458,7 +522,7 @@ export class SceneService {
           model.position.sub(center).add(position);
 
           // Apply shadows to all meshes
-          model.traverse((child) => {
+          model.traverse(child => {
             if ((child as Mesh).isMesh) {
               const mesh = child as Mesh;
               mesh.castShadow = true;
@@ -475,11 +539,11 @@ export class SceneService {
           this.scene.add(model);
           resolve(model);
         },
-        (progress) => {
+        progress => {
           const percent = (progress.loaded / progress.total) * 100;
           console.log(`Loading progress for ${path}: ${percent.toFixed(2)}%`);
         },
-        (error) => {
+        error => {
           console.error(`Error loading model ${path}:`, error);
           reject(error);
         }
@@ -500,7 +564,7 @@ export class SceneService {
     }
 
     // Clean up geometries and materials
-    this.scene.traverse((object) => {
+    this.scene.traverse(object => {
       if (object instanceof Mesh) {
         if (object.geometry) {
           object.geometry.dispose();

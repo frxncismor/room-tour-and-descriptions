@@ -1,22 +1,30 @@
-import { Component, ElementRef, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SceneService } from '../../services/scene.service';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  inject,
+} from '@angular/core';
 import * as THREE from 'three';
+import { SceneService } from '../../services/scene.service';
 
 @Component({
   selector: 'app-viewer',
   standalone: true,
   imports: [CommonModule],
   templateUrl: './viewer.component.html',
-  styleUrls: ['./viewer.component.scss']
+  styleUrls: ['./viewer.component.scss'],
 })
 export class ViewerComponent implements OnInit, OnDestroy {
-  @ViewChild('canvas', { static: true }) private canvasRef!: ElementRef<HTMLCanvasElement>;
-  
+  @ViewChild('canvas', { static: true })
+  private canvasRef!: ElementRef<HTMLCanvasElement>;
+
   selectedObject: { name: string; description: string } | null = null;
   hideInstructions = false;
 
-  constructor(private sceneService: SceneService) {}
+  private readonly sceneService = inject(SceneService);
 
   ngOnInit(): void {
     if (!this.canvasRef) {
@@ -34,7 +42,7 @@ export class ViewerComponent implements OnInit, OnDestroy {
   private async initializeViewer(): Promise<void> {
     // Initialize scene with canvas element
     this.sceneService.initialize(this.canvasRef.nativeElement);
-    
+
     // Load models with descriptions
     await this.loadModels();
 
@@ -54,11 +62,14 @@ export class ViewerComponent implements OnInit, OnDestroy {
     });
 
     // Add click event listener with drag check
-    this.canvasRef.nativeElement.addEventListener('click', (event: MouseEvent) => {
-      if (!isDragging) {
-        this.handleClick(event);
+    this.canvasRef.nativeElement.addEventListener(
+      'click',
+      (event: MouseEvent) => {
+        if (!isDragging) {
+          this.handleClick(event);
+        }
       }
-    });
+    );
   }
 
   private handleClick = (event: MouseEvent) => {
@@ -78,7 +89,11 @@ export class ViewerComponent implements OnInit, OnDestroy {
         1,
         sofaRotation
       );
-      this.sceneService.addObject(sofa, 'Sofá Moderno', 'Un elegante sofá de diseño contemporáneo perfecto para tu sala de estar.');
+      this.sceneService.addObject(
+        sofa,
+        'Sofá Moderno',
+        'Un elegante sofá de diseño contemporáneo perfecto para tu sala de estar.'
+      );
 
       // Load poker table
       const diningTable = await this.sceneService.loadModel(
@@ -86,7 +101,11 @@ export class ViewerComponent implements OnInit, OnDestroy {
         new THREE.Vector3(3, 0.5, -3),
         1
       );
-      this.sceneService.addObject(diningTable, 'Mesa de Poker', 'Mesa de poker profesional para tus juegos con amigos.');
+      this.sceneService.addObject(
+        diningTable,
+        'Mesa de Poker',
+        'Mesa de poker profesional para tus juegos con amigos.'
+      );
 
       // Load bookshelf - ajustado posición para mejor visibilidad
       const bookshelf = await this.sceneService.loadModel(
@@ -94,8 +113,11 @@ export class ViewerComponent implements OnInit, OnDestroy {
         new THREE.Vector3(0, 1.2, -7.5),
         1
       );
-      this.sceneService.addObject(bookshelf, 'Librero', 'Librero moderno y espacioso para organizar tus libros y decoración.');
-
+      this.sceneService.addObject(
+        bookshelf,
+        'Librero',
+        'Librero moderno y espacioso para organizar tus libros y decoración.'
+      );
     } catch (error) {
       console.error('Error loading models:', error);
     }

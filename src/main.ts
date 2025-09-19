@@ -3,7 +3,5 @@ import { AppComponent } from './app/app.component';
 import { provideAnimations } from '@angular/platform-browser/animations';
 
 bootstrapApplication(AppComponent, {
-  providers: [
-    provideAnimations()
-  ]
+  providers: [provideAnimations()],
 }).catch(err => console.error(err));

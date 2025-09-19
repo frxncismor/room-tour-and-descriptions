@@ -6,13 +6,15 @@ import { ViewerComponent } from './components/viewer/viewer.component';
   standalone: true,
   imports: [ViewerComponent],
   template: '<app-viewer></app-viewer>',
-  styles: [`
-    :host {
-      display: block;
-      width: 100%;
-      height: 100vh;
-      overflow: hidden;
-    }
-  `]
+  styles: [
+    `
+      :host {
+        display: block;
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+      }
+    `,
+  ],
 })
 export class AppComponent {}

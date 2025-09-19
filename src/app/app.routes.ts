@@ -3,5 +3,5 @@ import { ViewerComponent } from './components/viewer/viewer.component';
 
 export const routes: Routes = [
   { path: '', component: ViewerComponent },
-  { path: '**', redirectTo: '' }
+  { path: '**', redirectTo: '' },
 ];
