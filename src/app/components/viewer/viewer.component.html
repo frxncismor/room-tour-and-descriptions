@@ -8,21 +8,25 @@
 
   <div class="controls-info" *ngIf="!hideInstructions">
     <div class="controls-content">
-      <h2>Navegación</h2>
+      <h2>{{ uiText.navigation.title }}</h2>
       <div class="control-item">
         <span class="icon">🖱️</span>
-        <p>Click izquierdo + arrastrar para rotar la vista</p>
+        <p>{{ uiText.navigation.rotateView }}</p>
       </div>
       <div class="control-item">
         <span class="icon">👆</span>
-        <p>Click en el suelo para moverte</p>
+        <p>{{ uiText.navigation.moveAround }}</p>
       </div>
       <div class="control-item">
         <span class="icon">🔍</span>
-        <p>Click en los muebles para ver detalles</p>
+        <p>{{ uiText.navigation.viewDetails }}</p>
       </div>
-      <button class="close-button" (click)="hideInstructions = true">
-        Entendido
+      <button
+        type="button"
+        class="close-button"
+        (click)="onCloseInstructions()"
+      >
+        {{ uiText.navigation.gotIt }}
       </button>
     </div>
   </div>

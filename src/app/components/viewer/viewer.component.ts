@@ -7,7 +7,7 @@ import {
   ViewChild,
   inject,
 } from '@angular/core';
-import * as THREE from 'three';
+import { ObjectInfo, UI_TEXT } from '../../interfaces/scene.interface';
 import { SceneService } from '../../services/scene.service';
 
 @Component({
@@ -21,105 +21,90 @@ export class ViewerComponent implements OnInit, OnDestroy {
   @ViewChild('canvas', { static: true })
   private canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  selectedObject: { name: string; description: string } | null = null;
+  selectedObject: ObjectInfo | null = null;
   hideInstructions = false;
+  uiText = UI_TEXT;
+
+  private isDragging = false;
+  private dragStartTime = 0;
 
   private readonly sceneService = inject(SceneService);
 
   ngOnInit(): void {
-    if (!this.canvasRef) {
-      console.error('Canvas reference not found');
-      return;
-    }
+    this.validateCanvasReference();
     this.initializeViewer();
   }
 
   ngOnDestroy(): void {
-    // Clean up Three.js resources
     this.sceneService.dispose();
   }
 
+  private validateCanvasReference(): void {
+    if (!this.canvasRef) {
+      console.error('Canvas reference not found');
+      throw new Error('Canvas element is required for 3D rendering');
+    }
+  }
+
   private async initializeViewer(): Promise<void> {
-    // Initialize scene with canvas element
-    this.sceneService.initialize(this.canvasRef.nativeElement);
+    try {
+      this.sceneService.initialize(this.canvasRef.nativeElement);
+      await this.loadModels();
+      this.setupEventListeners();
+    } catch (error) {
+      console.error('Failed to initialize viewer:', error);
+    }
+  }
 
-    // Load models with descriptions
-    await this.loadModels();
+  private setupEventListeners(): void {
+    this.setupDragDetection();
+    this.setupClickHandler();
+  }
 
-    // Track drag state
-    let isDragging = false;
-    let dragStartTime = 0;
-
+  private setupDragDetection(): void {
     this.canvasRef.nativeElement.addEventListener('mousedown', () => {
-      isDragging = false;
-      dragStartTime = Date.now();
+      this.isDragging = false;
+      this.dragStartTime = Date.now();
     });
 
     this.canvasRef.nativeElement.addEventListener('mousemove', () => {
-      if (Date.now() - dragStartTime > 100) {
-        isDragging = true;
+      if (Date.now() - this.dragStartTime > 100) {
+        this.isDragging = true;
       }
     });
+  }
 
-    // Add click event listener with drag check
+  private setupClickHandler(): void {
     this.canvasRef.nativeElement.addEventListener(
       'click',
       (event: MouseEvent) => {
-        if (!isDragging) {
+        if (!this.isDragging) {
           this.handleClick(event);
         }
       }
     );
   }
 
-  private handleClick = (event: MouseEvent) => {
-    const objectInfo = this.sceneService.onMouseClick(event);
-    if (objectInfo) {
+  private async handleClick(event: MouseEvent): Promise<void> {
+    try {
+      const objectInfo = await this.sceneService.onMouseClick(event);
       this.selectedObject = objectInfo;
+    } catch (error) {
+      console.error('Error handling click:', error);
     }
-  };
+  }
 
   private async loadModels(): Promise<void> {
     try {
-      // Load sofa with 45-degree rotation
-      const sofaRotation = new THREE.Euler(0, Math.PI / 4, 0); // 45 degrees in radians
-      const sofa = await this.sceneService.loadModel(
-        'assets/models/sofa/scene.gltf',
-        new THREE.Vector3(-3, 0.7, -3),
-        1,
-        sofaRotation
-      );
-      this.sceneService.addObject(
-        sofa,
-        'Sofá Moderno',
-        'Un elegante sofá de diseño contemporáneo perfecto para tu sala de estar.'
-      );
-
-      // Load poker table
-      const diningTable = await this.sceneService.loadModel(
-        'assets/models/poker_table/scene.gltf',
-        new THREE.Vector3(3, 0.5, -3),
-        1
-      );
-      this.sceneService.addObject(
-        diningTable,
-        'Mesa de Poker',
-        'Mesa de poker profesional para tus juegos con amigos.'
-      );
-
-      // Load bookshelf - ajustado posición para mejor visibilidad
-      const bookshelf = await this.sceneService.loadModel(
-        'assets/models/bookshelf/scene.gltf',
-        new THREE.Vector3(0, 1.2, -7.5),
-        1
-      );
-      this.sceneService.addObject(
-        bookshelf,
-        'Librero',
-        'Librero moderno y espacioso para organizar tus libros y decoración.'
-      );
+      await this.sceneService.loadSofa();
+      await this.sceneService.loadPokerTable();
+      await this.sceneService.loadBookshelf();
     } catch (error) {
       console.error('Error loading models:', error);
     }
+  }
+
+  onCloseInstructions(): void {
+    this.hideInstructions = true;
   }
 }
