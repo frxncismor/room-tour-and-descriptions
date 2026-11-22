@@ -13,7 +13,6 @@ import { SceneService } from '../../services/scene.service';
 
 @Component({
   selector: 'app-viewer',
-  standalone: true,
   imports: [CommonModule],
   templateUrl: './viewer.component.html',
   styleUrls: ['./viewer.component.scss'],
