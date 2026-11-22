@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Box3, Material, Mesh, Object3D, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { ModelConfiguration } from '../interfaces/scene.interface';
 
 @Injectable({
@@ -11,6 +12,7 @@ export class ModelLoaderService {
 
   constructor() {
     this.loader = new GLTFLoader();
+    this.loader.setMeshoptDecoder(MeshoptDecoder);
   }
 
   async loadModel(config: ModelConfiguration): Promise<Object3D> {
@@ -78,5 +80,6 @@ export class ModelLoaderService {
 
   dispose(): void {
     this.loader = new GLTFLoader();
+    this.loader.setMeshoptDecoder(MeshoptDecoder);
   }
 }
