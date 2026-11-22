@@ -1,4 +1,28 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global styles: reset, design tokens and base typography. */
+:root {
+  --color-bg: #f0f0f0;
+  --color-surface: #ffffff;
+  --color-text: #1f2937;
+  --color-text-muted: #6b7280;
+  --color-accent: #0ea5e9;
+  --color-accent-strong: #0369a1;
+  --color-overlay: rgb(31 41 55 / 0.85);
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.15);
+  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.2);
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   margin: 0;
@@ -9,21 +33,17 @@ body {
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
+  height: 100dvh;
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Pointer lock cursor styles */
 .renderer-container {
   cursor: default;
 }
 
 .renderer-container:active {
   cursor: grabbing;
-}
-
-/* Hide cursor when in pointer lock mode */
-.renderer-container:fullscreen {
-  cursor: none;
 }
