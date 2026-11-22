@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -13,7 +12,7 @@ import { SceneService } from '../../services/scene.service';
 
 @Component({
   selector: 'app-viewer',
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './viewer.component.html',
   styleUrls: ['./viewer.component.scss'],
 })
