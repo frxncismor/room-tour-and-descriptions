@@ -1,5 +1,12 @@
 import { Injectable, inject } from '@angular/core';
-import { Euler, Scene, Vector3, WebGLRenderer } from 'three';
+import {
+  Euler,
+  Object3D,
+  PerspectiveCamera,
+  Scene,
+  Vector3,
+  WebGLRenderer,
+} from 'three';
 import {
   DEFAULT_SCENE_CONFIG,
   MODEL_CONFIGURATIONS,
@@ -186,7 +193,7 @@ export class SceneService {
     return this.scene;
   }
 
-  getCamera(): unknown {
+  getCamera(): PerspectiveCamera {
     return this.cameraService.getCamera();
   }
 

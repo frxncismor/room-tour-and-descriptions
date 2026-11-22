@@ -1,4 +1,4 @@
-import { Euler, Vector3 } from 'three';
+import { Euler, Object3D, Vector3 } from 'three';
 
 export interface ObjectInfo {
   name: string;
@@ -84,4 +84,8 @@ export interface InteractionResult {
   objectInfo: ObjectInfo | null;
   success: boolean;
   error?: string;
+  /** Punto del suelo (validado y recortado) en clics de suelo. */
+  floorPoint?: Vector3;
+  /** Objeto 3D seleccionado en clics de mueble. */
+  object?: Object3D;
 }

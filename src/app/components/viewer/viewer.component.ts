@@ -7,7 +7,8 @@ import {
   ViewChild,
   inject,
 } from '@angular/core';
-import { ObjectInfo, UI_TEXT } from '../../interfaces/scene.interface';
+import { UI_TEXT } from '../../config/ui-text';
+import { ObjectInfo } from '../../interfaces/scene.interface';
 import { SceneService } from '../../services/scene.service';
 
 @Component({
