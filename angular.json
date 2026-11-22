@@ -20,7 +20,7 @@
             "outputPath": "dist/interior-viewer",
             "index": "src/index.html",
             "browser": "src/main.ts",
-            "polyfills": ["zone.js"],
+            "polyfills": [],
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
@@ -40,8 +40,8 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "2mb",
-                  "maximumError": "5mb"
+                  "maximumWarning": "800kb",
+                  "maximumError": "900kb"
                 },
                 {
                   "type": "anyComponentStyle",
@@ -78,21 +78,11 @@
           }
         },
         "test": {
-          "builder": "@angular/build:karma",
+          "builder": "@angular/build:unit-test",
           "options": {
-            "polyfills": ["zone.js", "zone.js/testing"],
-            "tsConfig": "tsconfig.spec.json",
-            "inlineStyleLanguage": "scss",
-            "assets": [
-              "src/favicon.ico",
-              {
-                "glob": "**/*",
-                "input": "src/assets",
-                "output": "/assets"
-              }
-            ],
-            "styles": ["src/styles.scss"],
-            "scripts": []
+            "runner": "vitest",
+            "buildTarget": "::development",
+            "tsConfig": "tsconfig.spec.json"
           }
         },
         "lint": {

@@ -120,7 +120,7 @@ export class SceneService {
   async loadModel(
     path: string,
     position: Vector3,
-    scale: number = 1,
+    scale = 1,
     rotation: Euler = new Euler()
   ): Promise<Object3D> {
     const config: ModelConfiguration = {

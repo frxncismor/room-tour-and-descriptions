@@ -35,6 +35,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Runs Karma with ChromeHeadless; ubuntu-latest ships with Chrome preinstalled.
+      # Runs Vitest (jsdom) through the Angular unit-test builder; no browser is needed.
       - name: Test
         run: npm test

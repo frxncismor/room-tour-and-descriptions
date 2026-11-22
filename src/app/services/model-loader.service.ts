@@ -30,6 +30,7 @@ export class ModelLoaderService {
         },
         progress => {
           const percent = (progress.loaded / progress.total) * 100;
+          // eslint-disable-next-line no-console -- F4a: replaced by the loading UI
           console.log(
             `Loading progress for ${config.path}: ${percent.toFixed(2)}%`
           );
