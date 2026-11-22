@@ -4,13 +4,13 @@
 
 ### Prerequisites
 
-- Node.js (version 18 or higher)
-- npm or yarn package manager
+- Node.js 22 or higher (LTS)
+- npm
 
 ### Installation
 
 ```bash
-npm install
+npm ci
 ```
 
 ### Development Commands
@@ -37,11 +37,11 @@ npm run lint:check
 #### Code Formatting
 
 ```bash
-# Format all code with tabs
+# Format all code (2 spaces, no tabs, LF line endings)
 npm run format
 
-# Format specific files
-npx prettier --write --use-tabs "src/**/*.{ts,html,scss}"
+# Check formatting only
+npx prettier --check "src/**/*.{ts,html,scss}"
 ```
 
 **Automatic Formatting**: The project is configured to format code automatically on save in VS Code. Make sure you have the Prettier extension installed.
@@ -49,8 +49,11 @@ npx prettier --write --use-tabs "src/**/*.{ts,html,scss}"
 #### Testing
 
 ```bash
-# Run unit tests
+# Run unit tests (headless, single run)
 npm test
+
+# Interactive watch mode
+npm run test:watch
 ```
 
 #### Build
@@ -100,7 +103,7 @@ Before each commit, the following checks run automatically:
 
 ### Commit Message Format
 
-Use conventional commits format:
+Use conventional commits format (`type(scope): summary`):
 
 - `feat:` - new feature
 - `fix:` - bug fix
@@ -138,7 +141,7 @@ refactor(services): apply SOLID principles
 - Single responsibility principle
 - Small, focused functions
 - Descriptive variable and function names
-- Consistent formatting
+- Consistent formatting: 2 spaces for indentation (never tabs), LF line endings
 
 ## Troubleshooting
 
@@ -154,7 +157,7 @@ If lint-staged fails:
 
 If pre-commit hook fails:
 
-1. Check husky installation: `npx husky install`
+1. Check husky installation: `npm run prepare`
 2. Verify hook file exists: `.husky/pre-commit`
 3. Check file permissions on Unix systems
 

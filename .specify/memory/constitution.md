@@ -60,4 +60,4 @@ decisión expresa de Paco.
 
 Esta constitución se cambia solo con una nota en el commit y la aprobación de Paco.
 
-**Versión**: 1.0.0 | **Ratificada**: 2026-11-22 (pendiente de la aprobación de Paco) | **Última modificación**: 2026-11-22
+**Versión**: 1.0.0 | **Ratificada**: 2026-11-22 (aprobada por Paco el 2026-11-22) | **Última modificación**: 2026-11-22

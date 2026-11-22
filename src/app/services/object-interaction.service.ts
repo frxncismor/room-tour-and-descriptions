@@ -8,7 +8,9 @@ import {
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  PerspectiveCamera,
   Raycaster,
+  Scene,
   Vector2,
   Vector3,
 } from 'three';
@@ -57,8 +59,8 @@ export class ObjectInteractionService {
 
   async handleClick(
     event: MouseEvent,
-    camera: unknown,
-    scene: unknown
+    camera: PerspectiveCamera,
+    scene: Scene
   ): Promise<InteractionResult> {
     try {
       const mousePosition = this.getMousePosition(event);
