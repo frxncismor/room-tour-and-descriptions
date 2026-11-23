@@ -172,9 +172,4 @@ export class ModelLoaderService {
       mesh.receiveShadow = true;
     });
   }
-
-  /** Sin estado compartido que liberar: cada carga crea y descarta su loader. */
-  dispose(): void {
-    // intencionadamente vacío
-  }
 }

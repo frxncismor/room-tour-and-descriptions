@@ -1,14 +1,25 @@
 import {
   BoxGeometry,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  Vector2,
   Vector3,
 } from 'three';
-import { ObjectInteractionService } from './object-interaction.service';
+import {
+  ensureOutlineNormals,
+  ObjectInteractionService,
+  OUTLINE_NORMAL_ATTRIBUTE,
+  OUTLINE_THICKNESS_PX,
+} from './object-interaction.service';
+
+const VERTEX_STUB = ['void main() {', '#include <project_vertex>', '}'].join(
+  '\n'
+);
 
 function makeCanvas(): HTMLElement {
   const el = document.createElement('div');
@@ -187,22 +198,94 @@ describe('ObjectInteractionService', () => {
     expect(material.color.getHex()).not.toBe(a);
   });
 
-  it('grows each outline mesh around its own centre, not its local origin', async () => {
-    // Malla con la geometría desplazada 5 m del origen local.
+  it('skips transparent meshes (glass, cups) so their hull is not seen through', () => {
+    const glass = new Mesh(
+      new BoxGeometry(0.2, 0.2, 0.2),
+      new MeshStandardMaterial({ transparent: true, opacity: 0.4 })
+    );
+    const faded = new Mesh(
+      new BoxGeometry(0.2, 0.2, 0.2),
+      new MeshStandardMaterial({ opacity: 0.5 })
+    );
+    furniture.add(glass, faded);
+    service.selectObject(furniture);
+    const outline = furniture.children.find(
+      c => c.name === '__selection-outline'
+    )!;
+    expect(outline.children.length).toBe(1); // solo la caja opaca
+    expect(outline.children[0].matrix.equals(new Matrix4())).toBe(true);
+  });
+
+  it('keeps the outline mesh in the furniture frame without scaling it', async () => {
     furniture.geometry.translate(5, 0, 0);
-    furniture.geometry.computeBoundingBox();
     service.selectObject(furniture);
     const outlineMesh = furniture.children[0].children[0] as Mesh;
-    const box = furniture.geometry.boundingBox!;
-    const center = box.getCenter(new Vector3());
-    // El contorno es hijo del mueble: el centro de la caja no se desplaza al agrandar,
-    // pero un punto de la esquina sí se aleja de él.
-    const grown = center.clone().applyMatrix4(outlineMesh.matrix);
-    expect(grown.distanceTo(center)).toBeLessThan(1e-6);
-    const corner = box.max.clone();
-    expect(
-      corner.clone().applyMatrix4(outlineMesh.matrix).distanceTo(center)
-    ).toBeGreaterThan(corner.distanceTo(center));
+    // Mismo marco que el mueble: sin escalado ni desplazamiento (el grosor lo da el shader).
+    expect(outlineMesh.matrix.equals(new Matrix4())).toBe(true);
+    expect(outlineMesh.geometry).toBe(furniture.geometry);
+  });
+
+  it('smooths normals per position so hard edges do not open cracks', () => {
+    const box = new BoxGeometry(1, 1, 1); // 24 vértices: 3 normales por esquina
+    ensureOutlineNormals(box);
+    const attr = box.getAttribute(OUTLINE_NORMAL_ATTRIBUTE);
+    expect(attr.count).toBe(box.getAttribute('position').count);
+    const pos = box.getAttribute('position');
+    const byCorner = new Map<string, Vector3>();
+    for (let i = 0; i < attr.count; i++) {
+      const n = new Vector3().fromBufferAttribute(attr, i);
+      expect(n.length()).toBeCloseTo(1, 5);
+      const k = `${pos.getX(i)}_${pos.getY(i)}_${pos.getZ(i)}`;
+      const first = byCorner.get(k);
+      if (first) expect(n.distanceTo(first)).toBeLessThan(1e-6);
+      else byCorner.set(k, n);
+      // apunta hacia fuera de la esquina (mismo signo que la posición)
+      expect(
+        n.x * pos.getX(i) + n.y * pos.getY(i) + n.z * pos.getZ(i)
+      ).toBeGreaterThan(0.5);
+    }
+  });
+
+  it('is idempotent on geometry that already has outline normals', () => {
+    const box = new BoxGeometry(1, 1, 1);
+    ensureOutlineNormals(box);
+    const first = box.getAttribute(OUTLINE_NORMAL_ATTRIBUTE);
+    ensureOutlineNormals(box);
+    expect(box.getAttribute(OUTLINE_NORMAL_ATTRIBUTE)).toBe(first);
+  });
+
+  it('extrudes the outline in clip space by a constant px thickness', async () => {
+    await click(100, 100);
+    const material = (furniture.children[0].children[0] as Mesh)
+      .material as MeshBasicMaterial;
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader: VERTEX_STUB,
+    };
+    material.onBeforeCompile(shader as never, null as never);
+    expect(shader.vertexShader).toContain(OUTLINE_NORMAL_ATTRIBUTE);
+    expect(shader.vertexShader).not.toContain('#include <project_vertex>');
+    const offset = shader.uniforms['uOutlineOffset'].value as Vector2;
+    // canvas de 200×200 → 3 px = 2·3/200 en NDC, igual en X e Y.
+    expect(offset.x).toBeCloseTo((2 * OUTLINE_THICKNESS_PX) / 200, 6);
+    expect(offset.y).toBeCloseTo(offset.x, 6);
+  });
+
+  it('rescales the outline offset when the canvas is resized', async () => {
+    await click(100, 100);
+    canvas.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 400, height: 100 }) as DOMRect;
+    service.update(0);
+    const material = (furniture.children[0].children[0] as Mesh)
+      .material as MeshBasicMaterial;
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader: VERTEX_STUB,
+    };
+    material.onBeforeCompile(shader as never, null as never);
+    const offset = shader.uniforms['uOutlineOffset'].value as Vector2;
+    expect(offset.x).toBeCloseTo((2 * OUTLINE_THICKNESS_PX) / 400, 6);
+    expect(offset.y).toBeCloseTo((2 * OUTLINE_THICKNESS_PX) / 100, 6);
   });
 
   it('does not select the outline itself when raycasting', async () => {
