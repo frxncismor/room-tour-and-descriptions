@@ -1,9 +1,12 @@
 import { Injectable } from '@angular/core';
 import {
   Box3,
+  BufferGeometry,
   Color,
+  Float32BufferAttribute,
   LoadingManager,
   Material,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -11,6 +14,7 @@ import {
   Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import {
   LoadProgressCallback,
@@ -45,6 +49,80 @@ export function disableRaycast(root: Object3D): void {
   root.traverse(child => {
     if ((child as Mesh).isMesh) child.raycast = () => undefined;
   });
+}
+
+/** Copia de la geometría solo con position/normal/uv en float, en el espacio de `matrix`. */
+function toFloatGeometry(
+  source: BufferGeometry,
+  matrix: Matrix4
+): BufferGeometry {
+  const geometry = new BufferGeometry();
+  for (const [name, size] of [
+    ['position', 3],
+    ['normal', 3],
+    ['uv', 2],
+  ] as const) {
+    const attribute = source.getAttribute(name);
+    if (!attribute) continue;
+    const values = new Float32Array(attribute.count * size);
+    for (let i = 0; i < attribute.count; i++) {
+      values[i * size] = attribute.getX(i);
+      values[i * size + 1] = attribute.getY(i);
+      if (size === 3) values[i * size + 2] = attribute.getZ(i);
+    }
+    geometry.setAttribute(name, new Float32BufferAttribute(values, size));
+  }
+  const index = source.getIndex();
+  if (index) geometry.setIndex(Array.from(index.array));
+  geometry.applyMatrix4(matrix);
+  return geometry;
+}
+
+/**
+ * Funde las mallas de un modelo que comparten material (una llamada de dibujo
+ * por material). Solo mallas de un único material y sin grupos; el resultado
+ * queda en el espacio local de `root`. Devuelve cuántas mallas desaparecen.
+ */
+export function mergeMeshesByMaterial(root: Object3D): number {
+  root.updateMatrixWorld(true);
+  const inverse = new Matrix4().copy(root.matrixWorld).invert();
+  const buckets = new Map<Material, Mesh[]>();
+  root.traverse(child => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+    if (
+      mesh.geometry.groups.length > 0 ||
+      (mesh as { isSkinnedMesh?: boolean }).isSkinnedMesh
+    )
+      return;
+    const list = buckets.get(mesh.material) ?? [];
+    list.push(mesh);
+    buckets.set(mesh.material, list);
+  });
+  let removed = 0;
+  for (const [material, meshes] of buckets) {
+    if (meshes.length < 2) continue;
+    const geometries = meshes.map(mesh =>
+      toFloatGeometry(
+        mesh.geometry,
+        new Matrix4().multiplyMatrices(inverse, mesh.matrixWorld)
+      )
+    );
+    const merged = mergeGeometries(geometries);
+    geometries.forEach(g => g.dispose());
+    if (!merged) continue;
+    const result = new Mesh(merged, material);
+    result.name = meshes[0].name;
+    result.castShadow = meshes[0].castShadow;
+    result.receiveShadow = meshes[0].receiveShadow;
+    root.add(result);
+    for (const mesh of meshes) {
+      mesh.parent?.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    removed += meshes.length - 1;
+  }
+  return removed;
 }
 
 /** Anisotropía pedida a las texturas (la GPU la limita a su máximo). */
@@ -139,8 +217,9 @@ export class ModelLoaderService {
     );
     const model = gltf.scene;
     applyMaterialOverride(model, config.materialOverride);
+    if (config.mergeMeshes) mergeMeshesByMaterial(model);
     this.applyTransformations(model, config);
-    this.setupShadows(model);
+    this.setupShadows(model, config.castShadow ?? true);
     return model;
   }
 
@@ -168,14 +247,14 @@ export class ModelLoaderService {
   }
 
   /** Proyecta/recibe sombras solo en mallas opacas (las transparentes no proyectan). */
-  private setupShadows(model: Object3D): void {
+  private setupShadows(model: Object3D, cast: boolean): void {
     model.traverse(child => {
       const mesh = child as Mesh;
       if (!mesh.isMesh) return;
       const materials = Array.isArray(mesh.material)
         ? mesh.material
         : [mesh.material];
-      mesh.castShadow = !materials.some(m => m?.transparent);
+      mesh.castShadow = cast && !materials.some(m => m?.transparent);
       mesh.receiveShadow = true;
     });
   }

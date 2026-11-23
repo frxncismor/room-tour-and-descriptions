@@ -90,6 +90,10 @@ export interface ModelConfiguration {
   materialOverride?: MaterialOverride;
   /** Elevación extra sobre el suelo de la base del modelo (m). Por defecto 0. */
   yOffset?: number;
+  /** Si la pieza proyecta sombra (por defecto sí; cuadro y reloj no). */
+  castShadow?: boolean;
+  /** Funde por material las mallas estáticas tras cargar (menos draw calls). */
+  mergeMeshes?: boolean;
 }
 
 /**

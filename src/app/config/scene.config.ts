@@ -120,6 +120,8 @@ export const MODEL_CONFIGURATIONS = {
     scale: 2,
     rotation: new Euler(),
     yOffset: 1.2,
+    castShadow: false,
+    mergeMeshes: true,
     metadata: FURNITURE_TEXT.landscapePainting,
   },
   succulent: {
@@ -128,6 +130,7 @@ export const MODEL_CONFIGURATIONS = {
     scale: 2.2,
     rotation: new Euler(0, Math.PI / 6, 0),
     yOffset: 0,
+    mergeMeshes: true,
     metadata: FURNITURE_TEXT.succulent,
   },
 };
@@ -141,6 +144,8 @@ export const DECOR_CONFIGURATIONS = {
     scale: 2,
     rotation: new Euler(),
     yOffset: 1.38,
+    castShadow: false,
+    mergeMeshes: true,
   },
   vase: {
     label: 'Ceramic vase',
@@ -149,6 +154,7 @@ export const DECOR_CONFIGURATIONS = {
     scale: 2.2,
     rotation: new Euler(),
     yOffset: 0,
+    mergeMeshes: true,
   },
 } satisfies Record<string, DecorConfiguration>;
 
