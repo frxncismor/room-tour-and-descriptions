@@ -47,6 +47,21 @@ describe('ObjectListComponent', () => {
     expect(nav.querySelectorAll('.chip.reset').length).toBe(1);
   });
 
+  it('keeps the visible text inside the reset accessible name (WCAG 2.5.3)', async () => {
+    const fixture = TestBed.createComponent(ObjectListComponent);
+    fixture.componentRef.setInput('items', [
+      { id: 'sofa', name: FURNITURE_TEXT.sofa.name },
+    ]);
+    await fixture.whenStable();
+    const reset = (fixture.nativeElement as HTMLElement).querySelector(
+      'button.chip.reset'
+    ) as HTMLElement;
+    const visible = reset.textContent!.trim().toLowerCase();
+    const name = reset.getAttribute('aria-label')!.toLowerCase();
+    expect(visible).toBe(UI_TEXT.list.resetView.toLowerCase());
+    expect(name.startsWith(visible)).toBe(true);
+  });
+
   it('renders a text index with a header and no pill styling', async () => {
     const fixture = TestBed.createComponent(ObjectListComponent);
     fixture.componentRef.setInput('items', [
