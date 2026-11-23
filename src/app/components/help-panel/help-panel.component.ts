@@ -56,7 +56,11 @@ function writeDismissed(value: boolean): void {
         <dl>
           @for (control of text.controls; track control.label) {
             <div [attr.data-keyboard]="control.icon === 'keyboard' ? '' : null">
-              <dt>{{ control.label }}</dt>
+              <dt>
+                {{
+                  touch ? (control.touchLabel ?? control.label) : control.label
+                }}
+              </dt>
               <dd>{{ touch ? control.touchText : control.text }}</dd>
             </div>
           }

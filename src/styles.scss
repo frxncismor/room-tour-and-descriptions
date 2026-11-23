@@ -84,20 +84,6 @@
 
   /* interaction */
   --hit: 44px;
-
-  /* Legacy aliases: components still use them until T-270. */
-  --color-bg: var(--paper-sunk);
-  --color-surface: var(--paper);
-  --color-text: var(--ink);
-  --color-text-muted: var(--ink-muted);
-  --color-accent: var(--clay);
-  --color-accent-strong: var(--clay-hover);
-  --radius-sm: var(--radius-1);
-  --radius-md: var(--radius-2);
-  --radius-lg: var(--radius-2);
-  --shadow-sm: var(--shadow-panel);
-  --shadow-md: var(--shadow-panel);
-  --font-sans: var(--font-text);
 }
 
 *,
