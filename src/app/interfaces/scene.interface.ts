@@ -122,6 +122,9 @@ export interface RugTextures {
   normal: string;
   /** Tinte multiplicado por la textura. */
   tint: number;
+  /** Ribete de otro tono alrededor del plano: color y ancho (m). */
+  borderColor: number;
+  borderWidth: number;
   /** Medidas del plano (m). */
   width: number;
   depth: number;

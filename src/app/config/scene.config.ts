@@ -173,13 +173,15 @@ export const RUG_TEXTURES: RugTextures = {
   label: 'Rug texture',
   diffuse: 'assets/textures/rug/diff.webp',
   normal: 'assets/textures/rug/nor.webp',
-  tint: 0xf0e6d8,
+  tint: 0xffe9d0,
+  borderColor: 0xd8c7ad,
+  borderWidth: 0.12,
   width: 4.2,
   depth: 3.0,
   center: { x: -1.5, y: -1.5 },
   y: 0.004,
   rotationY: Math.PI / 4,
-  repeat: { x: 4.2 / 0.27, y: 3.0 / 0.27 },
+  repeat: { x: 4.2 / 0.5, y: 3.0 / 0.5 },
 };
 
 export const TRIM: TrimConfiguration = {

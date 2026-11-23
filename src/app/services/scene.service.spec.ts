@@ -23,6 +23,7 @@ import {
   ModelConfiguration,
   ObjectInfo,
 } from '../interfaces/scene.interface';
+import { CameraService } from './camera.service';
 import { ModelLoaderService } from './model-loader.service';
 import { ObjectInteractionService } from './object-interaction.service';
 import { RoomBuilderService } from './room-builder.service';
@@ -364,6 +365,43 @@ describe('SceneService', () => {
 
     service.clearSelection();
     expect(state.selected()).toBeNull();
+  });
+
+  it('selectObject frames each piece from its front, with decor as obstacle', async () => {
+    service.initialize(canvas);
+    await service.loadAll();
+    const camera = TestBed.inject(CameraService);
+    const focus = vi.spyOn(camera, 'focusOn').mockResolvedValue(true);
+
+    const entry = (
+      service as unknown as { models: Map<string, { object: Object3D }> }
+    ).models.get('sofa')!;
+    entry.object.rotation.y = Math.PI / 4;
+    service.selectObject('sofa');
+
+    const [object, obstacles, front] = focus.mock.calls[0];
+    expect(obstacles).toContain(
+      service.getScene().getObjectByName('decor')!.children[0]
+    );
+    expect(obstacles).not.toContain(object);
+    // El sofá gira π/4: su frente (+Z local) mira a +X/+Z, no a la cámara previa.
+    expect(front!.x).toBeCloseTo(Math.SQRT1_2, 3);
+    expect(front!.z).toBeCloseTo(Math.SQRT1_2, 3);
+  });
+
+  it('selectObject still works while the decor has not loaded', async () => {
+    service.initialize(canvas);
+    await service.loadAll();
+    (service as unknown as { decorGroup: Group | null }).decorGroup = null;
+    const focus = vi
+      .spyOn(TestBed.inject(CameraService), 'focusOn')
+      .mockResolvedValue(true);
+
+    service.selectObject('bookshelf');
+
+    expect(focus.mock.calls[0][1]).toHaveLength(
+      service.getObjectList().length - 1
+    );
   });
 
   it('handlePointerSelect teleports on a floor point', async () => {

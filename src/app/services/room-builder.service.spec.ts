@@ -115,6 +115,27 @@ describe('RoomBuilderService', () => {
       expect(box.max.x).toBeCloseTo(room.width / 2);
     });
 
+    it('frames the rug with a lighter border that clicks go through', () => {
+      const border = trim().getObjectByName('rug-border') as Mesh;
+      const rug = trim().getObjectByName('rug') as Mesh;
+      expect(border.position.y).toBeLessThan(rug.position.y);
+      expect(border.position.y).toBeGreaterThan(0);
+      border.geometry.computeBoundingBox();
+      expect(border.geometry.boundingBox!.max.x).toBeCloseTo(
+        (RUG_TEXTURES.width + 2 * RUG_TEXTURES.borderWidth) / 2
+      );
+      const hits: unknown[] = [];
+      border.raycast({ ray: {} } as never, hits as never);
+      expect(hits).toHaveLength(0);
+    });
+
+    it('keeps the skirting out of the raycaster (SC-205)', () => {
+      const skirting = trim().getObjectByName('skirting') as Mesh;
+      const hits: unknown[] = [];
+      skirting.raycast({ ray: {} } as never, hits as never);
+      expect(hits).toHaveLength(0);
+    });
+
     it('lays a rug that ignores raycasts so clicks fall on the floor', () => {
       const rug = trim().getObjectByName('rug') as Mesh;
       expect(rug.position.y).toBeCloseTo(RUG_TEXTURES.y);

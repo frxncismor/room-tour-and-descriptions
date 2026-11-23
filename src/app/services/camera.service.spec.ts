@@ -553,4 +553,82 @@ describe('CameraService', () => {
       expect(service.getCamera().position.distanceTo(moved)).toBeLessThan(0.01);
     });
   });
+  describe('focusOn with a preferred approach (chained selections)', () => {
+    interface Piece {
+      mesh: Mesh;
+      front: Vector3;
+    }
+    const piece = (
+      x: number,
+      y: number,
+      z: number,
+      size: [number, number, number],
+      rotY = 0
+    ): Piece => {
+      const mesh = new Mesh(new BoxGeometry(...size), new MeshBasicMaterial());
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = rotY;
+      mesh.updateMatrixWorld(true);
+      return {
+        mesh,
+        front: new Vector3(Math.sin(rotY), 0, Math.cos(rotY)),
+      };
+    };
+    const pieces: Record<string, Piece> = {
+      sofa: piece(-3, 0.45, -3, [2.2, 0.9, 1], Math.PI / 4),
+      poker: piece(3, 0.4, -3, [1.6, 0.8, 1.6]),
+      shelf: piece(0, 1, -7.6, [2.2, 2, 0.5]),
+      painting: piece(-4, 1.66, -7.975, [1.21, 0.93, 0.04]),
+      succulent: piece(1.85, 0.3, -7.55, [0.4, 0.6, 0.4], Math.PI / 6),
+    };
+    const vase = piece(-1.85, 0.3, -7.55, [0.4, 0.6, 0.4]);
+    const previousPoses = {
+      initial: new Vector3(0, 1.7, 4.5),
+      tealWall: new Vector3(-3, 1.7, -7.2),
+      behindSofa: new Vector3(-6, 1.7, -5),
+      highCorner: new Vector3(7, 3.8, -1.5),
+      beside: new Vector3(7.2, 1.7, -7),
+    };
+
+    for (const [name, current] of Object.entries(pieces)) {
+      for (const [poseName, pose] of Object.entries(previousPoses)) {
+        it(`frames ${name} from its front and unobstructed coming from ${poseName}`, async () => {
+          service.setAspect(1280 / 800);
+          service.getCamera().position.copy(pose);
+          const obstacles = [
+            ...Object.entries(pieces)
+              .filter(([other]) => other !== name)
+              .map(([, p]) => p.mesh),
+            vase.mesh,
+          ];
+
+          const done = service.focusOn(current.mesh, obstacles, current.front);
+          service.update(5000);
+          await expect(done).resolves.toBe(true);
+
+          const from = service.getCamera().position.clone();
+          const center = new Box3()
+            .setFromObject(current.mesh)
+            .getCenter(new Vector3());
+          // En el lado frontal de la pieza.
+          expect(
+            from.clone().sub(center).setY(0).dot(current.front)
+          ).toBeGreaterThan(0);
+          for (const obstacle of obstacles) {
+            const obstacleBox = new Box3().setFromObject(obstacle);
+            // Ningún obstáculo entre la cámara y la pieza...
+            const dir = center.clone().sub(from);
+            const length = dir.length();
+            const hit = new Ray(from.clone(), dir.normalize()).intersectBox(
+              obstacleBox,
+              new Vector3()
+            );
+            expect(hit === null || hit.distanceTo(from) >= length).toBe(true);
+            // ...ni pegado a la cámara.
+            expect(obstacleBox.distanceToPoint(from)).toBeGreaterThan(0.25);
+          }
+        });
+      }
+    }
+  });
 });

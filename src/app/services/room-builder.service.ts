@@ -220,6 +220,7 @@ export class RoomBuilderService {
     );
     skirting.name = 'skirting';
     skirting.receiveShadow = true;
+    skirting.raycast = () => undefined;
     group.add(skirting);
 
     this.rugMaterial = new MeshStandardMaterial({
@@ -227,9 +228,35 @@ export class RoomBuilderService {
       roughness: 1,
       metalness: 0,
       polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -1,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
     });
+    // Ribete claro: da lectura a la alfombra a la distancia de la vista inicial.
+    const border = new Mesh(
+      new PlaneGeometry(
+        RUG_TEXTURES.width + 2 * RUG_TEXTURES.borderWidth,
+        RUG_TEXTURES.depth + 2 * RUG_TEXTURES.borderWidth
+      ),
+      new MeshStandardMaterial({
+        color: RUG_TEXTURES.borderColor,
+        roughness: 1,
+        metalness: 0,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+      })
+    );
+    border.name = 'rug-border';
+    border.rotation.order = 'YXZ';
+    border.rotation.set(-Math.PI / 2, RUG_TEXTURES.rotationY, 0);
+    border.position.set(
+      RUG_TEXTURES.center.x,
+      RUG_TEXTURES.y - 0.002,
+      RUG_TEXTURES.center.y
+    );
+    border.receiveShadow = true;
+    border.raycast = () => undefined;
+    group.add(border);
     const rug = new Mesh(
       new PlaneGeometry(RUG_TEXTURES.width, RUG_TEXTURES.depth),
       this.rugMaterial
