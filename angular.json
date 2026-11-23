@@ -82,7 +82,13 @@
           "options": {
             "runner": "vitest",
             "buildTarget": "::development",
-            "tsConfig": "tsconfig.spec.json"
+            "tsConfig": "tsconfig.spec.json",
+            "coverageThresholds": {
+              "statements": 70,
+              "branches": 70,
+              "functions": 70,
+              "lines": 70
+            }
           }
         },
         "lint": {

@@ -1,5 +1,9 @@
 import {
+  AlwaysStencilFunc,
   BoxGeometry,
+  KeepStencilOp,
+  NotEqualStencilFunc,
+  ReplaceStencilOp,
   Box3,
   Matrix4,
   Mesh,
@@ -385,6 +389,45 @@ describe('ObjectInteractionService', () => {
     expect(new Box3().setFromObject(outline).isEmpty()).toBe(false);
   });
 
+  it('writes stencil on the piece only while selected/hovered and draws the hull outside it', async () => {
+    const material = furniture.material as MeshStandardMaterial;
+    material.emissive.setRGB(0.2, 0.1, 0.05);
+    const before = snapshot(material);
+    expect(material.stencilWrite).toBe(false);
+
+    await click(100, 100);
+    expect(material.stencilWrite).toBe(true);
+    expect(material.stencilRef).toBe(1);
+    expect(material.stencilFunc).toBe(AlwaysStencilFunc);
+    expect(material.stencilZPass).toBe(ReplaceStencilOp);
+    expect(snapshot(material)).toEqual(before);
+    const hull = furniture.children.find(c => c.name === '__selection-outline')!
+      .children[0] as Mesh;
+    const hullMat = hull.material as MeshBasicMaterial;
+    expect(hullMat.stencilWrite).toBe(true);
+    expect(hullMat.stencilFunc).toBe(NotEqualStencilFunc);
+    expect(hullMat.stencilRef).toBe(1);
+    expect(hullMat.depthTest).toBe(false);
+    expect(hullMat.depthWrite).toBe(false);
+    expect(hull.renderOrder).toBeGreaterThan(0);
+
+    service.clearSelection();
+    expect(material.stencilWrite).toBe(false);
+    expect(material.stencilRef).toBe(0);
+    expect(material.stencilFunc).toBe(AlwaysStencilFunc);
+    expect(material.stencilZPass).toBe(KeepStencilOp);
+    expect(snapshot(material)).toEqual(before);
+
+    service.setContext(camera, scene);
+    service.setHover({ x: 0, y: 0 });
+    service.update(16);
+    expect(material.stencilWrite).toBe(true);
+    service.setHover(null);
+    service.update(32);
+    expect(material.stencilWrite).toBe(false);
+    expect(snapshot(material)).toEqual(before);
+  });
+
   it('uses a pixel-space stroke direction so thickness is isotropic', async () => {
     await click(100, 100);
     const material = (furniture.children[0].children[0] as Mesh)
@@ -417,6 +460,48 @@ describe('ObjectInteractionService', () => {
       )!;
       const hull = outline.children[0] as Mesh;
       expect(hull.geometry.getIndex()!.count).toBe(6); // solo el grupo opaco
+    });
+
+    it('disposes cloned hull geometry and reuses one hover material', () => {
+      const geometry = new BoxGeometry(1, 1, 1);
+      geometry.clearGroups();
+      geometry.addGroup(0, 6, 0);
+      geometry.addGroup(6, 30, 1);
+      const mixed = new Mesh(geometry, [new MeshStandardMaterial(), glass()]);
+      mixed.position.set(2, 0.5, 0);
+      scene.add(mixed);
+      service.addObject(mixed, { name: 'Mixed', description: '' });
+
+      service.selectObject(mixed);
+      const hullGeometry = (
+        mixed.children.find(c => c.name === '__selection-outline')!
+          .children[0] as Mesh
+      ).geometry;
+      expect(hullGeometry).not.toBe(geometry);
+      const disposed = vi.fn();
+      hullGeometry.addEventListener('dispose', disposed);
+      service.removeOutline();
+      expect(disposed).toHaveBeenCalledTimes(1);
+
+      const hoverOf = (o: Mesh) =>
+        (
+          o.children.find(c => c.name === '__hover-outline')!
+            .children[0] as Mesh
+        ).material;
+      service.setContext(camera, scene);
+      service.setHover({ x: 0, y: 0 });
+      service.update(16);
+      const first = hoverOf(furniture) as MeshBasicMaterial;
+      const matDisposed = vi.fn();
+      first.addEventListener('dispose', matDisposed);
+      service.setHover(null);
+      service.update(32);
+      service.setHover({ x: 0, y: 0 });
+      service.update(48);
+      expect(hoverOf(furniture)).toBe(first);
+      expect(matDisposed).not.toHaveBeenCalled();
+      service.dispose();
+      expect(matDisposed).toHaveBeenCalledTimes(1);
     });
 
     it('skips a mesh whose materials are all translucent', () => {

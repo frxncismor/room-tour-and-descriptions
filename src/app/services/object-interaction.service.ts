@@ -1,13 +1,17 @@
 import { Injectable } from '@angular/core';
 import {
+  AlwaysStencilFunc,
   BackSide,
   BufferAttribute,
   BufferGeometry,
   Color,
   Group,
   Material,
+  KeepStencilOp,
   Mesh,
   MeshBasicMaterial,
+  NotEqualStencilFunc,
+  ReplaceStencilOp,
   Object3D,
   PerspectiveCamera,
   Raycaster,
@@ -64,7 +68,9 @@ export const OUTLINE_THICKNESS_PX = 3;
  */
 export const OUTLINE_DEPTH_PUSH = 0;
 /** Sesgo de profundidad (negativo = hacia la cámara): gana el empate con paredes/suelo pegados al mueble. */
-export const OUTLINE_POLYGON_OFFSET = -4;
+export const OUTLINE_POLYGON_OFFSET = -1;
+/** Unidades de `polygonOffset`: sesgo suave; el stencil ya oculta el casco dentro de la silueta. */
+export const OUTLINE_POLYGON_UNITS = -4;
 /** Atributo con normales suavizadas (por posición) que guía la extrusión del contorno. */
 export const OUTLINE_NORMAL_ATTRIBUTE = 'outlineNormal';
 /** Hover: contorno fino y semitransparente; no toca los materiales del mueble. */
@@ -87,6 +93,55 @@ function isTranslucentMaterial(m: Material): boolean {
 export function isTranslucent(mesh: Mesh): boolean {
   const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
   return list.length > 0 && list.every(isTranslucentMaterial);
+}
+
+/** Valores de stencil de un material, para restaurarlos al quitar el contorno. */
+type StencilBackup = Map<
+  Material,
+  {
+    stencilWrite: boolean;
+    stencilRef: number;
+    stencilFunc: number;
+    stencilZPass: number;
+  }
+>;
+
+/** Referencia de stencil que marca la silueta del mueble. */
+export const OUTLINE_STENCIL_REF = 1;
+/** Orden de render del casco: después de todo lo opaco. */
+export const OUTLINE_RENDER_ORDER = 10;
+
+/** Los materiales opacos del objeto escriben stencil=1 donde se dibujan. No toca color/emissive/map. */
+function writeStencil(root: Object3D): StencilBackup {
+  const backup: StencilBackup = new Map();
+  root.traverse(child => {
+    const mesh = child as Mesh;
+    if (
+      !mesh.isMesh ||
+      child.name === OUTLINE_NAME ||
+      child.name === HOVER_OUTLINE_NAME
+    )
+      return;
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of list) {
+      if (isTranslucentMaterial(m) || backup.has(m)) continue;
+      backup.set(m, {
+        stencilWrite: m.stencilWrite,
+        stencilRef: m.stencilRef,
+        stencilFunc: m.stencilFunc,
+        stencilZPass: m.stencilZPass,
+      });
+      m.stencilWrite = true;
+      m.stencilRef = OUTLINE_STENCIL_REF;
+      m.stencilFunc = AlwaysStencilFunc;
+      m.stencilZPass = ReplaceStencilOp;
+    }
+  });
+  return backup;
+}
+
+function restoreStencil(backup: StencilBackup | null): void {
+  backup?.forEach((saved, m) => Object.assign(m, saved));
 }
 
 /** Grupos de geometría opacos de un material array (null = toda la malla). */
@@ -172,6 +227,10 @@ export class ObjectInteractionService {
   private readonly outlineOffset = { value: new Vector2(0.01, 0.01) };
   private hoverOutline: Group | null = null;
   private hoverMaterial: MeshBasicMaterial | null = null;
+  /** Estado de stencil original de los materiales del objeto (seleccionado / hover). */
+  private selectedStencil: StencilBackup | null = null;
+  private hoverStencil: StencilBackup | null = null;
+  private readonly ownedGeometries = new WeakSet<BufferGeometry>();
   private readonly hoverOffset = { value: new Vector2(0.01, 0.01) };
   /** Tamaño del canvas en px CSS, cacheado (evita `getBoundingClientRect` por frame). */
   private canvasSize: { width: number; height: number } | null = null;
@@ -372,11 +431,14 @@ export class ObjectInteractionService {
   /** Quita el contorno actual y libera su material. */
   removeOutline(): void {
     if (this.outline) {
-      // La geometría es compartida con el original: no se libera aquí.
+      // La geometría es compartida con el original: solo se liberan los clones.
       this.outline.removeFromParent();
+      this.disposeHullGeometries(this.outline);
       this.outline.clear();
       this.outline = null;
     }
+    restoreStencil(this.selectedStencil);
+    this.selectedStencil = null;
     if (this.outlineMaterial) {
       this.outlineMaterial.dispose();
       this.outlineMaterial = null;
@@ -412,6 +474,8 @@ export class ObjectInteractionService {
   dispose(): void {
     this.removeOutline();
     this.removeHoverOutline();
+    this.hoverMaterial?.dispose();
+    this.hoverMaterial = null;
     this.hovered = null;
     this.pendingHover = null;
     this.hoverDirty = false;
@@ -457,6 +521,7 @@ export class ObjectInteractionService {
       this.outlineOffset,
       'selection-outline'
     );
+    this.selectedStencil = writeStencil(root);
     this.outline = this.buildOutline(root, this.outlineMaterial, OUTLINE_NAME);
   }
 
@@ -487,6 +552,7 @@ export class ObjectInteractionService {
       if (groups) {
         // Material mixto: casco solo sobre las partes opacas.
         geometry = geometry.clone();
+        this.ownedGeometries.add(geometry);
         geometry.clearGroups();
         const index = mesh.geometry.getIndex();
         const source = index ? Array.from(index.array) : null;
@@ -497,6 +563,7 @@ export class ObjectInteractionService {
         geometry.setIndex(picked);
       }
       const clone = new Mesh(geometry, material);
+      clone.renderOrder = OUTLINE_RENDER_ORDER;
       clone.raycast = () => undefined;
       clone.matrixAutoUpdate = false;
       clone.matrix.copy(rootInverse).multiply(mesh.matrixWorld);
@@ -522,11 +589,21 @@ export class ObjectInteractionService {
     const material = new MeshBasicMaterial({
       ...params,
       transparent: params.opacity !== undefined,
-      depthWrite: params.opacity === undefined,
+      // Sin test de profundidad: el stencil ya evita pintar dentro de la silueta, así
+      // el borde se ve completo aunque la pared lo tape (mueble pegado a ella).
+      depthTest: false,
+      depthWrite: false,
       side: BackSide,
       polygonOffset: true,
       polygonOffsetFactor: OUTLINE_POLYGON_OFFSET,
-      polygonOffsetUnits: OUTLINE_POLYGON_OFFSET,
+      polygonOffsetUnits: OUTLINE_POLYGON_UNITS,
+      // Solo se pinta fuera de la silueta del mueble (stencil != 1).
+      stencilWrite: true,
+      stencilRef: OUTLINE_STENCIL_REF,
+      stencilFunc: NotEqualStencilFunc,
+      stencilFail: KeepStencilOp,
+      stencilZFail: KeepStencilOp,
+      stencilZPass: KeepStencilOp,
     });
     material.onBeforeCompile = shader => {
       shader.uniforms['uOutlineOffset'] = offset;
@@ -590,11 +667,13 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
     // El seleccionado ya tiene su contorno; el hover nunca toca los materiales.
     if (target && target.object !== this.selected) {
       this.ensureCanvasSize();
-      this.hoverMaterial = this.createOutlineMaterial(
+      // Un único material de hover, reutilizado entre objetos.
+      this.hoverMaterial ??= this.createOutlineMaterial(
         { color: HOVER_OUTLINE_COLOR, opacity: HOVER_OUTLINE_OPACITY },
         this.hoverOffset,
         'hover-outline'
       );
+      this.hoverStencil = writeStencil(target.object);
       this.hoverOutline = this.buildOutline(
         target.object,
         this.hoverMaterial,
@@ -605,11 +684,22 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
   }
 
   private removeHoverOutline(): void {
-    this.hoverOutline?.removeFromParent();
-    this.hoverOutline?.clear();
-    this.hoverOutline = null;
-    this.hoverMaterial?.dispose();
-    this.hoverMaterial = null;
+    restoreStencil(this.hoverStencil);
+    this.hoverStencil = null;
+    if (this.hoverOutline) {
+      this.hoverOutline.removeFromParent();
+      this.disposeHullGeometries(this.hoverOutline);
+      this.hoverOutline.clear();
+      this.hoverOutline = null;
+    }
+  }
+
+  /** Libera las geometrías clonadas (mallas mixtas); las compartidas no se tocan. */
+  private disposeHullGeometries(outline: Group): void {
+    for (const child of outline.children) {
+      const geometry = (child as Mesh).geometry;
+      if (geometry && this.ownedGeometries.delete(geometry)) geometry.dispose();
+    }
   }
 
   private validateTeleportationPosition(position: Vector3): Vector3 | null {
