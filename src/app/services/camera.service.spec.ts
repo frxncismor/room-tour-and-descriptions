@@ -147,6 +147,67 @@ describe('CameraService', () => {
     );
   });
 
+  describe('user input vs. own animations', () => {
+    function press(key: string): void {
+      canvas.dispatchEvent(new KeyboardEvent('keydown', { code: key }));
+    }
+
+    beforeEach(() => {
+      // jsdom has no layout: OrbitControls divides by clientHeight when panning.
+      Object.defineProperty(canvas, 'clientHeight', { value: 800 });
+      Object.defineProperty(canvas, 'clientWidth', { value: 1280 });
+      canvas.setPointerCapture = vi.fn();
+      canvas.releasePointerCapture = vi.fn();
+    });
+
+    it('keyboard panning marks the view as touched so a resize keeps it', () => {
+      service.update(16);
+      const before = service.getCamera().position.clone();
+      press('ArrowLeft');
+      service.update(16);
+      expect(service.getCamera().position.distanceTo(before)).toBeGreaterThan(
+        0.005
+      );
+      const panned = service.getCamera().position.clone();
+      service.setAspect(390 / 844);
+      expect(service.getCamera().position.distanceTo(panned)).toBeLessThan(
+        0.01
+      );
+    });
+
+    it('own updates (damping, reframing) do not mark the view as touched', () => {
+      service.update(16);
+      service.setAspect(390 / 844);
+      service.update(16);
+      service.setAspect(16 / 9);
+      expect(service.getCamera().position.y).toBeCloseTo(
+        DEFAULT_SCENE_CONFIG.camera.initialPosition.y
+      );
+    });
+
+    it('dragging during a teleport cancels it and hands control back', async () => {
+      const done = service.teleportTo(new Vector3(3, 0, 3));
+      service.update(300);
+      expect(service.isAnimating()).toBe(true);
+      const x = service.getCamera().position.x;
+
+      canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          button: 0,
+          pointerId: 1,
+          pointerType: 'mouse',
+          clientX: 10,
+          clientY: 10,
+        })
+      );
+
+      await expect(done).resolves.toBe(false);
+      expect(service.isAnimating()).toBe(false);
+      service.update(5000);
+      expect(service.getCamera().position.x).toBeCloseTo(x, 1);
+    });
+  });
+
   describe('portrait framing (390x844)', () => {
     const aspect = 390 / 844;
 
@@ -235,6 +296,33 @@ describe('CameraService', () => {
       const fraction = (e.maxY - e.minY) / 2;
       expect(fraction).toBeGreaterThan(before * 1.5);
       expect(Math.abs((e.maxY + e.minY) / 2)).toBeLessThan(0.25);
+    });
+
+    it.each([
+      [390, 844],
+      [360, 740],
+      [430, 932],
+    ])(
+      'frames the strip tightly and centred at %ix%i (all 3 in view)',
+      (width, height) => {
+        service.initialize(DEFAULT_SCENE_CONFIG.camera, width / height);
+        service.setupControls(canvas);
+        expectAllInView();
+        const e = projectedExtent();
+        // The 3 pieces span ~8 m across but only ~2 m tall: at this aspect the
+        // width is the limit, so the strip can fill ~16 % of the NDC height (box-based) at most.
+        expect((e.maxY - e.minY) / 2).toBeGreaterThan(0.15);
+        expect(Math.abs((e.maxY + e.minY) / 2)).toBeLessThan(0.1);
+      }
+    );
+
+    it('desktop 1280x800 keeps the original framing', () => {
+      service.initialize(DEFAULT_SCENE_CONFIG.camera, 1280 / 800);
+      expect(
+        service
+          .getCamera()
+          .position.distanceTo(DEFAULT_SCENE_CONFIG.camera.initialPosition)
+      ).toBeLessThan(1e-6);
     });
 
     it('reset() frames the portrait view and a resize back restores the fov', async () => {

@@ -16,8 +16,8 @@ const MAX_VERTICAL_FOV = 90;
  * PORTRAIT_FULL_ASPECT se mezcla con la vista de escritorio (sin saltos).
  */
 const PORTRAIT_FULL_ASPECT = 0.5;
-const PORTRAIT_POSITION = new Vector3(-0.35, 3.9, 6.3);
-const PORTRAIT_TARGET = new Vector3(-0.35, 0.1, -4.2);
+const PORTRAIT_POSITION = new Vector3(-0.15, 3.9, 6.2);
+const PORTRAIT_TARGET = new Vector3(-0.15, 0, -4.8);
 const MIN_CAMERA_HEIGHT = 0.3;
 const MOVE_DURATION_MS = 1200;
 const FOCUS_DURATION_MS = 900;
@@ -51,9 +51,18 @@ export class CameraService {
   private tween: Tween | null = null;
   /** true mientras la cámara sigue en la vista inicial (sin que el usuario la mueva). */
   private atFramedPose = true;
+  /** true mientras el propio servicio llama a controls.update() (tween, reencuadre, damping). */
+  private selfUpdating = false;
   private readonly onControlsStart = () => {
     this.atFramedPose = false;
     this.cancelAnimation();
+  };
+  /**
+   * Cualquier cambio de OrbitControls que no venga de este servicio (p. ej. el paneo
+   * con flechas, que emite change pero no start) cuenta como vista tocada.
+   */
+  private readonly onControlsChange = () => {
+    if (!this.selfUpdating) this.atFramedPose = false;
   };
 
   initialize(config: CameraConfiguration, aspect = 1): void {
@@ -88,7 +97,16 @@ export class CameraService {
       this.camera.position.copy(this.framedPosition());
       this.controls?.target.copy(this.framedTarget());
       this.applyDistanceLimit();
+      this.updateControls();
+    }
+  }
+
+  private updateControls(): void {
+    this.selfUpdating = true;
+    try {
       this.controls?.update();
+    } finally {
+      this.selfUpdating = false;
     }
   }
 
@@ -136,6 +154,7 @@ export class CameraService {
     controls.screenSpacePanning = false;
     controls.target.copy(this.framedTarget());
     controls.addEventListener('start', this.onControlsStart);
+    controls.addEventListener('change', this.onControlsChange);
     // Flechas del teclado con el canvas enfocado.
     if (!domElement.hasAttribute('tabindex')) {
       domElement.tabIndex = 0;
@@ -251,7 +270,6 @@ export class CameraService {
     const tween = this.tween;
     if (!tween) return;
     this.tween = null;
-    if (this.controls) this.controls.enabled = true;
     tween.resolve(false);
   }
 
@@ -271,7 +289,7 @@ export class CameraService {
     if (this.prefersReducedMotion()) {
       this.camera.position.copy(toPosition);
       target.copy(toTarget);
-      this.controls?.update();
+      this.updateControls();
       return Promise.resolve(true);
     }
 
@@ -285,7 +303,7 @@ export class CameraService {
         elapsed: 0,
         resolve,
       };
-      if (this.controls) this.controls.enabled = false;
+      // Los controles siguen activos: un arrastre dispara start y cancela el tween.
     });
   }
 
@@ -329,11 +347,10 @@ export class CameraService {
       );
       if (progress >= 1) {
         this.tween = null;
-        if (this.controls) this.controls.enabled = true;
         tween.resolve(true);
       }
     }
-    this.controls?.update();
+    this.updateControls();
     this.clampToRoom();
   }
 
@@ -349,6 +366,7 @@ export class CameraService {
     this.cancelAnimation();
     if (this.controls) {
       this.controls.removeEventListener('start', this.onControlsStart);
+      this.controls.removeEventListener('change', this.onControlsChange);
       this.controls.stopListenToKeyEvents();
       this.controls.dispose();
       this.controls = null;
