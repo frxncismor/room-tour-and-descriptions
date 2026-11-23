@@ -1,9 +1,8 @@
 import { Injectable } from '@angular/core';
 import {
-  AdditiveBlending,
   BackSide,
-  Box3,
-  BoxGeometry,
+  Color,
+  Group,
   Material,
   Mesh,
   MeshBasicMaterial,
@@ -20,69 +19,122 @@ import {
   RoomLimits,
 } from '../interfaces/scene.interface';
 
+/** Mínimo que necesita el servicio de un evento de puntero/ratón. */
+export interface PointerLike {
+  clientX: number;
+  clientY: number;
+  target?: EventTarget | null;
+  currentTarget?: EventTarget | null;
+}
+
+/** Objeto bajo el cursor; `name` sirve de id para el cursor/UI. */
+export interface HoverTarget {
+  object: Object3D;
+  info: ObjectInfo;
+}
+
+interface EmissiveBackup {
+  color: Color;
+  intensity: number;
+}
+
+interface EmissiveMaterial extends Material {
+  emissive: Color;
+  emissiveIntensity: number;
+}
+
+const OUTLINE_NAME = '__selection-outline';
+const OUTLINE_COLOR = 0x2c4a52;
+const OUTLINE_SCALE = 1.03;
+const OUTLINE_BASE_OPACITY = 0.45;
+const OUTLINE_PULSE_AMPLITUDE = 0.15;
+const OUTLINE_PULSE_SPEED = 0.003;
+const HOVER_EMISSIVE_COLOR = 0x3a6a78;
+const HOVER_EMISSIVE_INTENSITY = 0.35;
+const TELEPORT_MARGIN = 1.5;
+const TELEPORT_MAX_CLAMP = 2;
+
+function hasEmissive(material: Material): material is EmissiveMaterial {
+  return (
+    'emissive' in material &&
+    (material as EmissiveMaterial).emissive instanceof Color
+  );
+}
+
 @Injectable({
   providedIn: 'root',
 })
 export class ObjectInteractionService {
-  private raycaster: Raycaster;
-  private objects: Map<Object3D, ObjectInfo>;
-  private outlineMaterial: Material;
-  private outlineMesh: Mesh | null = null;
-  private roomLimits: RoomLimits;
+  private readonly raycaster = new Raycaster();
+  private readonly objects = new Map<Object3D, ObjectInfo>();
+  private roomLimits: RoomLimits = {
+    minX: -8,
+    maxX: 8,
+    minZ: -8,
+    maxZ: 8,
+  };
 
-  constructor() {
-    this.raycaster = new Raycaster();
-    this.objects = new Map();
-    this.roomLimits = {
-      minX: -8,
-      maxX: 8,
-      minZ: -8,
-      maxZ: 8,
-    };
-    this.outlineMaterial = this.createOutlineMaterial();
-  }
+  private canvas: HTMLElement | null = null;
+  private camera: PerspectiveCamera | null = null;
+  private scene: Scene | null = null;
 
-  private createOutlineMaterial(): Material {
-    return new MeshBasicMaterial({
-      color: 0x2c4a52,
-      side: BackSide,
-      transparent: true,
-      opacity: 0.3,
-      blending: AdditiveBlending,
-      depthWrite: false,
-    });
-  }
+  private outline: Group | null = null;
+  private outlineMaterial: MeshBasicMaterial | null = null;
+  private selected: Object3D | null = null;
+
+  private pendingHover: Vector2 | null = null;
+  private hoverDirty = false;
+  private hovered: HoverTarget | null = null;
+  private readonly emissiveBackup = new Map<Material, EmissiveBackup>();
+
+  /** Notificación opcional de cambios de hover (F4b la conecta a señales). */
+  onHoverChange: ((target: HoverTarget | null) => void) | null = null;
 
   setRoomLimits(limits: RoomLimits): void {
     this.roomLimits = limits;
   }
 
+  /** Elemento cuyo rectángulo define las coordenadas NDC (el canvas). */
+  setCanvas(canvas: HTMLElement | null): void {
+    this.canvas = canvas;
+  }
+
+  /** Cámara y escena usadas por el hover (el clic las recibe por parámetro). */
+  setContext(camera: PerspectiveCamera, scene: Scene): void {
+    this.camera = camera;
+    this.scene = scene;
+  }
+
   async handleClick(
-    event: MouseEvent,
+    event: PointerLike,
     camera: PerspectiveCamera,
     scene: Scene
   ): Promise<InteractionResult> {
     try {
-      const mousePosition = this.getMousePosition(event);
-      this.raycaster.setFromCamera(mousePosition, camera);
-      const intersects = this.raycaster.intersectObjects(scene.children, true);
+      this.setContext(camera, scene);
+      const ndc = this.getMousePosition(event);
+      const intersects = this.intersect(ndc, camera, scene);
 
-      this.removeOutline();
+      this.clearSelection();
 
       for (const intersect of intersects) {
         const object = intersect.object;
 
         if (this.isFloorClick(object)) {
-          const teleportResult = this.handleFloorClick(intersect.point);
-          if (teleportResult) {
-            return { objectInfo: null, success: true };
+          const floorPoint = this.validateTeleportationPosition(
+            intersect.point
+          );
+          if (floorPoint) {
+            return { objectInfo: null, success: true, floorPoint };
           }
           continue;
         }
 
-        const objectInfo = this.handleObjectClick(object);
-        if (objectInfo) {
-          return { objectInfo, success: true };
+        const root = this.findRootObject(object);
+        const objectInfo = root ? this.objects.get(root) : undefined;
+        if (root && objectInfo) {
+          this.select(root);
+          return { objectInfo, success: true, object: root };
         }
       }
 
@@ -96,96 +148,69 @@ export class ObjectInteractionService {
     }
   }
 
-  private getMousePosition(event: MouseEvent): Vector2 {
-    const rect = (event.target as HTMLElement).getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    return new Vector2(x, y);
-  }
-
-  private isFloorClick(object: Object3D): boolean {
-    return object.name === 'floor';
-  }
-
-  private handleFloorClick(point: Vector3): boolean {
-    const targetPosition = this.validateTeleportationPosition(point);
-    return targetPosition !== null;
-  }
-
-  private handleObjectClick(object: Object3D): ObjectInfo | null {
-    const rootObject = this.findRootObject(object);
-    if (rootObject && this.objects.has(rootObject)) {
-      this.createOutline(rootObject);
-      return this.objects.get(rootObject) || null;
+  /** Coordenadas NDC respecto al rectángulo del canvas (no de `event.target`). */
+  getMousePosition(event: PointerLike): Vector2 {
+    const element =
+      this.canvas ??
+      (event.currentTarget as HTMLElement | null) ??
+      (event.target as HTMLElement | null);
+    if (!element || typeof element.getBoundingClientRect !== 'function') {
+      throw new Error('No element available to compute pointer position');
     }
-    return null;
-  }
-
-  private validateTeleportationPosition(position: Vector3): Vector3 | null {
-    const clampedX = Math.max(
-      this.roomLimits.minX + 1.5,
-      Math.min(this.roomLimits.maxX - 1.5, position.x)
-    );
-    const clampedZ = Math.max(
-      this.roomLimits.minZ + 1.5,
-      Math.min(this.roomLimits.maxZ - 1.5, position.z)
-    );
-
-    if (
-      Math.abs(clampedX - position.x) > 2 ||
-      Math.abs(clampedZ - position.z) > 2
-    ) {
-      return null;
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      throw new Error('Canvas has no size');
     }
-
-    return new Vector3(clampedX, position.y, clampedZ);
-  }
-
-  private findRootObject(object: Object3D): Object3D | null {
-    let current = object;
-    while (current.parent && !this.objects.has(current)) {
-      current = current.parent;
-    }
-    return this.objects.has(current) ? current : null;
-  }
-
-  createOutline(object: Object3D): void {
-    const bbox = new Box3().setFromObject(object);
-    const size = new Vector3();
-    bbox.getSize(size);
-
-    const outlineGeometry = new BoxGeometry(
-      size.x * 1.02,
-      size.y * 1.02,
-      size.z * 1.02
+    return new Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
-
-    this.outlineMesh = new Mesh(outlineGeometry, this.outlineMaterial);
-
-    const center = new Vector3();
-    bbox.getCenter(center);
-    this.outlineMesh.position.copy(center);
-    this.outlineMesh.quaternion.copy(object.quaternion);
-
-    this.animateOutline();
   }
 
-  private animateOutline(): void {
-    if (!this.outlineMesh) return;
-
-    const animate = () => {
-      if (this.outlineMesh) {
-        this.outlineMaterial.opacity = 0.3 + Math.sin(Date.now() * 0.002) * 0.1;
-        requestAnimationFrame(animate);
-      }
-    };
-    animate();
+  /** Marca la posición del puntero; se resuelve como mucho una vez por frame. */
+  setHover(ndc: { x: number; y: number } | null): void {
+    this.pendingHover = ndc ? new Vector2(ndc.x, ndc.y) : null;
+    this.hoverDirty = true;
   }
 
+  /** Llamar una vez por frame desde el bucle de F4b (sin rAF propio). */
+  update(timeMs: number): void {
+    if (this.outlineMaterial) {
+      this.outlineMaterial.opacity =
+        OUTLINE_BASE_OPACITY +
+        Math.sin(timeMs * OUTLINE_PULSE_SPEED) * OUTLINE_PULSE_AMPLITUDE;
+    }
+    if (this.hoverDirty) {
+      this.hoverDirty = false;
+      this.resolveHover();
+    }
+  }
+
+  getHovered(): HoverTarget | null {
+    return this.hovered;
+  }
+
+  getSelected(): Object3D | null {
+    return this.selected;
+  }
+
+  /** Quita el contorno actual y libera su material. */
   removeOutline(): void {
-    if (this.outlineMesh) {
-      this.outlineMesh = null;
+    if (this.outline) {
+      // La geometría es compartida con el original: no se libera aquí.
+      this.outline.removeFromParent();
+      this.outline.clear();
+      this.outline = null;
     }
+    if (this.outlineMaterial) {
+      this.outlineMaterial.dispose();
+      this.outlineMaterial = null;
+    }
+    this.selected = null;
+  }
+
+  clearSelection(): void {
+    this.removeOutline();
   }
 
   addObject(object: Object3D, info: ObjectInfo): void {
@@ -194,6 +219,8 @@ export class ObjectInteractionService {
 
   removeObject(object: Object3D): void {
     this.objects.delete(object);
+    if (this.selected === object) this.removeOutline();
+    if (this.hovered?.object === object) this.applyHover(null);
   }
 
   getObjectInfo(object: Object3D): ObjectInfo | undefined {
@@ -201,7 +228,158 @@ export class ObjectInteractionService {
   }
 
   dispose(): void {
-    this.objects.clear();
     this.removeOutline();
+    this.restoreEmissive();
+    this.hovered = null;
+    this.pendingHover = null;
+    this.hoverDirty = false;
+    this.onHoverChange = null;
+    this.objects.clear();
+    this.canvas = null;
+    this.camera = null;
+    this.scene = null;
+  }
+
+  // ---- privado ----
+
+  private intersect(ndc: Vector2, camera: PerspectiveCamera, scene: Scene) {
+    scene.updateMatrixWorld();
+    camera.updateMatrixWorld();
+    this.raycaster.setFromCamera(ndc, camera);
+    return this.raycaster
+      .intersectObjects(scene.children, true)
+      .filter(hit => !this.isOutline(hit.object));
+  }
+
+  private isOutline(object: Object3D): boolean {
+    let current: Object3D | null = object;
+    while (current) {
+      if (current.name === OUTLINE_NAME) return true;
+      current = current.parent;
+    }
+    return false;
+  }
+
+  private isFloorClick(object: Object3D): boolean {
+    return object.name === 'floor';
+  }
+
+  private select(root: Object3D): void {
+    this.selected = root;
+    this.outlineMaterial = new MeshBasicMaterial({
+      color: OUTLINE_COLOR,
+      side: BackSide,
+      transparent: true,
+      opacity: OUTLINE_BASE_OPACITY,
+      depthWrite: false,
+    });
+    const outline = new Group();
+    outline.name = OUTLINE_NAME;
+
+    // El contorno vive como hijo del objeto: hereda su transformación.
+    root.updateMatrixWorld(true);
+    const rootInverse = root.matrixWorld.clone().invert();
+    const meshes: Mesh[] = [];
+    root.traverse(child => {
+      if ((child as Mesh).isMesh && !this.isOutline(child)) {
+        meshes.push(child as Mesh);
+      }
+    });
+    for (const mesh of meshes) {
+      const clone = new Mesh(mesh.geometry, this.outlineMaterial);
+      clone.raycast = () => undefined;
+      clone.matrixAutoUpdate = false;
+      clone.matrix
+        .copy(rootInverse)
+        .multiply(mesh.matrixWorld)
+        .scale(new Vector3(OUTLINE_SCALE, OUTLINE_SCALE, OUTLINE_SCALE));
+      clone.matrixWorldNeedsUpdate = true;
+      outline.add(clone);
+    }
+    outline.raycast = () => undefined;
+    root.add(outline);
+    this.outline = outline;
+  }
+
+  private resolveHover(): void {
+    if (!this.pendingHover || !this.camera || !this.scene) {
+      this.applyHover(null);
+      return;
+    }
+    const hits = this.intersect(this.pendingHover, this.camera, this.scene);
+    for (const hit of hits) {
+      if (this.isFloorClick(hit.object)) break;
+      const root = this.findRootObject(hit.object);
+      const info = root ? this.objects.get(root) : undefined;
+      if (root && info) {
+        this.applyHover({ object: root, info });
+        return;
+      }
+    }
+    this.applyHover(null);
+  }
+
+  private applyHover(target: HoverTarget | null): void {
+    if (this.hovered?.object === target?.object) return;
+    this.restoreEmissive();
+    this.hovered = target;
+    if (target) this.highlight(target.object);
+    this.onHoverChange?.(target);
+  }
+
+  private highlight(root: Object3D): void {
+    root.traverse(child => {
+      if (!(child as Mesh).isMesh || this.isOutline(child)) return;
+      const material = (child as Mesh).material;
+      const list = Array.isArray(material) ? material : [material];
+      for (const m of list) {
+        if (!hasEmissive(m) || this.emissiveBackup.has(m)) continue;
+        this.emissiveBackup.set(m, {
+          color: m.emissive.clone(),
+          intensity: m.emissiveIntensity,
+        });
+        m.emissive.set(HOVER_EMISSIVE_COLOR);
+        m.emissiveIntensity = HOVER_EMISSIVE_INTENSITY;
+      }
+    });
+  }
+
+  private restoreEmissive(): void {
+    for (const [material, backup] of this.emissiveBackup) {
+      if (hasEmissive(material)) {
+        material.emissive.copy(backup.color);
+        material.emissiveIntensity = backup.intensity;
+      }
+    }
+    this.emissiveBackup.clear();
+  }
+
+  private validateTeleportationPosition(position: Vector3): Vector3 | null {
+    const clampedX = Math.max(
+      this.roomLimits.minX + TELEPORT_MARGIN,
+      Math.min(this.roomLimits.maxX - TELEPORT_MARGIN, position.x)
+    );
+    const clampedZ = Math.max(
+      this.roomLimits.minZ + TELEPORT_MARGIN,
+      Math.min(this.roomLimits.maxZ - TELEPORT_MARGIN, position.z)
+    );
+
+    if (
+      Math.abs(clampedX - position.x) > TELEPORT_MAX_CLAMP ||
+      Math.abs(clampedZ - position.z) > TELEPORT_MAX_CLAMP
+    ) {
+      return null;
+    }
+
+    return new Vector3(clampedX, position.y, clampedZ);
+  }
+
+  private findRootObject(object: Object3D): Object3D | null {
+    let current: Object3D | null = object;
+    while (current) {
+      if (this.objects.has(current)) return current;
+      current = current.parent;
+    }
+    return null;
   }
 }
