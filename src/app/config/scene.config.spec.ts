@@ -31,6 +31,13 @@ describe('scene config (T-231)', () => {
     }
   });
 
+  it('small decor pieces do not cast shadows (SC-204 frame time)', () => {
+    expect(MODEL_CONFIGURATIONS.succulent.castShadow).toBe(false);
+    expect(MODEL_CONFIGURATIONS.landscapePainting.castShadow).toBe(false);
+    expect(DECOR_CONFIGURATIONS.vase.castShadow).toBe(false);
+    expect(DECOR_CONFIGURATIONS.clock.castShadow).toBe(false);
+  });
+
   it('the two new interactive pieces use their FURNITURE_TEXT', () => {
     expect(MODEL_CONFIGURATIONS.landscapePainting.metadata).toBe(
       FURNITURE_TEXT.landscapePainting
