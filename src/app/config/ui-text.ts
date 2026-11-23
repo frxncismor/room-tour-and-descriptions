@@ -86,7 +86,7 @@ export const UI_TEXT = {
     ] as ControlText[],
   },
   canvasLabel:
-    'Interactive 3D view of a living room with a sofa, a poker table and a bookshelf. Use the furniture list to inspect each piece with the keyboard.',
+    'Interactive 3D view of a living room. Use the list of pieces to inspect each one with the keyboard.',
 };
 
 /**
@@ -111,5 +111,18 @@ export const FURNITURE_TEXT = {
     description:
       'A tall, open bookshelf with several tiers of shelving for books and decorative pieces. Its slim wooden structure keeps the wall feeling light while adding useful storage and a touch of character.',
     details: 'Model: "BookShelf" by Twpic, via Sketchfab.',
+  },
+  landscapePainting: {
+    name: 'Landscape painting',
+    description:
+      'Oil landscape of a mill and a river, in a gilt frame with beaded molding. It hangs on the back wall, lit by a spotlight.',
+    details:
+      'Model: "Fancy Picture Frame 01" by Rob Tuytel and Rico Cilliers, Poly Haven (CC0).',
+  },
+  succulent: {
+    name: 'Potted succulent',
+    description:
+      'Zebra haworthia in a weathered ceramic pot, set beside the bookshelf.',
+    details: 'Model: "Potted Plant 04" by James Ray Cock, Poly Haven (CC0).',
   },
 } satisfies Record<string, FurnitureText>;
