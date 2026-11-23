@@ -99,4 +99,67 @@ describe('ViewerComponent', () => {
     ).not.toBeNull();
     expect(scene.loadAll).not.toHaveBeenCalled();
   });
+
+  it('does not select after a multi-touch gesture', async () => {
+    const fixture = TestBed.createComponent(ViewerComponent);
+    await fixture.whenStable();
+    const canvas = fixture.nativeElement.querySelector('canvas');
+    canvas.dispatchEvent(
+      pointer('pointerdown', { pointerId: 1, clientX: 100, clientY: 100 })
+    );
+    canvas.dispatchEvent(
+      pointer('pointerdown', { pointerId: 2, clientX: 160, clientY: 100 })
+    );
+    canvas.dispatchEvent(
+      pointer('pointerup', { pointerId: 2, clientX: 160, clientY: 100 })
+    );
+    canvas.dispatchEvent(
+      pointer('pointerup', { pointerId: 1, clientX: 100, clientY: 100 })
+    );
+    expect(scene.handlePointerSelect).not.toHaveBeenCalled();
+
+    // After the gesture a plain tap selects again.
+    canvas.dispatchEvent(
+      pointer('pointerdown', { pointerId: 3, clientX: 50, clientY: 50 })
+    );
+    canvas.dispatchEvent(
+      pointer('pointerup', { pointerId: 3, clientX: 50, clientY: 50 })
+    );
+    expect(scene.handlePointerSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the gesture on pointercancel without selecting', async () => {
+    const fixture = TestBed.createComponent(ViewerComponent);
+    await fixture.whenStable();
+    const canvas = fixture.nativeElement.querySelector('canvas');
+    canvas.dispatchEvent(
+      pointer('pointerdown', { clientX: 100, clientY: 100 })
+    );
+    canvas.dispatchEvent(
+      pointer('pointermove', { clientX: 150, clientY: 100 })
+    );
+    canvas.dispatchEvent(
+      pointer('pointercancel', { clientX: 150, clientY: 100 })
+    );
+    canvas.dispatchEvent(pointer('pointerup', { clientX: 150, clientY: 100 }));
+    expect(scene.handlePointerSelect).not.toHaveBeenCalled();
+
+    canvas.dispatchEvent(pointer('pointerdown', { clientX: 10, clientY: 10 }));
+    canvas.dispatchEvent(pointer('pointerup', { clientX: 10, clientY: 10 }));
+    expect(scene.handlePointerSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns to the initial view with the Home key on the canvas', async () => {
+    const fixture = TestBed.createComponent(ViewerComponent);
+    await fixture.whenStable();
+    const canvas = fixture.nativeElement.querySelector('canvas');
+    const event = new KeyboardEvent('keydown', {
+      key: 'Home',
+      bubbles: true,
+      cancelable: true,
+    });
+    canvas.dispatchEvent(event);
+    expect(scene.resetView).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
 });

@@ -12,6 +12,7 @@ import {
 import { UI_TEXT } from '../../config/ui-text';
 import { SceneService } from '../../services/scene.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
+import { BrandLabelComponent } from '../brand-label/brand-label.component';
 import { DescriptionPanelComponent } from '../description-panel/description-panel.component';
 import { ErrorBannerComponent } from '../error-banner/error-banner.component';
 import { ErrorOverlayComponent } from '../error-overlay/error-overlay.component';
@@ -28,6 +29,7 @@ const BLOCKING_ERRORS = ['webgl-unavailable', 'webgl-context-lost'];
   selector: 'app-viewer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    BrandLabelComponent,
     DescriptionPanelComponent,
     ErrorBannerComponent,
     ErrorOverlayComponent,

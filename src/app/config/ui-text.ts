@@ -9,15 +9,22 @@ export interface FurnitureText {
 export interface ControlText {
   label: string;
   text: string;
+  /** Variante para dispositivos táctiles (sin ratón ni teclado). */
+  touchText: string;
   /** Icono SVG de la acción. */
   icon: 'rotate' | 'pan' | 'zoom' | 'walk' | 'inspect' | 'keyboard';
 }
 
 export const UI_TEXT = {
   appName: 'Room tour',
+  brand: {
+    title: 'Room Tour',
+    byline: 'by Francisco Moreno',
+  },
   loading: {
-    title: 'Preparing the room',
-    status: 'Loading 3D models',
+    title: 'Room Tour',
+    byline: 'by Francisco Moreno',
+    status: 'Preparing the room',
   },
   errors: {
     webglTitle: '3D view unavailable',
@@ -42,32 +49,38 @@ export const UI_TEXT = {
     controls: [
       {
         label: 'Look around',
-        text: 'Drag with the left mouse button, or with one finger',
+        text: 'Drag with the left mouse button',
+        touchText: 'Drag with one finger',
         icon: 'rotate',
       },
       {
         label: 'Slide sideways',
-        text: 'Drag with the right button or two fingers; arrow keys work too',
+        text: 'Drag with the right button; arrow keys work too',
+        touchText: 'Drag with two fingers',
         icon: 'pan',
       },
       {
         label: 'Zoom',
-        text: 'Scroll the wheel, or pinch with two fingers',
+        text: 'Scroll the wheel',
+        touchText: 'Pinch with two fingers',
         icon: 'zoom',
       },
       {
         label: 'Walk',
-        text: 'Click or tap the floor to move there',
+        text: 'Click the floor to move there',
+        touchText: 'Tap the floor to move there',
         icon: 'walk',
       },
       {
         label: 'Inspect furniture',
-        text: 'Click or tap a piece to zoom in and read about it',
+        text: 'Click a piece to zoom in and read about it',
+        touchText: 'Tap a piece to zoom in and read about it',
         icon: 'inspect',
       },
       {
         label: 'Keyboard',
         text: 'Esc closes the details, Home returns to the initial view',
+        touchText: 'Tap the cross to close the details',
         icon: 'keyboard',
       },
     ] as ControlText[],

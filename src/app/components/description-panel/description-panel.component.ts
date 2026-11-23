@@ -11,6 +11,13 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
   selector: 'app-description-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <!-- Persistent live region: screen readers only announce changes in a
+         region that already exists, so it lives outside the @if. -->
+    <div class="sr-only" aria-live="polite" aria-atomic="true">
+      @if (info(); as announced) {
+        {{ announced.name }}. {{ announced.description }}
+      }
+    </div>
     @if (info(); as item) {
       <section
         class="panel"
@@ -34,7 +41,7 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
             />
           </svg>
         </button>
-        <div aria-live="polite" aria-atomic="true">
+        <div>
           <h2 id="furniture-title">{{ item.name }}</h2>
           <p id="furniture-desc">{{ item.description }}</p>
           @if (item.details) {
@@ -47,6 +54,17 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
   styles: `
     :host {
       display: contents;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      white-space: nowrap;
+      clip-path: inset(50%);
+      border: 0;
     }
     .panel {
       position: absolute;

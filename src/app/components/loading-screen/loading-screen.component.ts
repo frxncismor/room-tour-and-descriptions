@@ -18,6 +18,7 @@ import { ViewerStateService } from '../../services/viewer-state.service';
     >
       <div class="card">
         <h1>{{ text.title }}</h1>
+        <p class="byline">{{ text.byline }}</p>
         <div
           class="bar"
           role="progressbar"
@@ -29,7 +30,10 @@ import { ViewerStateService } from '../../services/viewer-state.service';
         >
           <div class="fill" [style.width.%]="progress()"></div>
         </div>
-        <p class="status">{{ text.status }} · {{ progress() }}%</p>
+        <p class="status">
+          <span>{{ text.status }}</span>
+          <span class="percent">{{ progress() }}%</span>
+        </p>
       </div>
     </div>
   `,
@@ -40,7 +44,11 @@ import { ViewerStateService } from '../../services/viewer-state.service';
       z-index: 30;
       display: grid;
       place-items: center;
-      background: var(--color-bg);
+      background: radial-gradient(
+        ellipse at 50% 38%,
+        var(--color-surface) 0%,
+        var(--color-bg) 70%
+      );
       opacity: 1;
       transition: opacity 0.4s ease;
     }
@@ -57,10 +65,16 @@ import { ViewerStateService } from '../../services/viewer-state.service';
       text-align: center;
     }
     h1 {
-      margin: 0 0 20px;
-      font-size: 1.25rem;
-      font-weight: 600;
+      margin: 0;
+      font-size: 1.9rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
       color: var(--color-text);
+    }
+    .byline {
+      margin: 4px 0 32px;
+      font-size: 0.9rem;
+      color: var(--color-text-muted);
     }
     .bar {
       height: 8px;
@@ -74,9 +88,14 @@ import { ViewerStateService } from '../../services/viewer-state.service';
       transition: width 0.25s ease;
     }
     .status {
-      margin: 12px 0 0;
-      font-size: 0.9rem;
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0 0;
+      font-size: 0.85rem;
       color: var(--color-text-muted);
+    }
+    .percent {
+      font-variant-numeric: tabular-nums;
     }
     @media (prefers-reduced-motion: reduce) {
       .loading,
