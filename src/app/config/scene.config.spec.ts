@@ -39,12 +39,14 @@ describe('scene config (T-231)', () => {
   });
 
   it('the two new interactive pieces use their FURNITURE_TEXT', () => {
-    expect(MODEL_CONFIGURATIONS.landscapePainting.metadata).toBe(
-      FURNITURE_TEXT.landscapePainting
-    );
-    expect(MODEL_CONFIGURATIONS.succulent.metadata).toBe(
-      FURNITURE_TEXT.succulent
-    );
+    expect(MODEL_CONFIGURATIONS.landscapePainting.metadata).toEqual({
+      id: 'landscapePainting',
+      ...FURNITURE_TEXT.landscapePainting,
+    });
+    expect(MODEL_CONFIGURATIONS.succulent.metadata).toEqual({
+      id: 'succulent',
+      ...FURNITURE_TEXT.succulent,
+    });
   });
 
   it('declares the texture sets and the trim', () => {
@@ -54,6 +56,44 @@ describe('scene config (T-231)', () => {
     expect(RUG_TEXTURES.diffuse).toBe('assets/textures/rug/diff.webp');
     expect(RUG_TEXTURES.normal).toBe('assets/textures/rug/nor.webp');
     expect(TRIM).toMatchObject({ height: 0.12, depth: 0.02, color: 0xf3ece1 });
+  });
+});
+
+describe('warm lighting and 1.60 m axis (T-331)', () => {
+  const { lighting, renderer, room } = DEFAULT_SCENE_CONFIG;
+
+  it('has one point light, a hemisphere light and neutral tone mapping', () => {
+    expect(lighting.point).toHaveLength(1);
+    expect(lighting.hemisphere.intensity).toBeGreaterThan(0);
+    expect(renderer.toneMapping).toBe('neutral');
+    expect(renderer.exposure).toBeGreaterThanOrEqual(0.95);
+    expect(renderer.exposure).toBeLessThanOrEqual(1.15);
+  });
+
+  it('only the sun casts shadows', () => {
+    expect(lighting.directional.castShadow).toBe(true);
+    expect(lighting.spotlights.some(s => s.castShadow)).toBe(false);
+    expect(lighting.point.some(p => p.castShadow)).toBe(false);
+  });
+
+  it('uses warm colours (no pure white accent spots)', () => {
+    for (const spot of lighting.spotlights) {
+      expect(spot.color).not.toBe(0xffffff);
+    }
+    expect(room.colors.ceiling).toBe(0xf1e2cf);
+    expect(RUG_TEXTURES.tint).toBe(0xffd9b3);
+  });
+
+  it('painting and clock are centred at 1.60 m (±0.02)', () => {
+    const p = MODEL_CONFIGURATIONS.landscapePainting;
+    const c = DECOR_CONFIGURATIONS.clock;
+    expect(p.yOffset + SIZES['landscapePainting'].h / 2).toBeCloseTo(1.6, 1);
+    expect(
+      Math.abs(p.yOffset + SIZES['landscapePainting'].h / 2 - 1.6)
+    ).toBeLessThanOrEqual(0.02);
+    expect(
+      Math.abs(c.yOffset + SIZES['clock'].h / 2 - 1.6)
+    ).toBeLessThanOrEqual(0.02);
   });
 });
 

@@ -6,12 +6,14 @@ import {
   DirectionalLight,
   DoubleSide,
   Group,
+  HemisphereLight,
   Material,
   Mesh,
   MeshStandardMaterial,
   NoColorSpace,
   Object3D,
   PlaneGeometry,
+  PointLight,
   RepeatWrapping,
   Scene,
   SpotLight,
@@ -330,8 +332,15 @@ export class RoomBuilderService {
   }
 
   private setupLighting(scene: Scene, lighting: LightingConfiguration): void {
-    const { ambient, directional, spotlights } = lighting;
+    const { ambient, hemisphere, directional, spotlights, point } = lighting;
     scene.add(new AmbientLight(ambient.color, ambient.intensity));
+    scene.add(
+      new HemisphereLight(
+        hemisphere.skyColor,
+        hemisphere.groundColor,
+        hemisphere.intensity
+      )
+    );
     scene.add(this.createDirectionalLight(directional));
     for (const config of spotlights) {
       const light = new SpotLight(config.color, config.intensity);
@@ -343,6 +352,14 @@ export class RoomBuilderService {
       light.distance = config.distance;
       light.castShadow = config.castShadow;
       scene.add(light, light.target);
+    }
+    for (const config of point) {
+      const light = new PointLight(config.color, config.intensity);
+      light.position.copy(config.position);
+      light.distance = config.distance;
+      light.decay = config.decay;
+      light.castShadow = config.castShadow;
+      scene.add(light);
     }
   }
 

@@ -64,7 +64,11 @@ describe('ObjectInteractionService', () => {
     furniture = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial());
     furniture.position.set(0, 0.5, 0);
     scene.add(furniture);
-    service.addObject(furniture, { name: 'Box', description: 'A box' });
+    service.addObject(furniture, {
+      id: 'sofa',
+      name: 'Box',
+      description: 'A box',
+    });
   });
 
   afterEach(() => service.dispose());
@@ -370,7 +374,7 @@ describe('ObjectInteractionService', () => {
     );
     root.add(child);
     scene.add(root);
-    service.addObject(root, { name: 'Group', description: '' });
+    service.addObject(root, { id: 'sofa', name: 'Group', description: '' });
     service.selectObject(root);
     const outline = root.children.find(c => c.name === '__selection-outline')!;
     expect(outline.children.length).toBe(2);
@@ -453,7 +457,7 @@ describe('ObjectInteractionService', () => {
       expect(isTranslucent(mixed)).toBe(false);
       mixed.position.set(2, 0.5, 0);
       scene.add(mixed);
-      service.addObject(mixed, { name: 'Mixed', description: '' });
+      service.addObject(mixed, { id: 'sofa', name: 'Mixed', description: '' });
       service.selectObject(mixed);
       const outline = mixed.children.find(
         c => c.name === '__selection-outline'
@@ -470,7 +474,7 @@ describe('ObjectInteractionService', () => {
       const mixed = new Mesh(geometry, [new MeshStandardMaterial(), glass()]);
       mixed.position.set(2, 0.5, 0);
       scene.add(mixed);
-      service.addObject(mixed, { name: 'Mixed', description: '' });
+      service.addObject(mixed, { id: 'sofa', name: 'Mixed', description: '' });
 
       service.selectObject(mixed);
       const hullGeometry = (
