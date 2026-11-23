@@ -10,14 +10,16 @@ const WALL_MARGIN = 0.5;
 const MIN_HORIZONTAL_FOV = 50;
 const MAX_VERTICAL_FOV = 90;
 /**
- * Vista inicial en retrato (aspect <= PORTRAIT_FULL_ASPECT): la cámara sube y
- * mira hacia abajo, al centro de los muebles, para que la profundidad de la
- * sala llene el alto en vez de dejar techo y suelo vacíos. Entre aspect 1 y
- * PORTRAIT_FULL_ASPECT se mezcla con la vista de escritorio (sin saltos).
+ * Vista inicial en retrato (aspect <= PORTRAIT_FULL_ASPECT): encuadre diagonal.
+ * La cámara se coloca en la esquina delantera derecha, bajo el techo (4 m), y
+ * mira en diagonal hacia el fondo izquierdo con un pitch medio (~25°): la
+ * profundidad de la sala llena el alto, se ve la esquina y no queda vacío
+ * sobre las paredes. Entre aspect 1 y PORTRAIT_FULL_ASPECT se mezcla con la
+ * vista de escritorio (sin saltos).
  */
 const PORTRAIT_FULL_ASPECT = 0.5;
-const PORTRAIT_POSITION = new Vector3(-0.15, 3.9, 6.2);
-const PORTRAIT_TARGET = new Vector3(-0.15, 0, -4.8);
+const PORTRAIT_POSITION = new Vector3(7, 3.8, -1.5);
+const PORTRAIT_TARGET = new Vector3(0, 0.5, -4.5);
 const MIN_CAMERA_HEIGHT = 0.3;
 const MOVE_DURATION_MS = 1200;
 const FOCUS_DURATION_MS = 900;
