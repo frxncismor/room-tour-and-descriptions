@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Box3, Object3D, PerspectiveCamera, Sphere, Vector3 } from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { DEFAULT_SCENE_CONFIG } from '../config/scene.config';
 import { CameraConfiguration, RoomLimits } from '../interfaces/scene.interface';
 

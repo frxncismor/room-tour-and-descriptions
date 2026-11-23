@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Box3, Material, Mesh, Object3D, Texture, Vector3 } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import {
   LoadProgressCallback,
   ModelConfiguration,
