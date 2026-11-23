@@ -56,6 +56,62 @@ describe('ObjectInteractionService', () => {
     expect(result.floorPoint).toBeUndefined();
   });
 
+  describe('touch tolerance', () => {
+    /** Primer x (a la derecha del centro) donde un clic exacto ya falla el mueble. */
+    async function firstMissX(): Promise<number> {
+      for (let x = 100; x < 200; x++) {
+        if (!(await click(x, 100)).object) return x;
+      }
+      throw new Error('furniture fills the view');
+    }
+
+    const touch = (x: number, y: number) =>
+      service.handleClick(
+        { clientX: x, clientY: y, pointerType: 'touch' },
+        camera,
+        scene
+      );
+
+    it('selects a piece when a touch lands a few px beside it', async () => {
+      const miss = await firstMissX();
+      const exact = await click(miss + 6, 100);
+      expect(exact.object).toBeUndefined();
+      const result = await touch(miss + 6, 100);
+      expect(result.object).toBe(furniture);
+      expect(result.objectInfo?.name).toBe('Box');
+      expect(result.floorPoint).toBeUndefined();
+      expect(service.getSelected()).toBe(furniture);
+    });
+
+    it('does not select anything beyond the tolerance and keeps the floor click', async () => {
+      const miss = await firstMissX();
+      const result = await touch(miss + 40, 100);
+      expect(result.object).toBeUndefined();
+      expect(result.floorPoint).toBeDefined();
+    });
+
+    it('a mouse pointer gets no tolerance unless asked explicitly', async () => {
+      const miss = await firstMissX();
+      const mouse = await service.handleClick(
+        { clientX: miss + 6, clientY: 100, pointerType: 'mouse' },
+        camera,
+        scene
+      );
+      expect(mouse.object).toBeUndefined();
+      const explicit = await service.handleClick(
+        { clientX: miss + 6, clientY: 100 },
+        camera,
+        scene,
+        { tolerancePx: 14 }
+      );
+      expect(explicit.object).toBe(furniture);
+    });
+
+    it('a direct touch on the piece still selects it', async () => {
+      expect((await touch(100, 100)).object).toBe(furniture);
+    });
+  });
+
   it('returns a validated floorPoint on a floor click', async () => {
     const result = await click(100, 190);
     expect(result.success).toBe(true);

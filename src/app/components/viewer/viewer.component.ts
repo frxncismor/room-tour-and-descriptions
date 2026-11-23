@@ -147,6 +147,7 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
       void this.sceneService.handlePointerSelect({
         clientX: event.clientX,
         clientY: event.clientY,
+        pointerType: event.pointerType,
       });
     }
   }
