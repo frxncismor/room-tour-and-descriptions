@@ -52,6 +52,8 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   protected readonly canvasLabel = UI_TEXT.canvasLabel;
 
   protected readonly dragging = signal(false);
+  /** Primer gesto de navegación: la ayuda se da por vista (H3). */
+  protected readonly interacted = signal(false);
 
   protected readonly cursor = computed(() => {
     if (this.dragging()) return 'grabbing';
@@ -120,6 +122,7 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
         ) >= DRAG_THRESHOLD_PX
       ) {
         this.moved = true;
+        this.interacted.set(true);
         this.dragging.set(true);
       }
       return;
@@ -175,6 +178,10 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
     if (this.state.selected()) this.closePanel();
   }
 
+  protected onCanvasKey(event: KeyboardEvent): void {
+    if (event.key !== 'Tab' && event.key !== 'Shift') this.interacted.set(true);
+  }
+
   protected onHome(event: Event): void {
     event.preventDefault();
     this.sceneService.resetView();
@@ -186,10 +193,12 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   }
 
   protected selectObject(id: string): void {
+    this.interacted.set(true);
     this.sceneService.selectObject(id);
   }
 
   protected resetView(): void {
+    this.interacted.set(true);
     this.sceneService.clearSelection();
     this.sceneService.resetView();
   }

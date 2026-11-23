@@ -2,11 +2,13 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  effect,
   ElementRef,
   inject,
   Injector,
   input,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { UI_TEXT } from '../../config/ui-text';
@@ -326,6 +328,8 @@ function writeDismissed(value: boolean): void {
 export class HelpPanelComponent {
   /** El visor lo oculta mientras hay una ficha abierta (evita tapar la escena). */
   readonly suppressed = input(false);
+  /** El usuario ya navegó (gesto, lista): la ayuda se da por vista. */
+  readonly seen = input(false);
   protected readonly text = UI_TEXT.help;
   /** Táctil: la ayuda habla de dedos y toques, no de ratón ni teclado. */
   protected readonly touch = isTouchDevice();
@@ -334,6 +338,21 @@ export class HelpPanelComponent {
   private readonly injector = inject(Injector);
   private readonly reopenButton =
     viewChild<ElementRef<HTMLButtonElement>>('reopenButton');
+
+  constructor() {
+    // Primer gesto, primera selección o uso de la lista: ya sabe explorar, así
+    // que la ayuda no debe reaparecer al cerrar la ficha. No mueve el foco.
+    effect(() => {
+      if (this.suppressed() || this.seen()) {
+        untracked(() => {
+          if (this.open()) {
+            this.open.set(false);
+            writeDismissed(true);
+          }
+        });
+      }
+    });
+  }
 
   /**
    * La ayuda aparece abierta al cargar pero NO roba el foco (un usuario de

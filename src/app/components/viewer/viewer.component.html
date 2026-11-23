@@ -4,7 +4,7 @@
        change the layout. -->
   @if (!blockingError()) {
     <app-brand-label />
-    <app-help-panel [suppressed]="!!state.selected()" />
+    <app-help-panel [suppressed]="!!state.selected()" [seen]="interacted()" />
     <app-object-list
       [items]="objects()"
       [selectedName]="state.selected()?.name ?? null"
@@ -26,6 +26,8 @@
     (pointercancel)="onPointerCancel($event)"
     (pointerleave)="onPointerLeave($event)"
     (keydown.home)="onHome($event)"
+    (keydown)="onCanvasKey($event)"
+    (wheel)="interacted.set(true)"
   ></canvas>
 
   @if (blockingError(); as error) {
