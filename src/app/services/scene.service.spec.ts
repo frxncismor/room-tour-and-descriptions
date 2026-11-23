@@ -14,6 +14,7 @@ import {
   TextureLoader,
   Vector3,
 } from 'three';
+import { DECOR3, DECOR3_LOAD_KEYS } from '../config/decor.config';
 import {
   DECOR_CONFIGURATIONS,
   DEFAULT_SCENE_CONFIG,
@@ -30,6 +31,7 @@ import { ModelLoaderService } from './model-loader.service';
 import { ObjectInteractionService } from './object-interaction.service';
 import { RoomBuilderService } from './room-builder.service';
 import {
+  DECOR3_KEYS,
   MAX_CONSECUTIVE_FRAME_FAILURES,
   RENDERER_FACTORY,
   SceneRenderer,
@@ -808,6 +810,168 @@ describe('SceneService', () => {
       service.dispose();
       expect(renderer.info.memory.geometries).toBe(0);
       expect(service.getObjectList()).toEqual([]);
+    });
+  });
+
+  // ── T-360…T-362: decoración 3 perezosa, errores por código, ids ─────
+
+  describe('decor3 (lazy), error codes and ids', () => {
+    const decor3Paths = Object.values(DECOR3.textures);
+
+    it('keeps its static load keys in sync with DECOR3', () => {
+      expect([...DECOR3_KEYS]).toEqual([...DECOR3_LOAD_KEYS]);
+    });
+
+    it('loadAll builds the decor3 group, counts art/fabric keys and reaches 100', async () => {
+      const seen: number[] = [];
+      service.initialize(canvas);
+      const set = state.loadProgress.set.bind(state.loadProgress);
+      vi.spyOn(state.loadProgress, 'set').mockImplementation(v => {
+        seen.push(v);
+        set(v);
+      });
+      await service.loadAll();
+
+      expect(service.getScene().getObjectByName('decor3')).toBeDefined();
+      for (const path of decor3Paths) {
+        expect(
+          (textureLoad.mock.calls as unknown[][]).map(c => c[0])
+        ).toContain(path);
+      }
+      expect(seen).toEqual([...seen].sort((a, b) => a - b));
+      expect(seen.at(-1)).toBe(100);
+      expect(state.loadStatus()).toBe('ready');
+      expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+    });
+
+    it('stays loading until decor3 has finished', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>(resolve => (release = resolve));
+      const original = service['importDecorBuilder'].bind(service);
+      vi.spyOn(
+        service as unknown as { importDecorBuilder: () => unknown },
+        'importDecorBuilder'
+      ).mockImplementation(async () => {
+        await gate;
+        return original();
+      });
+      service.initialize(canvas);
+      const done = service.loadAll();
+      await new Promise(r => setTimeout(r, 20));
+      expect(state.loadStatus()).toBe('loading');
+      expect(state.sceneReady()).toBe(false);
+      expect(state.loadProgress()).toBeLessThan(100);
+      release();
+      await done;
+      expect(state.loadStatus()).toBe('ready');
+    });
+
+    it('decor3 meshes never receive raycast hits nor become interactive', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      const decor3 = service.getScene().getObjectByName('decor3')!;
+      let meshes = 0;
+      decor3.traverse(child => {
+        if ((child as Mesh).isMesh) {
+          meshes++;
+          const hits: unknown[] = [];
+          child.raycast(new Raycaster(), hits as never);
+          expect(hits).toEqual([]);
+        }
+      });
+      expect(meshes).toBeGreaterThan(0);
+      const interaction = TestBed.inject(ObjectInteractionService);
+      expect(interaction.getObjectInfo(decor3)).toBeUndefined();
+    });
+
+    it('dispose frees each decor3 texture exactly once', async () => {
+      const textures: Texture[] = [];
+      textureLoad.mockImplementation(async () => {
+        const texture = new Texture();
+        textures.push(texture);
+        return texture;
+      });
+      service.initialize(canvas);
+      await service.loadAll();
+      const decorTextures = textures.slice(-decor3Paths.length);
+      const spies = decorTextures.map(t => vi.spyOn(t, 'dispose'));
+      service.dispose();
+      spies.forEach(spy => expect(spy).toHaveBeenCalledTimes(1));
+      expect(service.getScene().getObjectByName('decor3')).toBeUndefined();
+    });
+
+    it('a rejected import warns by code, keeps the scene and retries', async () => {
+      const spy = vi
+        .spyOn(
+          service as unknown as { importDecorBuilder: () => unknown },
+          'importDecorBuilder'
+        )
+        .mockRejectedValue(new Error('chunk'));
+      service.initialize(canvas);
+      await service.loadAll();
+
+      expect(state.loadStatus()).toBe('error');
+      expect(state.error()?.code).toBe('model-load-failed');
+      expect(state.error()?.params?.names?.sort()).toEqual([
+        'fabric',
+        'prints',
+      ]);
+      expect(state.sceneReady()).toBe(true);
+      expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+      expect(service.getScene().getObjectByName('decor3')).toBeUndefined();
+
+      spy.mockRestore();
+      await service.retryLoad();
+      expect(state.loadStatus()).toBe('ready');
+      expect(state.error()).toBeNull();
+      expect(service.getScene().getObjectByName('decor3')).toBeDefined();
+    });
+
+    it('a failed art texture builds with flat colour, names prints and retries', async () => {
+      textureLoad.mockImplementation(async (path: string) => {
+        if (path.includes('felce')) throw new Error('404');
+        return new Texture();
+      });
+      service.initialize(canvas);
+      await service.loadAll();
+      expect(service.getScene().getObjectByName('decor3')).toBeDefined();
+      expect(state.error()?.params?.names).toEqual(['prints']);
+
+      textureLoad.mockImplementation(async () => new Texture());
+      await service.retryLoad();
+      expect(state.loadStatus()).toBe('ready');
+      expect(state.error()).toBeNull();
+      expect(
+        service.getScene().getObjectsByProperty('name', 'decor3')
+      ).toHaveLength(1);
+    });
+
+    it('model-load-failed carries ids in params.names, not labels', async () => {
+      failing.add('pokerTable');
+      failing.add('clock');
+      textureLoad.mockImplementation(async (path: string) => {
+        if (path.includes('/floor/')) throw new Error('404');
+        return new Texture();
+      });
+      service.initialize(canvas);
+      await service.loadAll();
+      expect(state.error()?.params?.names?.sort()).toEqual([
+        'clock',
+        'floor',
+        'pokerTable',
+      ]);
+      expect(state.error()?.message).toContain('Wall clock');
+    });
+
+    it('selectObject publishes the ObjectInfo with its id', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      service.selectObject('sofa');
+      expect(state.selected()?.id).toBe('sofa');
+      expect(service.getObjectList()).toContainEqual({
+        id: 'sofa',
+        name: expect.any(String),
+      });
     });
   });
 });
