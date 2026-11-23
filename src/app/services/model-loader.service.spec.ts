@@ -6,12 +6,18 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   Texture,
   Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ModelConfiguration } from '../interfaces/scene.interface';
-import { ModelLoaderService, disposeObject3D } from './model-loader.service';
+import {
+  ModelLoaderService,
+  TEXTURE_ANISOTROPY,
+  applyMaterialOverride,
+  disposeObject3D,
+} from './model-loader.service';
 
 function config(
   overrides: Partial<ModelConfiguration> = {}
@@ -118,5 +124,44 @@ describe('ModelLoaderService', () => {
     ];
     disposeObject3D(root);
     spies.forEach(spy => expect(spy).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('applyMaterialOverride', () => {
+  it('overrides color/roughness/metalness and sets texture anisotropy', () => {
+    const material = new MeshStandardMaterial({ color: 0x888888 });
+    material.map = new Texture();
+    const root = new Group();
+    root.add(new Mesh(new BoxGeometry(), material));
+    applyMaterialOverride(root, {
+      color: 0xa65f3a,
+      roughness: 0.9,
+      metalness: 0,
+    });
+    expect(material.color.getHex()).toBe(0xa65f3a);
+    expect(material.roughness).toBe(0.9);
+    expect(material.map.anisotropy).toBe(TEXTURE_ANISOTROPY);
+  });
+
+  it('keeps the original material when there is no override', () => {
+    const material = new MeshStandardMaterial({ color: 0x123456 });
+    const root = new Group();
+    root.add(new Mesh(new BoxGeometry(), material));
+    applyMaterialOverride(root, undefined);
+    expect(material.color.getHex()).toBe(0x123456);
+  });
+});
+
+describe('MODEL_CONFIGURATIONS grounding', () => {
+  it('places every model base on the floor (yOffset 0)', async () => {
+    const { MODEL_CONFIGURATIONS } = await import('../config/scene.config');
+    const service = TestBed.inject(ModelLoaderService);
+    vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockImplementation((() =>
+      Promise.resolve({ scene: fakeScene() })) as never);
+    for (const cfg of Object.values(MODEL_CONFIGURATIONS)) {
+      const model = await service.loadModel(cfg);
+      expect(new Box3().setFromObject(model).min.y).toBeCloseTo(0, 2);
+    }
+    vi.restoreAllMocks();
   });
 });
