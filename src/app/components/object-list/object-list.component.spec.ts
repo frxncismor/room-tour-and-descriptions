@@ -40,10 +40,46 @@ describe('ObjectListComponent', () => {
     ]);
     await fixture.whenStable();
     const nav = (fixture.nativeElement as HTMLElement).querySelector('nav')!;
-    const reset = nav.lastElementChild as HTMLElement;
+    const reset = nav.querySelector('li:last-child > button') as HTMLElement;
     expect(reset.classList.contains('reset')).toBe(true);
     expect(reset.querySelector('svg')).not.toBeNull();
     expect(reset.getAttribute('aria-label')).toBeTruthy();
     expect(nav.querySelectorAll('.chip.reset').length).toBe(1);
+  });
+
+  it('renders a text index with a header and no pill styling', async () => {
+    const fixture = TestBed.createComponent(ObjectListComponent);
+    fixture.componentRef.setInput('items', [
+      { id: 'sofa', name: FURNITURE_TEXT.sofa.name },
+    ]);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('h2')?.textContent?.trim()).toBe(
+      UI_TEXT.list.title
+    );
+    expect(el.querySelectorAll('ul > li').length).toBe(2);
+  });
+
+  it('scrolls the active piece into view', async () => {
+    const fixture = TestBed.createComponent(ObjectListComponent);
+    const scroll = vi.fn();
+    const proto = HTMLElement.prototype as { scrollIntoView?: unknown };
+    const original = proto.scrollIntoView;
+    proto.scrollIntoView = scroll;
+    try {
+      fixture.componentRef.setInput('items', [
+        { id: 'sofa', name: FURNITURE_TEXT.sofa.name },
+        { id: 'bookshelf', name: FURNITURE_TEXT.bookshelf.name },
+      ]);
+      fixture.componentRef.setInput(
+        'selectedName',
+        FURNITURE_TEXT.bookshelf.name
+      );
+      await fixture.whenStable();
+      await Promise.resolve();
+      expect(scroll).toHaveBeenCalled();
+    } finally {
+      proto.scrollIntoView = original;
+    }
   });
 });
