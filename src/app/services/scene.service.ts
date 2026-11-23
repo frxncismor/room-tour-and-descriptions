@@ -53,15 +53,6 @@ export const RENDERER_FACTORY = new InjectionToken<
   },
 });
 
-/** Métodos de ObjectInteractionService que aún dependen de F4a. */
-type InteractionApi = ObjectInteractionService & {
-  setCanvas?(canvas: HTMLElement | null): void;
-  setContext?(camera: PerspectiveCamera, scene: Scene): void;
-  update?(timeMs: number): void;
-  setHover?(ndc: { x: number; y: number } | null): void;
-  onHoverChange?: ((hover: { object: Object3D } | null) => void) | null;
-};
-
 const MAX_FRAME_DELTA_MS = 100;
 
 @Injectable({
@@ -154,10 +145,9 @@ export class SceneService {
       DEFAULT_SCENE_CONFIG.room.limits
     );
 
-    // TODO F4a: setCanvas/setContext/onHoverChange aún no existen en esta rama.
-    const interaction = this.objectInteractionService as InteractionApi;
-    interaction.setCanvas?.(canvas);
-    interaction.setContext?.(this.cameraService.getCamera(), this.scene);
+    const interaction = this.objectInteractionService;
+    interaction.setCanvas(canvas);
+    interaction.setContext(this.cameraService.getCamera(), this.scene);
     interaction.onHoverChange = hover => {
       const id = hover ? (this.objectIds.get(hover.object) ?? null) : null;
       if (this.state.hovered() !== id) this.state.hovered.set(id);
@@ -177,9 +167,9 @@ export class SceneService {
     this.removeListeners();
 
     this.cameraService.dispose();
-    const interaction = this.objectInteractionService as InteractionApi;
+    const interaction = this.objectInteractionService;
     interaction.onHoverChange = null;
-    interaction.setCanvas?.(null);
+    interaction.setCanvas(null);
     interaction.dispose();
     this.modelLoaderService.dispose();
 
@@ -228,8 +218,7 @@ export class SceneService {
     this.lastFrameTime = time;
 
     this.cameraService.update(delta);
-    // TODO F4a: `update` aún no existe en ObjectInteractionService.
-    (this.objectInteractionService as InteractionApi).update?.(time);
+    this.objectInteractionService.update(time);
     this.renderer?.render(this.scene, this.cameraService.getCamera());
   };
 
@@ -411,14 +400,13 @@ export class SceneService {
   selectObject(id: string): void {
     const entry = this.models.get(id as ModelId);
     if (!entry) return;
-    this.objectInteractionService.removeOutline();
-    this.objectInteractionService.createOutline(entry.object);
+    this.objectInteractionService.selectObject(entry.object);
     this.state.selected.set(entry.info);
     void this.cameraService.focusOn(entry.object);
   }
 
   clearSelection(): void {
-    this.objectInteractionService.removeOutline();
+    this.objectInteractionService.clearSelection();
     this.state.selected.set(null);
   }
 
@@ -454,8 +442,6 @@ export class SceneService {
   /** Movimiento del puntero; `null` cuando sale del canvas. */
   handlePointerMove(point: ScreenPoint | null): void {
     if (!this.isInitialized || !this.canvas) return;
-    const interaction = this.objectInteractionService as InteractionApi;
-
     let ndc: { x: number; y: number } | null = null;
     if (point) {
       const rect = this.canvas.getBoundingClientRect();
@@ -466,8 +452,8 @@ export class SceneService {
         };
       }
     }
-    // TODO F4a: setHover aún no existe; el id llega por onHoverChange.
-    interaction.setHover?.(ndc);
+    // El id llega por onHoverChange.
+    this.objectInteractionService.setHover(ndc);
   }
 
   private asMouseEvent(point: ScreenPoint): MouseEvent {

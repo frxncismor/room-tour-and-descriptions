@@ -9,8 +9,11 @@ import {
   Scene,
   Vector3,
 } from 'three';
-import { MODEL_CONFIGURATIONS } from '../config/scene.config';
-import { ModelConfiguration } from '../interfaces/scene.interface';
+import {
+  DEFAULT_SCENE_CONFIG,
+  MODEL_CONFIGURATIONS,
+} from '../config/scene.config';
+import { ModelConfiguration, ObjectInfo } from '../interfaces/scene.interface';
 import { ModelLoaderService } from './model-loader.service';
 import { ObjectInteractionService } from './object-interaction.service';
 import { RENDERER_FACTORY, SceneRenderer, SceneService } from './scene.service';
@@ -322,14 +325,50 @@ describe('SceneService', () => {
     expect(service.getCamera().position.x).toBeCloseTo(2, 0);
   });
 
-  it('handlePointerMove forwards NDC to setHover and onHoverChange sets hovered once', async () => {
+  it('the loop calls update on the interaction service every frame', () => {
+    service.initialize(canvas);
+    const interaction = TestBed.inject(ObjectInteractionService);
+    const update = vi.spyOn(interaction, 'update');
+    runFrame(16);
+    runFrame(32);
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(update).toHaveBeenLastCalledWith(32);
+  });
+
+  it('initialize wires canvas, context and room limits into the interaction service', () => {
+    const interaction = TestBed.inject(ObjectInteractionService);
+    const setCanvas = vi.spyOn(interaction, 'setCanvas');
+    const setContext = vi.spyOn(interaction, 'setContext');
+    const setRoomLimits = vi.spyOn(interaction, 'setRoomLimits');
+    service.initialize(canvas);
+    expect(setCanvas).toHaveBeenCalledWith(canvas);
+    expect(setContext).toHaveBeenCalledWith(
+      service.getCamera(),
+      service.getScene()
+    );
+    expect(setRoomLimits).toHaveBeenCalledWith(
+      DEFAULT_SCENE_CONFIG.room.limits
+    );
+  });
+
+  it('selectObject creates the F4a outline and clearSelection removes it', async () => {
     service.initialize(canvas);
     await service.loadAll();
-    const interaction = TestBed.inject(ObjectInteractionService) as unknown as {
-      setHover: (ndc: unknown) => void;
-      onHoverChange: (h: { object: Object3D } | null) => void;
-    };
-    interaction.setHover = vi.fn();
+    const interaction = TestBed.inject(ObjectInteractionService);
+    const entry = service.getObjectList()[0];
+
+    service.selectObject(entry.id);
+    expect(interaction.getSelected()).not.toBeNull();
+
+    service.clearSelection();
+    expect(interaction.getSelected()).toBeNull();
+  });
+
+  it('handlePointerMove calls setHover with NDC and onHoverChange sets hovered once', async () => {
+    service.initialize(canvas);
+    await service.loadAll();
+    const interaction = TestBed.inject(ObjectInteractionService);
+    const setHover = vi.spyOn(interaction, 'setHover');
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
       left: 0,
       top: 0,
@@ -337,17 +376,19 @@ describe('SceneService', () => {
       height: 100,
     } as DOMRect);
     service.handlePointerMove({ clientX: 50, clientY: 0 });
-    expect(interaction.setHover).toHaveBeenCalledWith({ x: 0, y: 1 });
+    expect(setHover).toHaveBeenCalledWith({ x: 0, y: 1 });
     service.handlePointerMove(null);
-    expect(interaction.setHover).toHaveBeenLastCalledWith(null);
+    expect(setHover).toHaveBeenLastCalledWith(null);
 
     const object = service.getScene().children.find(c => c.type === 'Group');
+    const info = { name: 'x' } as ObjectInfo;
     const set = vi.spyOn(state.hovered, 'set');
-    interaction.onHoverChange({ object: object as Object3D });
-    interaction.onHoverChange({ object: object as Object3D });
+    const notify = interaction.onHoverChange!;
+    notify({ object: object as Object3D, info });
+    notify({ object: object as Object3D, info });
     expect(state.hovered()).not.toBeNull();
     expect(set).toHaveBeenCalledTimes(1);
-    interaction.onHoverChange(null);
+    notify(null);
     expect(state.hovered()).toBeNull();
   });
 });
