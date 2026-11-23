@@ -8,6 +8,8 @@ export interface FurnitureText {
 
 export interface ControlText {
   label: string;
+  /** Etiqueta alternativa en táctil; si falta se usa `label`. */
+  touchLabel?: string;
   text: string;
   /** Variante para dispositivos táctiles (sin ratón ni teclado). */
   touchText: string;
@@ -79,6 +81,7 @@ export const UI_TEXT = {
       },
       {
         label: 'Keys',
+        touchLabel: 'Close',
         text: 'Esc closes details. Home resets the view.',
         touchText: 'Tap the cross to close details',
         icon: 'keyboard',

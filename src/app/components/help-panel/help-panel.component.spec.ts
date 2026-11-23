@@ -31,6 +31,11 @@ describe('HelpPanelComponent', () => {
     expect(text).toContain(look.touchText);
     expect(text).toContain(zoom.touchText);
     expect(text).not.toMatch(/mouse|wheel|click/i);
+    const terms = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('dt')
+    ).map(dt => dt.textContent?.trim());
+    expect(terms).toContain('Close');
+    expect(terms).not.toContain('Keys');
   });
 
   it('talks about mouse and keyboard on desktop', async () => {
@@ -40,6 +45,7 @@ describe('HelpPanelComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain(look.text);
     expect(text).not.toMatch(/finger|pinch|tap/i);
+    expect(text).toContain('Keys');
   });
 
   it('remembers dismissal and can be reopened', async () => {
