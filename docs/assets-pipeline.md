@@ -20,6 +20,13 @@ resize (≤ 1024 px, table wood 2048 px) → WebP → meshopt (+ quantization)`.
 `resample` is not needed (no animations). The scene graph is kept (no flatten/join/simplify)
 so node names used for picking stay intact.
 
+**Bookshelf repair.** The original Sketchfab export has broken geometry: the central divider is
+sheared into a diagonal "crack" (32 triangles with diagonal normals, inner vertices at 16 different
+x values) and its material is `BLEND`, which read as a dark glass box. `optimize-models.mjs` runs
+`repairBookshelf()` on the original before the pipeline: it drops the diagonal triangles,
+snaps the inner vertices to a thin central divider and makes the material opaque. It only works on
+the original export (it is skipped on already-optimized output and throws on an unexpected layout).
+
 Runtime: the viewer registers `MeshoptDecoder` in `ModelLoaderService`
 (`three/examples/jsm/libs/meshopt_decoder.module.js`, bundled by the build). No KTX2 (decision D-05).
 Check a model: `npx @gltf-transform/cli inspect src/assets/models/sofa/scene.gltf`
