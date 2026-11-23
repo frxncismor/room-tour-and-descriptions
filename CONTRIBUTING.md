@@ -121,6 +121,9 @@ Use conventional commits format (`type(scope): summary`):
 - `chore:` - maintenance tasks
 - `docs:` - documentation changes
 - `test:` - test changes
+- `build:` - build system or dependency changes
+- `ci:` - continuous integration configuration
+- `perf:` - performance improvements
 
 Example:
 

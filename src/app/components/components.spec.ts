@@ -10,6 +10,7 @@ import {
   HELP_STORAGE_KEY,
   HelpPanelComponent,
 } from './help-panel/help-panel.component';
+import { BrandLabelComponent } from './brand-label/brand-label.component';
 import { LoadingScreenComponent } from './loading-screen/loading-screen.component';
 import { ObjectListComponent } from './object-list/object-list.component';
 
@@ -31,6 +32,25 @@ describe('LoadingScreenComponent', () => {
     expect(el.querySelector('.loading')?.getAttribute('aria-hidden')).toBe(
       'true'
     );
+  });
+
+  it('shows the project title and author while loading', async () => {
+    const fixture = TestBed.createComponent(LoadingScreenComponent);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('h1')?.textContent).toContain('Room Tour');
+    expect(el.textContent).toContain('Francisco Moreno');
+  });
+});
+
+describe('BrandLabelComponent', () => {
+  it('renders the title and byline without interactive elements', async () => {
+    const fixture = TestBed.createComponent(BrandLabelComponent);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Room Tour');
+    expect(el.textContent).toContain('by Francisco Moreno');
+    expect(el.querySelector('button, a')).toBeNull();
   });
 });
 
@@ -62,7 +82,24 @@ describe('DescriptionPanelComponent', () => {
     expect(el.querySelector('#furniture-title')?.textContent).toContain(
       info.name
     );
-    expect(el.querySelector('[aria-live="polite"]')).not.toBeNull();
+  });
+
+  it('keeps a persistent polite live region that announces the piece', async () => {
+    const fixture = TestBed.createComponent(DescriptionPanelComponent);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    const live = el.querySelector('[aria-live="polite"]') as HTMLElement;
+    expect(live).not.toBeNull();
+    expect(live.textContent?.trim()).toBe('');
+
+    fixture.componentRef.setInput('info', info);
+    await fixture.whenStable();
+    expect(el.querySelector('[aria-live="polite"]')).toBe(live);
+    expect(live.textContent).toContain(info.name);
+
+    fixture.componentRef.setInput('info', null);
+    await fixture.whenStable();
+    expect(el.querySelector('[aria-live="polite"]')).toBe(live);
   });
 
   it('emits closed from the close button and renders nothing without info', async () => {
@@ -108,11 +145,59 @@ describe('ObjectListComponent', () => {
     expect(selected).toEqual(['sofa']);
     expect(resets).toBe(1);
   });
+
+  it('renders the initial view as a secondary icon button after the furniture', async () => {
+    const fixture = TestBed.createComponent(ObjectListComponent);
+    fixture.componentRef.setInput('items', [
+      { id: 'sofa', name: 'Modern Sofa' },
+    ]);
+    await fixture.whenStable();
+    const nav = (fixture.nativeElement as HTMLElement).querySelector('nav')!;
+    const reset = nav.lastElementChild as HTMLElement;
+    expect(reset.classList.contains('reset')).toBe(true);
+    expect(reset.querySelector('svg')).not.toBeNull();
+    expect(reset.getAttribute('aria-label')).toBeTruthy();
+    expect(nav.querySelectorAll('.chip.reset').length).toBe(1);
+  });
 });
 
 describe('HelpPanelComponent', () => {
   beforeEach(() => localStorage.removeItem(HELP_STORAGE_KEY));
-  afterEach(() => localStorage.removeItem(HELP_STORAGE_KEY));
+  afterEach(() => {
+    localStorage.removeItem(HELP_STORAGE_KEY);
+    vi.unstubAllGlobals();
+  });
+
+  function stubPointer(coarse: boolean): void {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: coarse && query.includes('coarse'),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    );
+  }
+
+  it('talks about fingers and taps on touch devices', async () => {
+    stubPointer(true);
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    await fixture.whenStable();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('one finger');
+    expect(text).toContain('Pinch');
+    expect(text).not.toMatch(/mouse|wheel|click/i);
+  });
+
+  it('talks about mouse and keyboard on desktop', async () => {
+    stubPointer(false);
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    await fixture.whenStable();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('left mouse button');
+    expect(text).not.toMatch(/finger|pinch|tap/i);
+  });
 
   it('remembers dismissal and can be reopened', async () => {
     const fixture = TestBed.createComponent(HelpPanelComponent);

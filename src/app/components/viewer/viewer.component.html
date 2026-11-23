@@ -3,6 +3,7 @@
        All three are absolutely positioned, so their DOM position does not
        change the layout. -->
   @if (!blockingError()) {
+    <app-brand-label />
     <app-help-panel [suppressed]="!!state.selected()" />
     <app-object-list
       [items]="objects()"

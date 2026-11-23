@@ -11,6 +11,14 @@ import {
 } from '@angular/core';
 import { UI_TEXT } from '../../config/ui-text';
 
+function isTouchDevice(): boolean {
+  try {
+    return globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
+  } catch {
+    return false;
+  }
+}
+
 export const HELP_STORAGE_KEY = 'room-tour.help-dismissed';
 
 function readDismissed(): boolean {
@@ -147,7 +155,7 @@ function writeDismissed(value: boolean): void {
               </span>
               <span class="copy">
                 <strong>{{ control.label }}</strong>
-                <span>{{ control.text }}</span>
+                <span>{{ touch ? control.touchText : control.text }}</span>
               </span>
             </li>
           }
@@ -181,6 +189,7 @@ function writeDismissed(value: boolean): void {
       left: 50%;
       z-index: 20;
       width: min(92vw, 640px);
+      max-height: 40dvh;
       padding: 12px 18px 14px;
       overflow: auto;
       background: rgb(255 255 255 / 0.96);
@@ -272,7 +281,6 @@ function writeDismissed(value: boolean): void {
       .sheet {
         bottom: 0;
         width: 100%;
-        max-height: 40dvh;
         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
       }
       ul {
@@ -319,6 +327,8 @@ export class HelpPanelComponent {
   /** El visor lo oculta mientras hay una ficha abierta (evita tapar la escena). */
   readonly suppressed = input(false);
   protected readonly text = UI_TEXT.help;
+  /** Táctil: la ayuda habla de dedos y toques, no de ratón ni teclado. */
+  protected readonly touch = isTouchDevice();
   protected readonly open = signal(!readDismissed());
 
   private readonly injector = inject(Injector);
