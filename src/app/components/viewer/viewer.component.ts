@@ -198,6 +198,7 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
 
   protected onHome(event: Event): void {
     event.preventDefault();
+    this.sceneService.clearSelection();
     this.sceneService.resetView();
   }
 

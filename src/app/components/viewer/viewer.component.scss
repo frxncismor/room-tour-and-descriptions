@@ -12,6 +12,19 @@
   background-color: var(--paper-sunk);
 }
 
+/* Doble anillo interior, solo con teclado: 3 px oscuros + 2 px claros. Sea cual
+   sea el fondo (muro teal, muros claros, suelo, techo) uno de los dos supera
+   3:1 (WCAG 1.4.11): oscuro 4,8–15,3:1, claro 3,5:1 sobre el teal. */
+.viewer-container:has(.scene-canvas:focus-visible)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 3px var(--focus-canvas-dark),
+    inset 0 0 0 5px var(--focus-canvas-light);
+}
+
 .scene-canvas {
   display: block;
   width: 100%;
@@ -20,11 +33,9 @@
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 
-  /* Contorno interior fino, solo con teclado (no con ratón/táctil); --focus
-     sobre el fondo de papel da 7:1 (WCAG 1.4.11 exige 3:1). */
+  /* El anillo lo dibuja `.viewer-container::after` (un box-shadow inset
+     quedaría bajo el contenido del canvas); aquí se anula el contorno nativo. */
   &:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: -6px;
-    border-radius: var(--radius-2);
+    outline: none;
   }
 }

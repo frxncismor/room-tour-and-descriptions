@@ -47,6 +47,9 @@
   --teal: #35544f;
   --danger: #7a2a1c;
   --focus: var(--teal);
+  /* Doble anillo del canvas (WCAG 1.4.11): el oscuro da ≥ 4,7:1 y el claro 3,5:1 sobre el muro teal. */
+  --focus-canvas-dark: #14201e;
+  --focus-canvas-light: #ffffff;
 
   /* type */
   --font-display:
