@@ -24,3 +24,37 @@ describe('single source of furniture text', () => {
     }
   });
 });
+
+describe('copy rules (FR-241, SC-214)', () => {
+  const BLACKLIST =
+    /generous|stunning|seamless|perfect|beautiful|sleek|elegant|cozy|inviting|invites|touch of|polished|modern|contemporary|ultimate|effortless/i;
+
+  const collectStrings = (value: unknown): string[] => {
+    if (typeof value === 'string') return [value];
+    if (Array.isArray(value)) return value.flatMap(collectStrings);
+    if (value && typeof value === 'object')
+      return Object.values(value).flatMap(collectStrings);
+    return [];
+  };
+
+  it('UI_TEXT has no blacklisted words', () => {
+    for (const s of collectStrings(UI_TEXT)) {
+      expect(s).not.toMatch(BLACKLIST);
+    }
+  });
+
+  it('FURNITURE_TEXT has no blacklisted words', () => {
+    for (const s of collectStrings(FURNITURE_TEXT)) {
+      expect(s).not.toMatch(BLACKLIST);
+    }
+  });
+
+  it('every description has at most 2 sentences and 30 words', () => {
+    for (const [id, t] of Object.entries(FURNITURE_TEXT)) {
+      const sentences = t.description.split(/(?<=[.!?])\s+/).filter(Boolean);
+      const words = t.description.split(/\s+/).filter(Boolean);
+      expect(sentences.length, `${id} sentences`).toBeLessThanOrEqual(2);
+      expect(words.length, `${id} words`).toBeLessThanOrEqual(30);
+    }
+  });
+});

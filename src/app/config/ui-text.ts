@@ -24,37 +24,37 @@ export const UI_TEXT = {
   loading: {
     title: 'Room Tour',
     byline: 'by Francisco Moreno',
-    status: 'Preparing the room',
+    status: 'Loading the room',
   },
   errors: {
-    webglTitle: '3D view unavailable',
-    contextLostTitle: 'Reconnecting the 3D view',
+    webglTitle: 'WebGL is not available',
+    contextLostTitle: 'The 3D view was interrupted',
     webglHelp:
-      'This viewer needs WebGL. Try a recent version of Chrome, Edge, Firefox or Safari, and make sure hardware acceleration is enabled.',
-    retry: 'Try again',
+      'This viewer needs WebGL. Use a recent Chrome, Edge, Firefox or Safari, with hardware acceleration on.',
+    retry: 'Retry',
   },
   panel: {
     close: 'Close details',
   },
   list: {
-    title: 'Furniture',
-    resetView: 'Initial view',
-    resetViewLabel: 'Return to the initial view of the room',
+    title: 'Pieces',
+    resetView: 'Reset view',
+    resetViewLabel: 'Return to the initial view',
   },
   help: {
-    title: 'How to explore',
-    open: 'Help',
-    openLabel: 'Show navigation help',
-    gotIt: 'Got it',
+    title: 'Controls',
+    open: 'Controls',
+    openLabel: 'Show the controls',
+    gotIt: 'Close',
     controls: [
       {
-        label: 'Look around',
+        label: 'Orbit',
         text: 'Drag with the left mouse button',
         touchText: 'Drag with one finger',
         icon: 'rotate',
       },
       {
-        label: 'Slide sideways',
+        label: 'Pan',
         text: 'Drag with the right button; arrow keys work too',
         touchText: 'Drag with two fingers',
         icon: 'pan',
@@ -66,21 +66,21 @@ export const UI_TEXT = {
         icon: 'zoom',
       },
       {
-        label: 'Walk',
-        text: 'Click the floor to move there',
-        touchText: 'Tap the floor to move there',
+        label: 'Move',
+        text: 'Click the floor to go there',
+        touchText: 'Tap the floor to go there',
         icon: 'walk',
       },
       {
-        label: 'Inspect furniture',
-        text: 'Click a piece to zoom in and read about it',
-        touchText: 'Tap a piece to zoom in and read about it',
+        label: 'Inspect',
+        text: 'Click a piece to read about it',
+        touchText: 'Tap a piece to read about it',
         icon: 'inspect',
       },
       {
-        label: 'Keyboard',
-        text: 'Esc closes the details, Home returns to the initial view',
-        touchText: 'Tap the cross to close the details',
+        label: 'Keys',
+        text: 'Esc closes details. Home resets the view.',
+        touchText: 'Tap the cross to close details',
         icon: 'keyboard',
       },
     ] as ControlText[],
@@ -95,21 +95,21 @@ export const UI_TEXT = {
  */
 export const FURNITURE_TEXT = {
   sofa: {
-    name: 'Modern Sofa',
+    name: 'Sectional sofa',
     description:
-      'A low-profile contemporary sofa with generous seat cushions and clean, softly rounded lines. It anchors the living area and invites you to sit back, with plenty of room for the whole group to stretch out.',
+      'Corner sectional with loose back cushions and a separate ottoman, in a terracotta tone. It anchors the seating area on the left.',
     details: 'Model: "Sofa Set" by FREEDomplant, via Sketchfab.',
   },
   pokerTable: {
-    name: 'Poker Table',
+    name: 'Poker table',
     description:
-      'A game table with a felt-style playing surface, a padded rail and a polished wooden frame. It is sized for a relaxed night of cards with friends, and its compact footprint keeps it at the heart of the room without crowding it.',
+      'Card table with a felt playing surface, a padded rail and a wooden frame. It stands on the right, opposite the sofa.',
     details: 'Model: "Poker Board Game Table" by Lília Mara, via Sketchfab.',
   },
   bookshelf: {
     name: 'Bookshelf',
     description:
-      'A tall, open bookshelf with several tiers of shelving for books and decorative pieces. Its slim wooden structure keeps the wall feeling light while adding useful storage and a touch of character.',
+      'Open shelving in four tiers, in dark wood. It stands against the back wall, centered between the painting and the clock.',
     details: 'Model: "BookShelf" by Twpic, via Sketchfab.',
   },
   landscapePainting: {
