@@ -28,7 +28,7 @@ An interactive 3D living room that runs entirely in the browser. Walk around by 
 - [Architecture](#architecture)
 - [Technical decisions](#technical-decisions)
 - [Performance](#performance)
-- [3D model credits and licenses](#3d-model-credits-and-licenses)
+- [Credits and licenses](#credits-and-licenses)
 - [Contributing](#contributing)
 - [License](#license)
 - [Author](#author)
@@ -42,7 +42,7 @@ An interactive 3D living room that runs entirely in the browser. Walk around by 
 - **Responsive**: the initial framing adapts to portrait screens so all three pieces stay visible on a phone.
 - **Realistic lighting**: soft shadows, matte walls and tuned material for the sofa.
 - **Loading and error states**: a progress screen while models download, and clear messages (with a retry button) if WebGL is unavailable, the context is lost or a model fails to load.
-- **Light assets**: the three models were reduced from about 51 MB to about 2.4 MB (see [Performance](#performance)).
+- **Light assets**: the three original models were reduced from about 51 MB to about 2.4 MB, and the whole `src/assets` folder (seven models, room textures, fonts) weighs about 3.7 MB (see [Performance](#performance)).
 
 ## Controls
 
@@ -131,7 +131,9 @@ src/app/
 ├── config/       scene configuration and UI text
 └── interfaces/   shared types
 src/assets/
-├── models/       optimized glTF models (sofa, poker_table, bookshelf)
+├── models/       optimized glTF models (sofa, poker_table, bookshelf, landscape_painting, wall_clock, succulent, ceramic_vase)
+├── textures/     floor and rug textures (WebP)
+├── fonts/        Fraunces and Hanken Grotesk (WOFF2) and their OFL license
 └── brand/        favicon, touch icon and social preview image
 docs/             assets pipeline, screenshots and baseline captures
 ```
@@ -152,14 +154,23 @@ Measured on a production build (`npm run build`):
 
 | Metric                    | Value                                |
 | ------------------------- | ------------------------------------ |
-| Initial JavaScript bundle | 843 kB raw, about 188 kB transferred |
-| 3D models (all three)     | about 2.4 MB, down from about 51 MB  |
+| Initial JavaScript bundle | 873 kB raw, about 195 kB transferred |
+| 3D models (all seven)     | 3,100,101 B (about 3.1 MB)           |
+| Room textures             | 400,862 B (about 0.4 MB)             |
+| Fonts                     | 106,659 B (about 0.1 MB)             |
+| `src/assets` in total     | 3,717,013 B (about 3.7 MB)           |
 
-Per-model sizes before and after are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
+The three original models went from about 51 MB to about 2.4 MB. Per-model sizes before and after are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
 
-## 3D model credits and licenses
+### How the assets are optimized
 
-The models come from [Sketchfab](https://sketchfab.com/) and are used under the Sketchfab Standard license. Credit to their authors:
+Models are optimized in place with `scripts/optimize-models.mjs` (`@gltf-transform/cli` through `npx`, not a dependency): dedup, weld and prune, textures resized (at most 1024 px) and converted to WebP at quality 85, and geometry compressed with meshopt and quantization. Room textures are plain WebP made from the 1K originals. The originals are not kept in the working tree. The full pipeline, the per-piece policy and the regeneration steps are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
+
+## Credits and licenses
+
+### Sketchfab models (sofa, poker table, bookshelf)
+
+The three furniture models come from [Sketchfab](https://sketchfab.com/) and are used under the Sketchfab Standard license. Credit to their authors:
 
 | Model                                 | Author       | Source                                                                                                            |
 | ------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
@@ -169,13 +180,30 @@ The models come from [Sketchfab](https://sketchfab.com/) and are used under the 
 
 License terms: <https://sketchfab.com/licenses>. The models were resized, texture-compressed and quantized for the web; the geometry and design are the authors' work.
 
+### Poly Haven (decor pieces and room textures)
+
+The decor and the floor and rug textures come from [Poly Haven](https://polyhaven.com/) and are released under CC0. CC0 does not require attribution; they are credited here as a courtesy.
+
+| Piece                  | Author                            | Source                                                       |
+| ---------------------- | --------------------------------- | ------------------------------------------------------------ |
+| Fancy Picture Frame 01 | Rob Tuytel, Rico Cilliers         | [Poly Haven](https://polyhaven.com/a/fancy_picture_frame_01) |
+| Wall Clock             | PierreB3D                         | [Poly Haven](https://polyhaven.com/a/wall_clock)             |
+| Potted Plant 04        | James Ray Cock                    | [Poly Haven](https://polyhaven.com/a/potted_plant_04)        |
+| Ceramic Vase 02        | James Ray Cock                    | [Poly Haven](https://polyhaven.com/a/ceramic_vase_02)        |
+| Laminate Floor 02      | Dario Barresi, Charlotte Baglioni | [Poly Haven](https://polyhaven.com/a/laminate_floor_02)      |
+| Poly Wool Herringbone  | colormass, Rico Cilliers          | [Poly Haven](https://polyhaven.com/a/poly_wool_herringbone)  |
+
+### Fonts
+
+[Fraunces](https://github.com/undercasetype/Fraunces) (headings) and [Hanken Grotesk](https://github.com/marcologous/hanken-grotesk) (interface text) are licensed under the SIL Open Font License 1.1. The license text is in [src/assets/fonts/OFL.txt](src/assets/fonts/OFL.txt).
+
 ## Contributing
 
 Setup, commands, code standards and the commit format are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-The source code is released under the [MIT License](LICENSE). The 3D models keep their own licenses (see above).
+The source code is released under the [MIT License](LICENSE). The 3D models, textures and fonts keep their own licenses (see above).
 
 ## Author
 
