@@ -1,0 +1,331 @@
+import {
+  Box3,
+  BufferGeometry,
+  Material,
+  Mesh,
+  Object3D,
+  Texture,
+  Vector3,
+} from 'three';
+import { DECOR3, DECOR3_LOAD_KEYS } from '../config/decor.config';
+import {
+  DecorBuild,
+  DecorBuilderService,
+  DecorTextures,
+} from './decor-builder.service';
+
+/** AABB aproximadas de los muebles (plan §1); la colocación fina es la F3. */
+const SOFA = new Box3(
+  new Vector3(-5.65, 0, -5.65),
+  new Vector3(-0.35, 1.332, -0.35)
+);
+const FURNITURE: Record<string, Box3> = {
+  sofa: SOFA,
+  pokerTable: new Box3(
+    new Vector3(3 - 0.652, 0, -3 - 0.652),
+    new Vector3(3 + 0.652, 1.089, -3 + 0.652)
+  ),
+  bookshelf: new Box3(
+    new Vector3(-0.9145, 0, -7.6 - 0.197),
+    new Vector3(0.9145, 2.134, -7.6 + 0.197)
+  ),
+  // Altura generosa (cota superior) para jarrón y suculenta.
+  vase: new Box3(new Vector3(-2.1, 0, -7.8), new Vector3(-1.6, 1, -7.3)),
+  succulent: new Box3(new Vector3(1.6, 0, -7.8), new Vector3(2.1, 1, -7.3)),
+};
+
+function meshes(root: Object3D): Mesh[] {
+  const found: Mesh[] = [];
+  root.traverse(object => {
+    if ((object as Mesh).isMesh) {
+      found.push(object as Mesh);
+    }
+  });
+  return found;
+}
+
+function triangles(mesh: Mesh): number {
+  const geometry = mesh.geometry;
+  return (geometry.index?.count ?? geometry.getAttribute('position').count) / 3;
+}
+
+function fakeTextures(): Record<string, Texture> {
+  return Object.fromEntries(DECOR3_LOAD_KEYS.map(key => [key, new Texture()]));
+}
+
+describe('DecorBuilderService', () => {
+  const service = new DecorBuilderService();
+  let build: DecorBuild;
+
+  beforeEach(() => {
+    build = service.build(DECOR3, {});
+  });
+
+  afterEach(() => build.dispose());
+
+  describe('geometría', () => {
+    it('crea los grupos wall-art, fixtures y textiles dentro de decor3', () => {
+      expect(build.group.name).toBe('decor3');
+      expect(build.group.children.map(c => c.name)).toEqual([
+        'wall-art',
+        'fixtures',
+        'textiles',
+      ]);
+    });
+
+    it('usa como máximo 20 mallas y 9 000 triángulos', () => {
+      const all = meshes(build.group);
+      expect(all.length).toBeGreaterThan(0);
+      expect(all.length).toBeLessThanOrEqual(20);
+      const total = all.reduce((sum, mesh) => sum + triangles(mesh), 0);
+      expect(total).toBeLessThanOrEqual(9000);
+    });
+
+    it('fusiona por material: ninguna malla comparte material con otra', () => {
+      const all = meshes(build.group);
+      expect(new Set(all.map(m => m.material)).size).toBe(all.length);
+    });
+
+    it('anula el raycast y no proyecta sombra en ninguna malla', () => {
+      for (const mesh of meshes(build.group)) {
+        expect(mesh.castShadow).toBe(false);
+        expect(mesh.raycast).not.toBe(Mesh.prototype.raycast);
+        const hits: unknown[] = [];
+        mesh.raycast({} as never, hits as never);
+        expect(hits).toHaveLength(0);
+      }
+    });
+
+    it('deja halos aditivos sin escritura de profundidad y cristal/halos sin tone mapping', () => {
+      const byName = (name: string): Material =>
+        meshes(build.group).find(m => m.name === name)!.material as Material;
+      const halo = byName('halo');
+      expect(halo.depthWrite).toBe(false);
+      expect(halo.transparent).toBe(true);
+      expect(halo.blending).toBe(2); // AdditiveBlending
+      expect(halo.toneMapped).toBe(false);
+      expect(byName('glass').toneMapped).toBe(false);
+    });
+
+    it('tiene 4 láminas, 2 apliques, 1 ventana, 2 paños, 1 lámpara, 2 cojines y 1 manta', () => {
+      const count = (kind: string) =>
+        build.pieces.filter(p => p.kind === kind).length;
+      expect(count('frame')).toBe(4);
+      expect(count('sconce')).toBe(2);
+      expect(count('window')).toBe(1);
+      expect(count('curtain')).toBe(2);
+      expect(count('lamp')).toBe(1);
+      expect(count('cushion')).toBe(2);
+      expect(count('throw')).toBe(1);
+    });
+
+    it('todos los vértices son finitos', () => {
+      for (const mesh of meshes(build.group)) {
+        const position = mesh.geometry.getAttribute('position');
+        for (const value of position.array) {
+          expect(Number.isFinite(value)).toBe(true);
+        }
+      }
+    });
+  });
+
+  describe('texturas', () => {
+    it('funciona sin texturas (color plano)', () => {
+      for (const mesh of meshes(build.group)) {
+        const material = mesh.material as Material & {
+          map?: Texture | null;
+          normalMap?: Texture | null;
+        };
+        if (mesh.name.startsWith('art:') || mesh.name.startsWith('textile:')) {
+          expect(material.map ?? null).toBeNull();
+        }
+      }
+      expect(meshes(build.group).length).toBeGreaterThan(0);
+    });
+
+    it('acepta valores null', () => {
+      const nulls: DecorTextures = Object.fromEntries(
+        DECOR3_LOAD_KEYS.map(key => [key, null])
+      );
+      const other = service.build(DECOR3, nulls);
+      expect(meshes(other.group).length).toBe(meshes(build.group).length);
+      other.dispose();
+    });
+
+    it('aplica lino (map + normalMap) a cortinas y textiles, y la obra a su lámina', () => {
+      const textures = fakeTextures();
+      const withTextures = service.build(DECOR3, textures);
+      const material = (name: string) =>
+        meshes(withTextures.group).find(m => m.name === name)!
+          .material as Material & { map: Texture; normalMap: Texture };
+      for (const name of [
+        'curtain',
+        'textile:cushion-cream',
+        'textile:throw',
+      ]) {
+        expect(material(name).map).toBe(textures['fabric:linen']);
+        expect(material(name).normalMap).toBe(textures['fabric:linen-nor']);
+      }
+      expect(material('art:spiraea').map).toBe(textures['art:spiraea']);
+      withTextures.dispose();
+    });
+  });
+
+  describe('dispose', () => {
+    it('libera todas las geometrías, materiales y texturas y vacía el grupo', () => {
+      const textures = fakeTextures();
+      const full = service.build(DECOR3, textures);
+      const all = meshes(full.group);
+      const geometries = new Set<BufferGeometry>(all.map(m => m.geometry));
+      const materials = new Set<Material>(all.map(m => m.material as Material));
+      const owned = new Set<Texture>(Object.values(textures));
+      // Texturas generadas por el builder (halo y cristal) dentro de los materiales.
+      for (const material of materials) {
+        const map = (material as Material & { map?: Texture | null }).map;
+        if (map) {
+          owned.add(map);
+        }
+      }
+      const spies = [...geometries, ...materials, ...owned].map(item => {
+        const spy = vi.fn();
+        item.addEventListener('dispose', spy);
+        return spy;
+      });
+
+      full.dispose();
+
+      for (const spy of spies) {
+        expect(spy).toHaveBeenCalled();
+      }
+      expect(owned.size).toBeGreaterThanOrEqual(
+        Object.keys(textures).length + 2
+      );
+      expect(full.group.children).toHaveLength(0);
+    });
+
+    it('puede llamarse dos veces', () => {
+      expect(() => {
+        build.dispose();
+        build.dispose();
+      }).not.toThrow();
+    });
+  });
+
+  describe('colocación estática (SC-307)', () => {
+    const solid = () => build.pieces.filter(p => p.kind !== 'halo');
+    const textile = (kind: string) => kind === 'cushion' || kind === 'throw';
+
+    it('ninguna pieza intersecta con otra', () => {
+      const pieces = solid();
+      for (let i = 0; i < pieces.length; i++) {
+        for (let j = i + 1; j < pieces.length; j++) {
+          expect(
+            pieces[i].box.intersectsBox(pieces[j].box),
+            `${pieces[i].id} × ${pieces[j].id}`
+          ).toBe(false);
+        }
+      }
+    });
+
+    it('ninguna pieza (salvo los textiles, que van sobre el sofá) intersecta con los muebles', () => {
+      for (const piece of solid().filter(p => !textile(p.kind))) {
+        for (const [name, box] of Object.entries(FURNITURE)) {
+          expect(piece.box.intersectsBox(box), `${piece.id} × ${name}`).toBe(
+            false
+          );
+        }
+      }
+    });
+
+    it('los textiles evitan mesa, estantería, jarrón y suculenta y se apoyan en el sofá', () => {
+      for (const piece of solid().filter(p => textile(p.kind))) {
+        expect(piece.box.intersectsBox(SOFA), piece.id).toBe(true);
+        for (const [name, box] of Object.entries(FURNITURE)) {
+          if (name !== 'sofa') {
+            expect(piece.box.intersectsBox(box), `${piece.id} × ${name}`).toBe(
+              false
+            );
+          }
+        }
+      }
+    });
+
+    it('la manta interseca la AABB del sofá en al menos el 25 % de su volumen', () => {
+      const blanket = build.pieces.find(p => p.kind === 'throw')!.box;
+      const overlap = blanket.clone().intersect(SOFA);
+      const size = (box: Box3) => box.getSize(new Vector3());
+      const volume = (box: Box3) => {
+        const s = size(box);
+        return s.x * s.y * s.z;
+      };
+      expect(volume(overlap) / volume(blanket)).toBeGreaterThanOrEqual(0.25);
+    });
+
+    it('los cojines quedan en y ∈ [0,45; 0,75] y con ≥ 0,05 m entre ellos', () => {
+      const cushions = build.pieces.filter(p => p.kind === 'cushion');
+      for (const { box } of cushions) {
+        const centre = box.getCenter(new Vector3());
+        expect(centre.y).toBeGreaterThanOrEqual(0.45);
+        expect(centre.y).toBeLessThanOrEqual(0.75);
+      }
+      expect(
+        cushions[0].box.distanceToPoint(
+          cushions[1].box.getCenter(new Vector3())
+        )
+      ).toBeGreaterThan(0.05);
+    });
+
+    it('marcos a 0,02–0,06 m del muro (cara trasera)', () => {
+      for (const frame of build.pieces.filter(p => p.kind === 'frame')) {
+        const art = DECOR3.artworks.find(a => a.id === frame.id)!;
+        const onBack = Math.abs(art.rotationY) < 1e-6;
+        const back = onBack ? 8 + frame.box.min.z : 8 - frame.box.max.x; // pared derecha (x = +8)
+        expect(back, frame.id).toBeGreaterThanOrEqual(0.02);
+        expect(back, frame.id).toBeLessThanOrEqual(0.06);
+      }
+    });
+
+    it('apliques a 0,02–0,06 m del muro del fondo', () => {
+      for (const sconce of build.pieces.filter(p => p.kind === 'sconce')) {
+        const gap = 8 + sconce.box.min.z;
+        expect(gap).toBeGreaterThanOrEqual(0.02);
+        expect(gap).toBeLessThanOrEqual(0.06);
+      }
+    });
+
+    it('cortinas dentro de la sala y sin tocar la ventana (el antepecho sobresale 0,12 m)', () => {
+      const win = build.pieces.find(p => p.kind === 'window')!;
+      for (const curtain of build.pieces.filter(p => p.kind === 'curtain')) {
+        // Spec A.1.5 pide 0,02–0,06 m para marcos y cortinas, pero A.2 las
+        // coloca en x = −7,80 (0,20 m) para librar el antepecho: se prueba eso.
+        const gap = curtain.box.min.x + 8;
+        expect(gap).toBeGreaterThan(win.box.max.x + 8);
+        expect(gap).toBeLessThan(0.25);
+      }
+    });
+
+    it('la lámpara queda a ≥ 1,0 m del sofá y a ≥ 0,75 m de cada muro', () => {
+      const centre = DECOR3.floorLamp.position;
+      const lamp = build.pieces.find(p => p.kind === 'lamp')!.box;
+      expect(
+        lamp.distanceToPoint(SOFA.getCenter(new Vector3()))
+      ).toBeGreaterThan(0);
+      const toSofa = Math.hypot(
+        Math.max(SOFA.min.x - lamp.max.x, lamp.min.x - SOFA.max.x, 0),
+        Math.max(SOFA.min.z - lamp.max.z, lamp.min.z - SOFA.max.z, 0)
+      );
+      expect(toSofa).toBeGreaterThanOrEqual(1.0);
+      // Spec A.2 fija la lámpara en (−7,2; −7,2): 0,8 m de cada muro.
+      expect(centre.x + 8).toBeGreaterThanOrEqual(0.75);
+      expect(centre.z + 8).toBeGreaterThanOrEqual(0.75);
+    });
+
+    it('los apliques quedan a ≥ 0,9 m (eje a borde) de la estantería', () => {
+      // La spec mide desde el eje de la placa (0,94 m); la pantalla llega a 0,85 m.
+      for (const position of DECOR3.sconces.positions) {
+        const gap = Math.abs(position.x) - FURNITURE['bookshelf'].max.x;
+        expect(gap).toBeGreaterThanOrEqual(0.9);
+      }
+    });
+  });
+});
