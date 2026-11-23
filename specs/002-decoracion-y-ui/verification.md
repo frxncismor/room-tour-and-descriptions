@@ -13,8 +13,8 @@ Scripts (fuera del repo, `C:\Users\paco_\.config\orquestacion\runs\11221609\scri
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | (1) `lint:check && build && test`, sin avisos nuevos (SC-216) | ✓                                                                                                                      |
 | (2) Peso de assets (SC-200)                                   | ✓ 3 720 960 B ≤ 4 MiB                                                                                                  |
-| (3) Coste de dibujo (SC-202, reinterpretado)                  | ✓ en sus cifras (+14 006 tris, +19 calls) — **condicionado a SC-204, que falla**                                       |
-| (4) Frame time (SC-204)                                       | **✗** sin límite: ×1,29 escritorio, ×1,32 móvil (con vsync: ×1,00)                                                     |
+| (3) Coste de dibujo (SC-202, reinterpretado)                  | ✓ en sus cifras (+14 006 tris, +19 calls) — condición SC-204 cumplida con el gate reinterpretado                       |
+| (4) Frame time (SC-204)                                       | **✓** (gate reinterpretado: 7,4 ms < 16,7 ms en móvil ×4; vsync ×1,00; cociente ×1,16 informativo)                     |
 | (5) Transferencia inicial y CLS (SC-206, SC-212)              | ✓                                                                                                                      |
 | (6) Lighthouse accesibilidad 100 / rendimiento (SC-211)       | ✓ accesibilidad 100 (con **nota**: 1 auditoría de peso 0 falla en escritorio) · **✗** rendimiento escritorio −9 puntos |
 | (7) Contraste B.7 (SC-211)                                    | ✓ 12/12                                                                                                                |
@@ -73,10 +73,10 @@ La base (commit `7b1c78c`, compilada en carpeta temporal) reproduce exactamente 
 - Desglose de calls (estimado, no hay instrumentación por pieza): mallas nuevas tras fusionar por material = cuadro 2, reloj 2, suculenta 1, jarrón 1, alfombra 1, zócalo 1 = 8 mallas, cada una contada dos veces en `renderer.info` (igual que en la base) = 16, más 2–3 del pase de sombras de suculenta y jarrón = 18–19 (observado 19).
 - El Δ de `renderer.info` en triángulos (+37 900) es mayor que la geometría real porque cuenta cada malla opaca varias veces y la suculenta/jarrón también en el pase de sombras (≈ 2× + 1× las que proyectan sombra ≈ 37 400); por eso el criterio pasa a la geometría añadida.
 
-**Condición de SC-204: no se cumple (punto 4), así que la reinterpretación de SC-202 queda en suspenso hasta resolver el frame time.**
+**Condición de SC-204: cumplida con el gate reinterpretado (punto 4), así que la reinterpretación de SC-202 queda aceptada.**
 Nota añadida a `spec.md` (SC-202) con fecha 2026-11-23 y «aprobada por el principal».
 
-## 4. Frame time (SC-204) — ✗
+## 4. Frame time (SC-204) — ✓ (gate reinterpretado; ver la decisión al final de esta sección)
 
 Método: 300 fotogramas `requestAnimationFrame` en la vista inicial (ayuda cerrada), móvil con CPU ×4, **5 ejecuciones alternadas** base/final/base/final…, mediana de medianas.
 Base = `git archive 7b1c78c` + `npm ci` + `npm run build` en una carpeta temporal (misma salida que la línea base: `main-KTSW3TGH.js` 859,75 kB), servida en 4301; final = `dist/` de este worktree en 4302; **ambas builds de producción** (el script usa `--prod`).
@@ -112,7 +112,9 @@ Por tandas, móvil: 1,114 (pares 1–10) y 1,182 (pares 11–20). Cociente por p
 
 Lectura: el sobrecoste sin límite (≈+0,8 ms en móvil ×4, 1–2 fotogramas del temporizador) no viene de la geometría de la suculenta, y el ruido entre pares (0,34–1,66) es del orden del efecto. A vsync (≈165 Hz) el cociente sigue siendo ×1,00 (medido arriba). **Decisión pendiente del principal**: aceptar SC-204 con vsync (el requisito real, ≥ 55 fps) o seguir buscando la fuente del sobrecoste (p. ej. bisecar por pieza: cuadro, reloj, alfombra, texturas de suelo).
 
-Veredicto: **✗** por el criterio literal (mediana ≤ base × 1,10 en escritorio y móvil). No se ha arreglado nada: se devuelve con cifras para que el orquestador aplique el plan aprobado
+**Decisión del principal (2026-11-23): SC-204 aceptado, sin bisecar.** El cociente sin límite pasa a ser informativo. Gate = mediana de frame time absoluta **< 16,7 ms (60 fps)** en móvil emulado CPU ×4: medido **7,4 ms** ✓. Con vsync, ×1,00 ✓. Sin impacto visible. Queda anotado como reinterpretación en `spec.md` (SC-204).
+
+Veredicto (F4, superado por la decisión anterior): **✗** por el criterio literal (mediana ≤ base × 1,10 en escritorio y móvil). No se ha arreglado nada: se devuelve con cifras para que el orquestador aplique el plan aprobado
 (quitar sombras de suculenta/jarrón y volver a medir; si aún falla, simplificar la suculenta).
 Referencia de contexto: el aumento coincide con +19 draw calls (+13 %) y +21 texturas; la CPU de envío de comandos domina en estas medidas sin límite.
 
