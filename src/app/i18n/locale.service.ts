@@ -136,7 +136,6 @@ export class LocaleService {
   private notifyLoadFailure(): void {
     this.state.error.set({
       code: 'locale-load-failed',
-      message: EN.errors.messages['locale-load-failed'],
       retry: () => {
         this.state.error.set(null);
         void this.setLocale('es');

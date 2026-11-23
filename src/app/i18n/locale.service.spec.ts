@@ -171,7 +171,6 @@ describe('LocaleService', () => {
     expect(document.documentElement.lang).toBe('en');
     const error = TestBed.inject(ViewerStateService).error();
     expect(error?.code).toBe('locale-load-failed');
-    expect(error?.message).toBe('Could not load Spanish. Staying in English.');
   });
 
   it('a failed initial load falls back to English with the notice', async () => {

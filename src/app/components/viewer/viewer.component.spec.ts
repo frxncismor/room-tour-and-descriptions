@@ -114,8 +114,6 @@ describe('ViewerComponent', () => {
     const fixture = TestBed.createComponent(ViewerComponent);
     state.selected.set({
       id: 'sofa',
-      name: EN.furniture.sofa.name,
-      description: 'x',
     });
     await localeReady();
     await fixture.whenStable();
@@ -129,7 +127,7 @@ describe('ViewerComponent', () => {
   it('shows a retry banner for model errors and calls retry', async () => {
     const state = TestBed.inject(ViewerStateService);
     const retry = vi.fn();
-    state.error.set({ code: 'model-load-failed', message: 'Nope', retry });
+    state.error.set({ code: 'model-load-failed', retry });
     const fixture = TestBed.createComponent(ViewerComponent);
     await fixture.whenStable();
     const button = (fixture.nativeElement as HTMLElement).querySelector(
@@ -142,7 +140,7 @@ describe('ViewerComponent', () => {
   it('shows the blocking overlay when WebGL is unavailable', async () => {
     const state = TestBed.inject(ViewerStateService);
     state.loadStatus.set('error');
-    state.error.set({ code: 'webgl-unavailable', message: 'No WebGL' });
+    state.error.set({ code: 'webgl-unavailable' });
     const fixture = TestBed.createComponent(ViewerComponent);
     await fixture.whenStable();
     expect(
@@ -278,8 +276,6 @@ describe('ViewerComponent', () => {
       const state = TestBed.inject(ViewerStateService);
       state.selected.set({
         id: 'sofa',
-        name: EN.furniture.sofa.name,
-        description: EN.furniture.sofa.description,
       });
       const fixture = TestBed.createComponent(ViewerComponent);
       await fixture.whenStable();
@@ -305,7 +301,6 @@ describe('ViewerComponent', () => {
       const state = TestBed.inject(ViewerStateService);
       state.error.set({
         code: 'model-load-failed',
-        message: 'x',
       });
       const fixture = TestBed.createComponent(ViewerComponent);
       await fixture.whenStable();

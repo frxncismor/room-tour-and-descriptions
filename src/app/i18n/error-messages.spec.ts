@@ -19,12 +19,6 @@ describe('errorText', () => {
       expect(errorText(messages, locale, { code })).toBe(expected);
     });
 
-    it('ignores the message when the code is known', () => {
-      expect(
-        errorText(messages, locale, { code: 'render-failed', message: 'x' })
-      ).toBe(messages.errors.messages['render-failed']);
-    });
-
     it('translates asset and furniture ids and joins them', () => {
       const text = errorText(messages, locale, {
         code: 'model-load-failed',
@@ -35,13 +29,10 @@ describe('errorText', () => {
       expect(text).not.toContain('{names}');
     });
 
-    it('uses the message when the params are missing', () => {
-      expect(
-        errorText(messages, locale, {
-          code: 'model-load-failed',
-          message: 'Could not load: X.',
-        })
-      ).toBe('Could not load: X.');
+    it('falls back to the generic text when the params are missing', () => {
+      expect(errorText(messages, locale, { code: 'model-load-failed' })).toBe(
+        messages.errors.messages['render-failed']
+      );
     });
   });
 
@@ -58,10 +49,7 @@ describe('errorText', () => {
     );
   });
 
-  it('falls back to the message for an unknown code, then to a generic text', () => {
-    expect(errorText(EN, 'en', { code: 'weird', message: 'Boom' })).toBe(
-      'Boom'
-    );
+  it('falls back to the generic text for an unknown code', () => {
     expect(errorText(EN, 'en', { code: 'weird' })).toBe(
       EN.errors.messages['render-failed']
     );

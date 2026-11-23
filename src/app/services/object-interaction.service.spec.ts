@@ -66,8 +66,6 @@ describe('ObjectInteractionService', () => {
     scene.add(furniture);
     service.addObject(furniture, {
       id: 'sofa',
-      name: 'Box',
-      description: 'A box',
     });
   });
 
@@ -76,7 +74,7 @@ describe('ObjectInteractionService', () => {
   it('returns the object on a furniture click', async () => {
     const result = await click(100, 100);
     expect(result.success).toBe(true);
-    expect(result.objectInfo?.name).toBe('Box');
+    expect(result.objectInfo?.id).toBe('sofa');
     expect(result.object).toBe(furniture);
     expect(result.floorPoint).toBeUndefined();
   });
@@ -103,7 +101,7 @@ describe('ObjectInteractionService', () => {
       expect(exact.object).toBeUndefined();
       const result = await touch(miss + 6, 100);
       expect(result.object).toBe(furniture);
-      expect(result.objectInfo?.name).toBe('Box');
+      expect(result.objectInfo?.id).toBe('sofa');
       expect(result.floorPoint).toBeUndefined();
       expect(service.getSelected()).toBe(furniture);
     });
@@ -323,12 +321,12 @@ describe('ObjectInteractionService', () => {
     material.emissiveIntensity = 0.7;
     const before = snapshot(material);
     const changes: (string | null)[] = [];
-    service.onHoverChange = t => changes.push(t?.info.name ?? null);
+    service.onHoverChange = t => changes.push(t?.info.id ?? null);
     service.setContext(camera, scene);
 
     service.setHover({ x: 0, y: 0 });
     service.update(16);
-    expect(service.getHovered()?.info.name).toBe('Box');
+    expect(service.getHovered()?.info.id).toBe('sofa');
     const hover = furniture.children.find(c => c.name === '__hover-outline')!;
     expect(hover).toBeDefined();
     const hull = (hover.children[0] as Mesh).material as MeshBasicMaterial;
@@ -343,7 +341,7 @@ describe('ObjectInteractionService', () => {
       false
     );
     expect(snapshot(material)).toEqual(before);
-    expect(changes).toEqual(['Box', null]);
+    expect(changes).toEqual(['sofa', null]);
   });
 
   it('keeps materials identical with hover and selection, and swaps outlines', async () => {
@@ -374,7 +372,7 @@ describe('ObjectInteractionService', () => {
     );
     root.add(child);
     scene.add(root);
-    service.addObject(root, { id: 'sofa', name: 'Group', description: '' });
+    service.addObject(root, { id: 'sofa' });
     service.selectObject(root);
     const outline = root.children.find(c => c.name === '__selection-outline')!;
     expect(outline.children.length).toBe(2);
@@ -457,7 +455,7 @@ describe('ObjectInteractionService', () => {
       expect(isTranslucent(mixed)).toBe(false);
       mixed.position.set(2, 0.5, 0);
       scene.add(mixed);
-      service.addObject(mixed, { id: 'sofa', name: 'Mixed', description: '' });
+      service.addObject(mixed, { id: 'sofa' });
       service.selectObject(mixed);
       const outline = mixed.children.find(
         c => c.name === '__selection-outline'
@@ -474,7 +472,7 @@ describe('ObjectInteractionService', () => {
       const mixed = new Mesh(geometry, [new MeshStandardMaterial(), glass()]);
       mixed.position.set(2, 0.5, 0);
       scene.add(mixed);
-      service.addObject(mixed, { id: 'sofa', name: 'Mixed', description: '' });
+      service.addObject(mixed, { id: 'sofa' });
 
       service.selectObject(mixed);
       const hullGeometry = (

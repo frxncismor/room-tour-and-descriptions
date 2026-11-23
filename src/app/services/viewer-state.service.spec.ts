@@ -20,8 +20,8 @@ describe('ViewerStateService', () => {
   it('reset() restores the initial state', () => {
     state.loadStatus.set('error');
     state.loadProgress.set(80);
-    state.error.set({ code: 'x', message: 'y' });
-    state.selected.set({ id: 'sofa', name: 'a', description: 'b' });
+    state.error.set({ code: 'x' });
+    state.selected.set({ id: 'sofa' });
     state.hovered.set('sofa');
     state.sceneReady.set(true);
 

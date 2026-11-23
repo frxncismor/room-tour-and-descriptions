@@ -25,7 +25,7 @@ describe.each(LOCALES)('ErrorOverlayComponent (%s)', locale => {
   }
 
   it('explains WebGL being unavailable, with help', async () => {
-    const el = await render({ code: 'webgl-unavailable', message: 'raw' });
+    const el = await render({ code: 'webgl-unavailable' });
     expect(el.querySelector('h1')?.textContent?.trim()).toBe(
       messages.errors.webglTitle
     );
@@ -40,7 +40,7 @@ describe.each(LOCALES)('ErrorOverlayComponent (%s)', locale => {
   it.each(['webgl-context-lost', 'context-lost'])(
     'uses the context-lost title for %s, without the WebGL help',
     async code => {
-      const el = await render({ code, message: 'raw' });
+      const el = await render({ code });
       expect(el.querySelector('h1')?.textContent?.trim()).toBe(
         messages.errors.contextLostTitle
       );
@@ -52,7 +52,7 @@ describe.each(LOCALES)('ErrorOverlayComponent (%s)', locale => {
   );
 
   it('is announced as an alert', async () => {
-    const el = await render({ code: 'render-failed', message: 'raw' });
+    const el = await render({ code: 'render-failed' });
     expect(el.querySelector('[role="alert"]')).not.toBeNull();
   });
 });
@@ -64,7 +64,6 @@ describe('ErrorOverlayComponent live language change', () => {
     const fixture = TestBed.createComponent(ErrorOverlayComponent);
     fixture.componentRef.setInput('error', {
       code: 'webgl-unavailable',
-      message: 'raw',
     });
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
