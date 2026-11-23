@@ -1,8 +1,33 @@
 import { Injectable } from '@angular/core';
-import { Box3, Material, Mesh, Object3D, Vector3 } from 'three';
+import { Box3, Material, Mesh, Object3D, Texture, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { ModelConfiguration } from '../interfaces/scene.interface';
+import {
+  LoadProgressCallback,
+  ModelConfiguration,
+} from '../interfaces/scene.interface';
+
+/** Libera geometrías, materiales y texturas de un árbol de objetos. */
+export function disposeObject3D(root: Object3D): void {
+  root.traverse(child => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry?.dispose();
+    const materials: Material[] = Array.isArray(mesh.material)
+      ? mesh.material
+      : mesh.material
+        ? [mesh.material]
+        : [];
+    for (const material of materials) {
+      for (const value of Object.values(material)) {
+        if (value && (value as Texture).isTexture) {
+          (value as Texture).dispose();
+        }
+      }
+      material.dispose();
+    }
+  });
+}
 
 @Injectable({
   providedIn: 'root',
@@ -11,76 +36,71 @@ export class ModelLoaderService {
   private loader: GLTFLoader;
 
   constructor() {
-    this.loader = new GLTFLoader();
-    this.loader.setMeshoptDecoder(MeshoptDecoder);
+    this.loader = this.createLoader();
   }
 
-  async loadModel(config: ModelConfiguration): Promise<Object3D> {
-    return new Promise((resolve, reject) => {
-      const cleanPath = config.path.replace(/^\/+/, '');
+  private createLoader(): GLTFLoader {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    return loader;
+  }
 
-      this.loader.load(
-        cleanPath,
-        gltf => {
-          const model = gltf.scene;
-          this.applyTransformations(model, config);
-          this.setupShadows(model);
-          this.updateMaterials(model);
-          resolve(model);
-        },
-        progress => {
-          const percent = (progress.loaded / progress.total) * 100;
-          // eslint-disable-next-line no-console -- F4a: replaced by the loading UI
-          console.log(
-            `Loading progress for ${config.path}: ${percent.toFixed(2)}%`
-          );
-        },
-        error => {
-          console.error(`Error loading model ${config.path}:`, error);
-          reject(error);
-        }
-      );
+  /**
+   * Carga un modelo y lo coloca por su base sobre el suelo.
+   * `onProgress` recibe bytes reales; `total` es 0 si el servidor no lo informa.
+   */
+  async loadModel(
+    config: ModelConfiguration,
+    onProgress?: LoadProgressCallback
+  ): Promise<Object3D> {
+    const cleanPath = config.path.replace(/^\/+/, '');
+    const gltf = await this.loader.loadAsync(cleanPath, event => {
+      const total = event.lengthComputable && event.total > 0 ? event.total : 0;
+      onProgress?.(event.loaded, total);
     });
+    const model = gltf.scene;
+    this.applyTransformations(model, config);
+    this.setupShadows(model);
+    return model;
   }
 
+  /**
+   * Escala y rota el modelo, centra su caja en X/Z sobre `config.position`
+   * y apoya su base (minY) en `yOffset` (0 = suelo).
+   */
   private applyTransformations(
     model: Object3D,
     config: ModelConfiguration
   ): void {
-    model.position.copy(config.position);
+    model.position.set(0, 0, 0);
     model.rotation.copy(config.rotation);
     model.scale.setScalar(config.scale);
+    model.updateMatrixWorld(true);
 
-    // Center model if needed
     const box = new Box3().setFromObject(model);
     const center = box.getCenter(new Vector3());
-    model.position.sub(center).add(config.position);
+    model.position.set(
+      config.position.x - center.x,
+      (config.yOffset ?? 0) - box.min.y,
+      config.position.z - center.z
+    );
+    model.updateMatrixWorld(true);
   }
 
+  /** Proyecta/recibe sombras solo en mallas opacas (las transparentes no proyectan). */
   private setupShadows(model: Object3D): void {
     model.traverse(child => {
-      if ((child as Mesh).isMesh) {
-        const mesh = child as Mesh;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-      }
-    });
-  }
-
-  private updateMaterials(model: Object3D): void {
-    model.traverse(child => {
-      if ((child as Mesh).isMesh) {
-        const mesh = child as Mesh;
-        if (mesh.material) {
-          const material = mesh.material as Material;
-          material.needsUpdate = true;
-        }
-      }
+      const mesh = child as Mesh;
+      if (!mesh.isMesh) return;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+      mesh.castShadow = !materials.some(m => m?.transparent);
+      mesh.receiveShadow = true;
     });
   }
 
   dispose(): void {
-    this.loader = new GLTFLoader();
-    this.loader.setMeshoptDecoder(MeshoptDecoder);
+    this.loader = this.createLoader();
   }
 }
