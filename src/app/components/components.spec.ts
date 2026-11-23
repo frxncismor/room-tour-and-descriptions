@@ -130,6 +130,32 @@ describe('HelpPanelComponent', () => {
     expect(el.querySelector('.sheet')).not.toBeNull();
   });
 
+  it('is a non-modal labelled dialog that does not steal focus', async () => {
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    await fixture.whenStable();
+    const sheet = (fixture.nativeElement as HTMLElement).querySelector(
+      '.sheet'
+    ) as HTMLElement;
+    expect(sheet.getAttribute('role')).toBe('dialog');
+    expect(sheet.getAttribute('aria-modal')).toBe('false');
+    const title = document.getElementById(
+      sheet.getAttribute('aria-labelledby') ?? ''
+    );
+    expect(title?.textContent).toContain('How to explore');
+    expect(sheet.contains(document.activeElement)).toBe(false);
+  });
+
+  it('moves focus to the reopen button when closed', async () => {
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    document.body.appendChild(fixture.nativeElement);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.primary') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(el.querySelector('.reopen'));
+    fixture.nativeElement.remove();
+  });
+
   it('starts closed when it was dismissed before', async () => {
     localStorage.setItem(HELP_STORAGE_KEY, '1');
     const fixture = TestBed.createComponent(HelpPanelComponent);

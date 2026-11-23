@@ -13,7 +13,8 @@
     "lint:check": "node scripts/lint-check.js",
     "format": "prettier --write \"src/**/*.{ts,html,scss}\"",
     "prepare": "husky",
-    "pre-commit": "lint-staged"
+    "pre-commit": "lint-staged",
+    "test:coverage": "ng test --no-watch --no-progress --coverage"
   },
   "private": true,
   "dependencies": {
@@ -32,6 +33,7 @@
     "@angular/compiler-cli": "^21.2.26",
     "@eslint/js": "^9.39.5",
     "@types/three": "^0.187.0",
+    "@vitest/coverage-v8": "^4.1.12",
     "angular-eslint": "^21.4.0",
     "eslint": "^9.39.5",
     "husky": "^9.1.7",
@@ -53,5 +55,8 @@
     "*.{json,md}": [
       "prettier --write"
     ]
+  },
+  "engines": {
+    "node": ">=22.12"
   }
 }

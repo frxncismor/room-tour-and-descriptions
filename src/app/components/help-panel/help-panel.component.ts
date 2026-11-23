@@ -1,8 +1,13 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  inject,
+  Injector,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { UI_TEXT } from '../../config/ui-text';
 
@@ -31,7 +36,12 @@ function writeDismissed(value: boolean): void {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open() && !suppressed()) {
-      <section class="sheet" aria-labelledby="help-title">
+      <section
+        class="sheet"
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="help-title"
+      >
         <h2 id="help-title">{{ text.title }}</h2>
         <ul>
           @for (control of text.controls; track control.label) {
@@ -151,6 +161,7 @@ function writeDismissed(value: boolean): void {
     } @else if (!open() && !suppressed()) {
       <button
         type="button"
+        #reopenButton
         class="reopen"
         [attr.aria-label]="text.openLabel"
         (click)="reopen()"
@@ -170,7 +181,7 @@ function writeDismissed(value: boolean): void {
       left: 50%;
       z-index: 20;
       width: min(92vw, 640px);
-      padding: 16px 20px 20px;
+      padding: 12px 18px 14px;
       overflow: auto;
       background: rgb(255 255 255 / 0.96);
       border-radius: var(--radius-lg);
@@ -179,38 +190,38 @@ function writeDismissed(value: boolean): void {
       transform: translateX(-50%);
     }
     h2 {
-      margin: 0 0 12px;
-      font-size: 1.1rem;
+      margin: 0 0 8px;
+      font-size: 1.05rem;
       font-weight: 600;
       color: var(--color-text);
     }
     ul {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px 20px;
+      gap: 8px 20px;
       padding: 0;
-      margin: 0 0 16px;
+      margin: 0 0 10px;
       list-style: none;
     }
     li {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: flex-start;
     }
     .icon {
       display: grid;
       flex: none;
       place-items: center;
-      width: 36px;
-      height: 36px;
+      width: 32px;
+      height: 32px;
       color: var(--color-accent-strong);
       background: rgb(14 165 233 / 0.1);
       border-radius: var(--radius-sm);
     }
     .copy {
       display: grid;
-      font-size: 0.92rem;
-      line-height: 1.35;
+      font-size: 0.88rem;
+      line-height: 1.3;
       color: var(--color-text);
     }
     .copy span {
@@ -218,7 +229,7 @@ function writeDismissed(value: boolean): void {
     }
     .primary {
       width: 100%;
-      min-height: 44px;
+      min-height: 40px;
       font: inherit;
       font-weight: 600;
       color: #fff;
@@ -284,6 +295,23 @@ function writeDismissed(value: boolean): void {
       .reopen-text {
         display: none;
       }
+      /* Sin iconos el texto ocupa menos líneas y caben los ítems enteros. */
+      .icon {
+        display: none;
+      }
+      li {
+        gap: 0;
+      }
+      .copy {
+        font-size: 0.85rem;
+        line-height: 1.25;
+      }
+    }
+    /* En táctil no hay teclado: se omite su ítem para no cortar la lista. */
+    @media (pointer: coarse) and (max-width: 600px) {
+      li:last-child {
+        display: none;
+      }
     }
   `,
 })
@@ -293,9 +321,22 @@ export class HelpPanelComponent {
   protected readonly text = UI_TEXT.help;
   protected readonly open = signal(!readDismissed());
 
+  private readonly injector = inject(Injector);
+  private readonly reopenButton =
+    viewChild<ElementRef<HTMLButtonElement>>('reopenButton');
+
+  /**
+   * La ayuda aparece abierta al cargar pero NO roba el foco (un usuario de
+   * ratón/táctil no debe ver saltar el foco): basta con que sea lo primero en
+   * el orden de Tab. Al cerrarla, el foco pasa al botón «? Help» para que un
+   * usuario de teclado no lo pierda al desaparecer el botón enfocado.
+   */
   protected dismiss(): void {
     this.open.set(false);
     writeDismissed(true);
+    afterNextRender(() => this.reopenButton()?.nativeElement.focus(), {
+      injector: this.injector,
+    });
   }
 
   protected reopen(): void {

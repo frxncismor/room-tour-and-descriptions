@@ -110,11 +110,23 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
       }
     }
     @media (max-width: 600px), (max-height: 500px) {
+      /* Bottom sheet bajo (≤ 30 %): deja libre el mueble recién encuadrado. */
       .panel {
-        top: 120px;
-        right: 50%;
-        max-height: 40dvh;
-        transform: translateX(50%);
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: 30dvh;
+        padding: 14px 52px calc(14px + env(safe-area-inset-bottom)) 16px;
+        overscroll-behavior: contain;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      }
+      h2 {
+        font-size: 1.1rem;
+      }
+      p {
+        line-height: 1.45;
       }
     }
     @media (prefers-reduced-motion: reduce) {

@@ -1,4 +1,17 @@
 <div class="viewer-container">
+  <!-- DOM order = Tab order: help -> list -> "Initial view" -> canvas.
+       All three are absolutely positioned, so their DOM position does not
+       change the layout. -->
+  @if (!blockingError()) {
+    <app-help-panel [suppressed]="!!state.selected()" />
+    <app-object-list
+      [items]="objects()"
+      [selectedName]="state.selected()?.name ?? null"
+      (selectItem)="selectObject($event)"
+      (resetView)="resetView()"
+    />
+  }
+
   <canvas
     #canvas
     class="scene-canvas"
@@ -23,13 +36,6 @@
       <app-error-banner [error]="error" (retry)="retry()" />
     }
 
-    <app-object-list
-      [items]="objects()"
-      [selectedName]="state.selected()?.name ?? null"
-      (selectItem)="selectObject($event)"
-      (resetView)="resetView()"
-    />
     <app-description-panel [info]="panelInfo()" (closed)="closePanel()" />
-    <app-help-panel [suppressed]="!!state.selected()" />
   }
 </div>
