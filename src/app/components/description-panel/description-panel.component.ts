@@ -31,14 +31,17 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
           [attr.aria-label]="text.close"
           (click)="closed.emit()"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path
-              d="M6 6l12 12M18 6L6 18"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              fill="none"
-            />
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="butt"
+            aria-hidden="true"
+          >
+            <path d="M3 3l10 10M13 3 3 13" />
           </svg>
         </button>
         <div>
@@ -68,56 +71,56 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
     }
     .panel {
       position: absolute;
-      top: 16px;
-      right: 16px;
+      top: var(--space-4);
+      right: var(--space-4);
       z-index: 20;
       width: min(92vw, 360px);
       max-height: min(60dvh, 480px);
-      padding: 20px 56px 20px 20px;
+      padding: var(--space-5);
       overflow: auto;
-      background: rgb(255 255 255 / 0.96);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-md);
-      backdrop-filter: blur(8px);
-      animation: panel-in 0.2s ease-out;
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius-2);
+      box-shadow: var(--shadow-panel);
+      animation: panel-in var(--dur-2) var(--ease);
     }
     h2 {
-      margin: 0 0 8px;
-      font-size: 1.25rem;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-      color: var(--color-text);
+      padding-right: var(--space-6);
+      margin: 0;
+      font-size: var(--fs-title);
+      color: var(--ink);
     }
     p {
-      margin: 0;
-      line-height: 1.55;
-      color: var(--color-text);
+      margin: var(--space-3) 0 0;
+      color: var(--ink);
     }
     .credit {
-      margin-top: 12px;
-      font-size: 0.85rem;
-      color: var(--color-text-muted);
+      padding-top: var(--space-3);
+      margin-top: var(--space-4);
+      font-size: var(--fs-small);
+      color: var(--ink-muted);
+      border-top: 1px solid var(--rule);
     }
     .close {
       position: absolute;
-      top: 4px;
-      right: 4px;
+      top: var(--space-2);
+      right: var(--space-2);
       display: grid;
       place-items: center;
-      width: 44px;
-      height: 44px;
-      color: var(--color-text);
+      width: var(--hit);
+      height: var(--hit);
+      color: var(--ink);
       cursor: pointer;
       background: transparent;
       border: 0;
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-1);
     }
     .close:hover {
-      background: rgb(31 41 55 / 0.08);
+      background: var(--paper-sunk);
     }
     .close:focus-visible {
-      outline: 3px solid var(--color-accent-strong);
-      outline-offset: -3px;
+      outline: 2px solid var(--focus);
+      outline-offset: -2px;
     }
     @keyframes panel-in {
       from {
@@ -127,24 +130,23 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
         opacity: 1;
       }
     }
+    /* Móvil y paisaje bajo: hoja inferior (≤ 34 dvh) con scroll interno. */
     @media (max-width: 600px), (max-height: 500px) {
-      /* Bottom sheet bajo (≤ 30 %): deja libre el mueble recién encuadrado. */
       .panel {
         top: auto;
         right: 0;
         bottom: 0;
         left: 0;
         width: auto;
-        max-height: 30dvh;
-        padding: 14px 52px calc(14px + env(safe-area-inset-bottom)) 16px;
+        max-height: 34dvh;
+        padding: var(--space-4) var(--space-4)
+          calc(var(--space-5) + env(safe-area-inset-bottom));
         overscroll-behavior: contain;
-        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        border-width: 1px 0 0;
+        border-radius: var(--radius-2) var(--radius-2) 0 0;
       }
-      h2 {
-        font-size: 1.1rem;
-      }
-      p {
-        line-height: 1.45;
+      .credit {
+        margin-top: var(--space-3);
       }
     }
     @media (prefers-reduced-motion: reduce) {
