@@ -1,4 +1,10 @@
-import { Injectable, InjectionToken, NgZone, inject } from '@angular/core';
+import {
+  Injectable,
+  InjectionToken,
+  Injector,
+  NgZone,
+  inject,
+} from '@angular/core';
 import {
   ACESFilmicToneMapping,
   Group,
@@ -7,9 +13,12 @@ import {
   Object3D,
   PerspectiveCamera,
   Scene,
+  Texture,
+  TextureLoader,
   Vector3,
   WebGLRenderer,
 } from 'three';
+import type { Decor3Config } from '../config/decor.config';
 import {
   DECOR_CONFIGURATIONS,
   DEFAULT_SCENE_CONFIG,
@@ -23,6 +32,7 @@ import {
   ScreenPoint,
 } from '../interfaces/scene.interface';
 import { CameraService } from './camera.service';
+import type { DecorBuild, DecorBuilderService } from './decor-builder.service';
 import {
   ModelLoaderService,
   disableRaycast,
@@ -46,6 +56,23 @@ const TEXTURE_SETS: Record<RoomTextureSet, { label: string }> = {
   floor: FLOOR_TEXTURES,
   rug: RUG_TEXTURES,
 };
+
+/** Claves de carga de la decoración 3 (`art:*` láminas, `fabric:*` lino). */
+const isDecor3Key = (key: string): boolean =>
+  key.startsWith('art:') || key.startsWith('fabric:');
+
+/** Nombre en inglés de los activos de la decoración 3 (se retira en F3). */
+const DECOR3_LABELS = { prints: 'Framed prints', fabric: 'Linen textiles' };
+
+/** Claves de carga de la decoración 3; coinciden con `DECOR3_LOAD_KEYS` (lo prueba el spec) y evitan importar su config en el bundle inicial. */
+export const DECOR3_KEYS: readonly string[] = [
+  'art:spiraea',
+  'art:felce',
+  'art:osmunda',
+  'art:pteris',
+  'fabric:linen',
+  'fabric:linen-nor',
+];
 
 const TONE_MAPPING = {
   neutral: NeutralToneMapping,
@@ -125,12 +152,16 @@ export class SceneService {
   private decorGroup: Group | null = null;
   private readonly decorLoaded = new Set<DecorId>();
   private readonly texturesLoaded = new Set<RoomTextureSet>();
+  /** Decoración 3 (láminas, apliques, ventana, textiles): chunk perezoso. */
+  private decor3: DecorBuild | null = null;
+  private readonly decor3Loaded = new Set<string>();
   /** Progreso 0-1 por clave: `<modelo>`, `decor:<id>` o `tex:<set>`. */
   private readonly modelProgress = new Map<string, number>();
   private readonly failed = new Map<string, unknown>();
   private readonly pending = new Map<string, Promise<void>>();
 
   private readonly zone = inject(NgZone);
+  private readonly injector = inject(Injector);
   private readonly rendererFactory = inject(RENDERER_FACTORY);
   private readonly cameraService = inject(CameraService);
   private readonly modelLoaderService = inject(ModelLoaderService);
@@ -233,6 +264,12 @@ export class SceneService {
     interaction.setCanvas(null);
     interaction.dispose();
 
+    // El builder es dueño de sus texturas: se liberan aquí, una sola vez, y
+    // antes de recorrer la escena (el grupo queda vacío).
+    this.decor3?.group.removeFromParent();
+    this.decor3?.dispose();
+    this.decor3 = null;
+    this.decor3Loaded.clear();
     if (this.scene) {
       this.roomBuilderService.dispose(this.scene);
       disposeObject3D(this.scene);
@@ -396,6 +433,7 @@ export class SceneService {
       ...this.modelIds(),
       ...this.decorIds().map(id => `decor:${id}`),
       ...this.textureSets().map(set => `tex:${set}`),
+      ...DECOR3_KEYS,
     ];
   }
 
@@ -406,9 +444,20 @@ export class SceneService {
     if (key.startsWith('tex:')) {
       return this.texturesLoaded.has(key.slice(4) as RoomTextureSet);
     }
+    if (isDecor3Key(key)) return this.decor3Loaded.has(key);
     return this.models.has(key as ModelId);
   }
 
+  /** Id del activo que nombra el aviso (`params.names`): mueble o `AssetLabelId`. */
+  private assetId(key: string): string {
+    if (key.startsWith('decor:')) return key.slice(6);
+    if (key.startsWith('tex:')) return key.slice(4);
+    if (key.startsWith('art:')) return 'prints';
+    if (key.startsWith('fabric:')) return 'fabric';
+    return key;
+  }
+
+  /** Nombre en inglés (compatibilidad: `message` se retira en F3). */
   private label(key: string): string {
     if (key.startsWith('decor:')) {
       return DECOR_CONFIGURATIONS[key.slice(6) as DecorId].label;
@@ -416,6 +465,8 @@ export class SceneService {
     if (key.startsWith('tex:')) {
       return TEXTURE_SETS[key.slice(4) as RoomTextureSet].label;
     }
+    if (key.startsWith('art:')) return DECOR3_LABELS.prints;
+    if (key.startsWith('fabric:')) return DECOR3_LABELS.fabric;
     return MODEL_CONFIGURATIONS[key as ModelId].metadata.name;
   }
 
@@ -472,20 +523,26 @@ export class SceneService {
 
     const decor = keys.filter(k => k.startsWith('decor:'));
     const textures = keys.filter(k => k.startsWith('tex:'));
+    const decor3 = keys.filter(isDecor3Key);
     const models = keys.filter(k => !k.includes(':'));
     await Promise.allSettled([
       ...models.map(key => this.loadOne(key as ModelId)),
       this.loadDecor(decor),
       this.loadTextures(textures),
+      this.loadDecor3(decor3),
     ]);
     if (generation !== this.generation) return;
 
     this.publishProgress();
     if (this.failed.size > 0) {
-      const names = [...this.failed.keys()].map(key => this.label(key));
+      const failedKeys = [...this.failed.keys()];
+      const names = [...new Set(failedKeys.map(key => this.label(key)))];
       this.state.loadStatus.set('error');
       this.state.error.set({
         code: 'model-load-failed',
+        params: {
+          names: [...new Set(failedKeys.map(key => this.assetId(key)))],
+        },
         message: `Could not load: ${names.join(', ')}.`,
         retry: () => void this.retryLoad(),
       });
@@ -584,6 +641,86 @@ export class SceneService {
       if (generation !== this.generation) return;
       this.texturesLoaded.add(set);
       this.modelProgress.set(key, 1);
+    });
+  }
+
+  /** Chunk perezoso del builder; aparte para poder sustituirlo en los tests. */
+  private async importDecorBuilder(): Promise<{
+    DecorBuilderService: typeof DecorBuilderService;
+    config: Decor3Config;
+  }> {
+    const [builder, { DECOR3 }] = await Promise.all([
+      import('./decor-builder.service'),
+      import('../config/decor.config'),
+    ]);
+    return { DecorBuilderService: builder.DecorBuilderService, config: DECOR3 };
+  }
+
+  /**
+   * Decoración 3: importa el builder (chunk aparte), carga las texturas `art:*`
+   * y `fabric:*` y construye el grupo `decor3`, sin raycast. Un fallo no
+   * bloquea: la pieza queda en color plano y se avisa (la reintenta `retryLoad`).
+   * Al reintentar se recarga todo el conjunto: el builder libera sus texturas.
+   */
+  async loadDecor3(keys?: string[]): Promise<void> {
+    const wanted = keys?.length ? keys : [...DECOR3_KEYS];
+    if (this.decor3 && wanted.every(key => this.decor3Loaded.has(key))) return;
+    const all = [...DECOR3_KEYS];
+    await this.once('decor3', async generation => {
+      const loaded = new Map<string, Texture>();
+      let owned = false;
+      const fail = (reason: unknown, failedKeys: readonly string[]) => {
+        console.error('Error loading decor3:', reason);
+        if (generation === this.generation) {
+          failedKeys.forEach(key => this.failed.set(key, reason));
+        }
+      };
+      all.forEach(key => this.failed.delete(key));
+      try {
+        const { DecorBuilderService, config } = await this.importDecorBuilder();
+        if (generation !== this.generation) return;
+
+        const loader = new TextureLoader();
+        const results = await Promise.allSettled(
+          all.map(async key => {
+            const texture = await loader.loadAsync(
+              config.textures[key],
+              event => {
+                if (event.lengthComputable && event.total > 0) {
+                  this.setProgress(key, generation, event.loaded / event.total);
+                }
+              }
+            );
+            loaded.set(key, texture);
+          })
+        );
+        if (generation !== this.generation) {
+          loaded.forEach(texture => texture.dispose());
+          return;
+        }
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') fail(result.reason, [all[i]]);
+        });
+
+        const build = this.injector
+          .get(DecorBuilderService)
+          .build(config, Object.fromEntries(loaded));
+        owned = true; // desde aquí las texturas son del builder
+        disableRaycast(build.group);
+        this.decor3?.group.removeFromParent();
+        this.decor3?.dispose();
+        this.scene.add(build.group);
+        this.decor3 = build;
+        this.decor3Loaded.clear();
+        loaded.forEach((_, key) => {
+          this.decor3Loaded.add(key);
+          this.modelProgress.set(key, 1);
+        });
+      } catch (error) {
+        // Import rechazado o fallo al construir: la escena sigue sin decoración 3.
+        if (!owned) loaded.forEach(texture => texture.dispose());
+        fail(error, all);
+      }
     });
   }
 
