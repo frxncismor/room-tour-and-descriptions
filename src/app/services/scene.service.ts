@@ -172,7 +172,6 @@ export class SceneService {
     interaction.onHoverChange = null;
     interaction.setCanvas(null);
     interaction.dispose();
-    this.modelLoaderService.dispose();
 
     if (this.scene) {
       this.roomBuilderService.dispose(this.scene);
@@ -327,7 +326,7 @@ export class SceneService {
     }
     this.state.loadStatus.set('loading');
     this.state.loadProgress.set(0);
-    this.state.error.set(null);
+    this.clearLoadError();
     await this.loadModels(this.modelIds());
   }
 
@@ -339,8 +338,15 @@ export class SceneService {
       : this.modelIds().filter(m => !this.models.has(m));
     if (ids.length === 0) return;
     this.state.loadStatus.set('loading');
-    this.state.error.set(null);
+    this.clearLoadError();
     await this.loadModels(ids);
+  }
+
+  /** Solo borra errores de carga: un `render-failed` o de WebGL sigue vigente. */
+  private clearLoadError(): void {
+    if (this.state.error()?.code === 'model-load-failed') {
+      this.state.error.set(null);
+    }
   }
 
   private async loadModels(ids: ModelId[]): Promise<void> {

@@ -110,7 +110,7 @@ describe('SceneService', () => {
         { provide: RENDERER_FACTORY, useValue: () => renderer },
         {
           provide: ModelLoaderService,
-          useValue: { loadModel, dispose: vi.fn() },
+          useValue: { loadModel },
         },
       ],
     });
@@ -523,6 +523,22 @@ describe('SceneService', () => {
     loadModel.mockClear();
     await service.retryLoad();
     expect(loadModel).not.toHaveBeenCalled();
+  });
+
+  it('loadAll and retryLoad only clear load errors, never render-failed or WebGL ones', async () => {
+    service.initialize(canvas);
+    failing.add('sofa');
+    await service.loadAll();
+    expect(state.error()?.code).toBe('model-load-failed');
+    failing.clear();
+    await service.retryLoad('sofa');
+    expect(state.error()).toBeNull(); // un error de carga sí se limpia
+
+    for (const code of ['render-failed', 'webgl-context-lost']) {
+      state.error.set({ code, message: 'x' });
+      await service.loadAll();
+      expect(state.error()?.code).toBe(code);
+    }
   });
 
   describe('resize and pixel ratio', () => {

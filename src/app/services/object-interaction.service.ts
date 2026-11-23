@@ -1,10 +1,11 @@
 import { Injectable } from '@angular/core';
 import {
   BackSide,
+  BufferAttribute,
+  BufferGeometry,
   Color,
   Group,
   Material,
-  Matrix4,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -64,20 +65,72 @@ const OUTLINE_COLOR = 0x2f8fa8;
 const OUTLINE_PULSE_COLOR = 0x8fe3f5;
 const OUTLINE_PULSE_AMPLITUDE = 0.5;
 const OUTLINE_PULSE_SPEED = 0.003;
-/** Grosor deseado del contorno en metros (igual en sofá, mesa o estantería). */
-const OUTLINE_THICKNESS = 0.025;
-const OUTLINE_MIN_SCALE = 1.01;
-const OUTLINE_MAX_SCALE = 1.15;
+/** Grosor del contorno en px CSS: constante en pantalla, sea cual sea el mueble o la distancia. */
+export const OUTLINE_THICKNESS_PX = 3;
+/** Empuje (m) del casco hacia el fondo: oculta los destellos de caras traseras interiores. */
+export const OUTLINE_DEPTH_PUSH = 0.025;
+/** Atributo con normales suavizadas (por posición) que guía la extrusión del contorno. */
+export const OUTLINE_NORMAL_ATTRIBUTE = 'outlineNormal';
 const HOVER_EMISSIVE_COLOR = 0x3a6a78;
 const HOVER_EMISSIVE_INTENSITY = 0.35;
 const TELEPORT_MARGIN = 1.5;
 const TELEPORT_MAX_CLAMP = 2;
+
+/** Mallas transparentes (vasos, cristal): su casco se vería a través y las rellenaría. */
+function isTranslucent(mesh: Mesh): boolean {
+  const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  return list.length > 0 && list.every(m => m.transparent || m.opacity < 1);
+}
 
 function hasEmissive(material: Material): material is EmissiveMaterial {
   return (
     'emissive' in material &&
     (material as EmissiveMaterial).emissive instanceof Color
   );
+}
+
+/**
+ * Añade (una sola vez) normales suavizadas: la suma ponderada por área de las
+ * normales de cara de todos los vértices que comparten posición. Con normales
+ * partidas (aristas duras) el casco invertido se abriría en grietas.
+ */
+export function ensureOutlineNormals(geometry: BufferGeometry): void {
+  if (geometry.getAttribute(OUTLINE_NORMAL_ATTRIBUTE)) return;
+  const position = geometry.getAttribute('position');
+  if (!position) return;
+  const index = geometry.getIndex();
+  const count = index ? index.count : position.count;
+  const key = (i: number) =>
+    `${Math.round(position.getX(i) * 1e4)}_${Math.round(position.getY(i) * 1e4)}_${Math.round(position.getZ(i) * 1e4)}`;
+  const sums = new Map<string, Vector3>();
+  const keys: string[] = new Array(position.count);
+  for (let i = 0; i < position.count; i++) keys[i] = key(i);
+  const a = new Vector3();
+  const b = new Vector3();
+  const c = new Vector3();
+  for (let i = 0; i + 2 < count; i += 3) {
+    const i0 = index ? index.getX(i) : i;
+    const i1 = index ? index.getX(i + 1) : i + 1;
+    const i2 = index ? index.getX(i + 2) : i + 2;
+    a.fromBufferAttribute(position, i0);
+    b.fromBufferAttribute(position, i1).sub(a);
+    c.fromBufferAttribute(position, i2).sub(a);
+    b.cross(c); // longitud = 2 × área: pondera la contribución
+    for (const v of [i0, i1, i2]) {
+      let sum = sums.get(keys[v]);
+      if (!sum) sums.set(keys[v], (sum = new Vector3()));
+      sum.add(b);
+    }
+  }
+  const data = new Float32Array(position.count * 3);
+  const n = new Vector3();
+  for (let i = 0; i < position.count; i++) {
+    n.copy(sums.get(keys[i]) ?? n.set(0, 1, 0)).normalize();
+    data[i * 3] = n.x;
+    data[i * 3 + 1] = n.y;
+    data[i * 3 + 2] = n.z;
+  }
+  geometry.setAttribute(OUTLINE_NORMAL_ATTRIBUTE, new BufferAttribute(data, 3));
 }
 
 @Injectable({
@@ -99,6 +152,8 @@ export class ObjectInteractionService {
 
   private outline: Group | null = null;
   private outlineMaterial: MeshBasicMaterial | null = null;
+  /** Desplazamiento del contorno en NDC (se actualiza con el tamaño del canvas). */
+  private readonly outlineOffset = { value: new Vector2() };
   private selected: Object3D | null = null;
 
   private pendingHover: Vector2 | null = null;
@@ -264,6 +319,7 @@ export class ObjectInteractionService {
         ((Math.sin(timeMs * OUTLINE_PULSE_SPEED) + 1) / 2) *
         OUTLINE_PULSE_AMPLITUDE;
       this.outlineMaterial.color.setHex(OUTLINE_COLOR).lerp(this.pulseColor, t);
+      this.updateOutlineOffset();
     }
     if (this.hoverDirty) {
       this.hoverDirty = false;
@@ -357,10 +413,8 @@ export class ObjectInteractionService {
 
   private select(root: Object3D): void {
     this.selected = root;
-    this.outlineMaterial = new MeshBasicMaterial({
-      color: OUTLINE_COLOR,
-      side: BackSide,
-    });
+    this.outlineMaterial = this.createOutlineMaterial();
+    this.updateOutlineOffset();
     const outline = new Group();
     outline.name = OUTLINE_NAME;
 
@@ -369,18 +423,20 @@ export class ObjectInteractionService {
     const rootInverse = root.matrixWorld.clone().invert();
     const meshes: Mesh[] = [];
     root.traverse(child => {
-      if ((child as Mesh).isMesh && !this.isOutline(child)) {
+      if (
+        (child as Mesh).isMesh &&
+        !this.isOutline(child) &&
+        !isTranslucent(child as Mesh)
+      ) {
         meshes.push(child as Mesh);
       }
     });
     for (const mesh of meshes) {
+      ensureOutlineNormals(mesh.geometry);
       const clone = new Mesh(mesh.geometry, this.outlineMaterial);
       clone.raycast = () => undefined;
       clone.matrixAutoUpdate = false;
-      clone.matrix
-        .copy(rootInverse)
-        .multiply(mesh.matrixWorld)
-        .multiply(this.growAroundCenter(mesh));
+      clone.matrix.copy(rootInverse).multiply(mesh.matrixWorld);
       clone.matrixWorldNeedsUpdate = true;
       outline.add(clone);
     }
@@ -390,31 +446,48 @@ export class ObjectInteractionService {
   }
 
   /**
-   * Matriz local que agranda la malla alrededor del centro de su caja (no de su
-   * origen local) lo justo para ~`OUTLINE_THICKNESS` m de borde en cualquier tamaño.
+   * Casco invertido (BackSide) cuyos vértices se desplazan en espacio de clip
+   * `OUTLINE_THICKNESS_PX` píxeles a lo largo de la normal suavizada proyectada:
+   * grosor constante en pantalla, sin escalar la malla (no se desplaza ni engorda
+   * en piezas con el origen lejos de su centro).
    */
-  private growAroundCenter(mesh: Mesh): Matrix4 {
-    const geometry = mesh.geometry;
-    if (!geometry.boundingBox) geometry.computeBoundingBox();
-    const box = geometry.boundingBox;
-    if (!box) return new Matrix4();
-    const center = box.getCenter(new Vector3());
-    const size = box.getSize(new Vector3());
-    const worldScale = mesh.getWorldScale(new Vector3());
-    const half =
-      Math.max(
-        size.x * worldScale.x,
-        size.y * worldScale.y,
-        size.z * worldScale.z
-      ) / 2 || 1;
-    const factor = Math.min(
-      OUTLINE_MAX_SCALE,
-      Math.max(OUTLINE_MIN_SCALE, 1 + OUTLINE_THICKNESS / half)
+  private createOutlineMaterial(): MeshBasicMaterial {
+    const material = new MeshBasicMaterial({
+      color: OUTLINE_COLOR,
+      side: BackSide,
+    });
+    material.onBeforeCompile = shader => {
+      shader.uniforms['uOutlineOffset'] = this.outlineOffset;
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          'void main() {',
+          `attribute vec3 ${OUTLINE_NORMAL_ATTRIBUTE};
+uniform vec2 uOutlineOffset;
+void main() {`
+        )
+        .replace(
+          '#include <project_vertex>',
+          `vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 );
+mvPosition.z -= ${OUTLINE_DEPTH_PUSH.toFixed(3)};
+gl_Position = projectionMatrix * mvPosition;
+vec3 outlineViewNormal = normalMatrix * ${OUTLINE_NORMAL_ATTRIBUTE};
+vec2 outlineDir = ( projectionMatrix * vec4( outlineViewNormal, 0.0 ) ).xy;
+float outlineLen = length( outlineDir );
+if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOffset * gl_Position.w;`
+        );
+    };
+    material.customProgramCacheKey = () => 'selection-outline';
+    return material;
+  }
+
+  /** Convierte el grosor en px CSS a NDC según el tamaño actual del canvas. */
+  private updateOutlineOffset(): void {
+    const rect = this.canvas?.getBoundingClientRect?.();
+    if (!rect || rect.width === 0 || rect.height === 0) return;
+    this.outlineOffset.value.set(
+      (2 * OUTLINE_THICKNESS_PX) / rect.width,
+      (2 * OUTLINE_THICKNESS_PX) / rect.height
     );
-    return new Matrix4()
-      .makeTranslation(center.x, center.y, center.z)
-      .scale(new Vector3(factor, factor, factor))
-      .multiply(new Matrix4().makeTranslation(-center.x, -center.y, -center.z));
   }
 
   private resolveHover(): void {
