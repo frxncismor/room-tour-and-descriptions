@@ -1,5 +1,6 @@
 import { Euler, Vector3 } from 'three';
 import { SceneConfiguration } from '../interfaces/scene.interface';
+import { FURNITURE_TEXT } from './ui-text';
 
 export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
   camera: {
@@ -89,11 +90,7 @@ export const MODEL_CONFIGURATIONS = {
     rotation: new Euler(0, Math.PI / 4, 0),
     yOffset: 0,
     materialOverride: { color: 0xa65f3a, roughness: 0.9, metalness: 0 },
-    metadata: {
-      name: 'Modern Sofa',
-      description:
-        'An elegant contemporary design sofa perfect for your living room.',
-    },
+    metadata: FURNITURE_TEXT.sofa,
   },
   pokerTable: {
     path: 'assets/models/poker_table/scene.gltf',
@@ -101,11 +98,7 @@ export const MODEL_CONFIGURATIONS = {
     scale: 1,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: {
-      name: 'Poker Table',
-      description:
-        'Professional poker table for your games with friends and family.',
-    },
+    metadata: FURNITURE_TEXT.pokerTable,
   },
   bookshelf: {
     path: 'assets/models/bookshelf/scene.gltf',
@@ -113,10 +106,6 @@ export const MODEL_CONFIGURATIONS = {
     scale: 1,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: {
-      name: 'Bookshelf',
-      description:
-        'Modern and spacious bookshelf to organize your books and decoration.',
-    },
+    metadata: FURNITURE_TEXT.bookshelf,
   },
 };

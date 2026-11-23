@@ -3,6 +3,8 @@ import { Euler, Object3D, Vector3 } from 'three';
 export interface ObjectInfo {
   name: string;
   description: string;
+  /** Datos secundarios (autoría, origen). */
+  details?: string;
 }
 
 export interface SceneConfiguration {
