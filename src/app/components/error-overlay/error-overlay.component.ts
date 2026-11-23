@@ -1,5 +1,12 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
-import { UI_TEXT } from '../../config/ui-text';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+} from '@angular/core';
+import { errorText } from '../../i18n/error-messages';
+import { LocaleService } from '../../i18n/locale.service';
 import { ViewerError } from '../../services/viewer-state.service';
 
 /** Error bloqueante (WebGL no disponible o contexto perdido). */
@@ -9,16 +16,10 @@ import { ViewerError } from '../../services/viewer-state.service';
   template: `
     <div class="overlay" role="alert">
       <div class="card">
-        <h1>
-          {{
-            error().code === 'webgl-context-lost'
-              ? text.contextLostTitle
-              : text.webglTitle
-          }}
-        </h1>
-        <p>{{ error().message }}</p>
+        <h1>{{ title() }}</h1>
+        <p>{{ message() }}</p>
         @if (error().code === 'webgl-unavailable') {
-          <p class="help">{{ text.webglHelp }}</p>
+          <p class="help">{{ text().webglHelp }}</p>
         }
       </div>
     </div>
@@ -59,5 +60,15 @@ import { ViewerError } from '../../services/viewer-state.service';
 })
 export class ErrorOverlayComponent {
   readonly error = input.required<ViewerError>();
-  protected readonly text = UI_TEXT.errors;
+  private readonly i18n = inject(LocaleService);
+  protected readonly text = computed(() => this.i18n.messages().errors);
+  protected readonly title = computed(() =>
+    this.error().code === 'webgl-context-lost' ||
+    this.error().code === 'context-lost'
+      ? this.text().contextLostTitle
+      : this.text().webglTitle
+  );
+  protected readonly message = computed(() =>
+    errorText(this.i18n.messages(), this.i18n.locale(), this.error())
+  );
 }

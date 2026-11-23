@@ -4,7 +4,8 @@ import {
   computed,
   inject,
 } from '@angular/core';
-import { UI_TEXT } from '../../config/ui-text';
+import { pct } from '../../i18n/format';
+import { LocaleService } from '../../i18n/locale.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
 
 @Component({
@@ -17,20 +18,20 @@ import { ViewerStateService } from '../../services/viewer-state.service';
       [attr.aria-hidden]="done() ? 'true' : null"
     >
       <div class="card">
-        <h1>{{ text.title }}</h1>
-        <p class="byline">{{ text.byline }}</p>
+        <h1>{{ text().title }}</h1>
+        <p class="byline">{{ text().byline }}</p>
         <div
           class="bar"
           role="progressbar"
           aria-valuemin="0"
           aria-valuemax="100"
           [attr.aria-valuenow]="progress()"
-          [attr.aria-valuetext]="progress() + '%'"
-          [attr.aria-label]="text.status"
+          [attr.aria-valuetext]="percent()"
+          [attr.aria-label]="text().status"
         >
           <div class="fill" [style.width.%]="progress()"></div>
         </div>
-        <p class="status">{{ text.status }} · {{ progress() }}%</p>
+        <p class="status">{{ text().status }} · {{ percent() }}</p>
       </div>
     </div>
   `,
@@ -106,9 +107,13 @@ import { ViewerStateService } from '../../services/viewer-state.service';
 })
 export class LoadingScreenComponent {
   private readonly state = inject(ViewerStateService);
-  protected readonly text = UI_TEXT.loading;
+  private readonly i18n = inject(LocaleService);
+  protected readonly text = computed(() => this.i18n.messages().loading);
   protected readonly progress = computed(() =>
     Math.round(Math.min(100, Math.max(0, this.state.loadProgress())))
+  );
+  protected readonly percent = computed(() =>
+    pct(this.progress(), this.i18n.locale())
   );
   /** Termina cuando la escena está lista o la carga falló (se ve el error). */
   protected readonly done = computed(() => {

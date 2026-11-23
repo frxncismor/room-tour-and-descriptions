@@ -2,6 +2,7 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   ElementRef,
   inject,
@@ -11,7 +12,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { UI_TEXT } from '../../config/ui-text';
+import { LocaleService } from '../../i18n/locale.service';
 
 function isTouchDevice(): boolean {
   try {
@@ -52,9 +53,9 @@ function writeDismissed(value: boolean): void {
         aria-modal="false"
         aria-labelledby="help-title"
       >
-        <h2 id="help-title">{{ text.title }}</h2>
+        <h2 id="help-title">{{ text().title }}</h2>
         <dl>
-          @for (control of text.controls; track control.label) {
+          @for (control of text().controls; track control.label) {
             <div [attr.data-keyboard]="control.icon === 'keyboard' ? '' : null">
               <dt>
                 {{
@@ -67,7 +68,7 @@ function writeDismissed(value: boolean): void {
         </dl>
         <div class="footer">
           <button type="button" class="primary" (click)="dismiss()">
-            {{ text.gotIt }}
+            {{ text().gotIt }}
           </button>
         </div>
       </section>
@@ -76,10 +77,10 @@ function writeDismissed(value: boolean): void {
         type="button"
         #reopenButton
         class="reopen"
-        [attr.aria-label]="text.openLabel"
+        [attr.aria-label]="text().openLabel"
         (click)="reopen()"
       >
-        {{ text.open }}
+        {{ text().open }}
       </button>
     }
   `,
@@ -105,16 +106,18 @@ function writeDismissed(value: boolean): void {
       font-size: var(--fs-title);
       color: var(--ink);
     }
+    /* Una sola columna de etiquetas, tan ancha como la más larga («Inspeccionar»). */
     dl {
       display: grid;
-      gap: var(--space-3);
+      grid-template-columns: minmax(5rem, max-content) 1fr;
+      gap: var(--space-3) var(--space-4);
       margin: var(--space-4) 0 var(--space-5);
       font-size: var(--fs-body);
     }
     dl > div {
       display: grid;
-      grid-template-columns: 5rem 1fr;
-      gap: var(--space-4);
+      grid-template-columns: subgrid;
+      grid-column: 1 / -1;
     }
     dt {
       font-weight: 600;
@@ -169,12 +172,9 @@ function writeDismissed(value: boolean): void {
         border-radius: var(--radius-2) var(--radius-2) 0 0;
       }
       dl {
-        gap: var(--space-2);
+        grid-template-columns: minmax(4.5rem, max-content) 1fr;
+        gap: var(--space-2) var(--space-3);
         margin: var(--space-3) 0 var(--space-2);
-      }
-      dl > div {
-        grid-template-columns: 4.5rem 1fr;
-        gap: var(--space-3);
       }
       .footer {
         position: sticky;
@@ -210,7 +210,8 @@ export class HelpPanelComponent {
   readonly suppressed = input(false);
   /** El usuario ya navegó (gesto, lista): la ayuda se da por vista. */
   readonly seen = input(false);
-  protected readonly text = UI_TEXT.help;
+  private readonly i18n = inject(LocaleService);
+  protected readonly text = computed(() => this.i18n.messages().help);
   /** Táctil: la ayuda habla de dedos y toques, no de ratón ni teclado. */
   protected readonly touch = isTouchDevice();
   protected readonly open = signal(!readDismissed());

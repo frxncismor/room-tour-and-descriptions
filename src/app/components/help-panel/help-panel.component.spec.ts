@@ -1,11 +1,23 @@
 import { TestBed } from '@angular/core/testing';
-import { UI_TEXT } from '../../config/ui-text';
+import { EN } from '../../i18n/en';
+import ES from '../../i18n/es';
+import { LocaleService } from '../../i18n/locale.service';
+import { LOCALES } from '../../i18n/messages';
+import { localeReady, provideLocale } from '../../i18n/testing';
 import { HELP_STORAGE_KEY, HelpPanelComponent } from './help-panel.component';
 
-describe('HelpPanelComponent', () => {
-  const [look, , zoom] = UI_TEXT.help.controls;
+const DICTIONARY = { en: EN, es: ES };
 
-  beforeEach(() => localStorage.clear());
+describe.each(LOCALES)('HelpPanelComponent (%s)', locale => {
+  const help = DICTIONARY[locale].help;
+  const [look, , zoom] = help.controls;
+  const keys = help.controls[5];
+
+  beforeEach(async () => {
+    localStorage.clear();
+    TestBed.configureTestingModule({ providers: [provideLocale(locale)] });
+    await localeReady();
+  });
   afterEach(() => {
     localStorage.clear();
     vi.unstubAllGlobals();
@@ -23,29 +35,34 @@ describe('HelpPanelComponent', () => {
     );
   }
 
-  it('talks about fingers and taps on touch devices', async () => {
+  const terms = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll('dt')).map(dt => dt.textContent?.trim());
+  const definitions = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll('dd')).map(dd => dd.textContent?.trim());
+
+  it('shows the touch wording on touch devices', async () => {
     stubPointer(true);
     const fixture = TestBed.createComponent(HelpPanelComponent);
     await fixture.whenStable();
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain(look.touchText);
-    expect(text).toContain(zoom.touchText);
-    expect(text).not.toMatch(/mouse|wheel|click/i);
-    const terms = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('dt')
-    ).map(dt => dt.textContent?.trim());
-    expect(terms).toContain('Close');
-    expect(terms).not.toContain('Keys');
+    const el = fixture.nativeElement as HTMLElement;
+    expect(definitions(el)).toEqual(help.controls.map(c => c.touchText));
+    for (const control of help.controls) {
+      expect(definitions(el)).not.toContain(control.text);
+    }
+    expect(el.textContent).toContain(look.touchText);
+    expect(el.textContent).toContain(zoom.touchText);
+    expect(terms(el)).toContain(keys.touchLabel);
+    expect(terms(el)).not.toContain(keys.label);
   });
 
-  it('talks about mouse and keyboard on desktop', async () => {
+  it('shows the mouse and keyboard wording on desktop', async () => {
     stubPointer(false);
     const fixture = TestBed.createComponent(HelpPanelComponent);
     await fixture.whenStable();
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain(look.text);
-    expect(text).not.toMatch(/finger|pinch|tap/i);
-    expect(text).toContain('Keys');
+    const el = fixture.nativeElement as HTMLElement;
+    expect(definitions(el)).toEqual(help.controls.map(c => c.text));
+    expect(terms(el)).toEqual(help.controls.map(c => c.label));
+    expect(el.textContent).toContain(look.text);
   });
 
   it('remembers dismissal and can be reopened', async () => {
@@ -53,15 +70,20 @@ describe('HelpPanelComponent', () => {
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('.sheet')).not.toBeNull();
+    expect(el.querySelector('.primary')?.textContent?.trim()).toBe(help.gotIt);
 
     (el.querySelector('.primary') as HTMLButtonElement).click();
     await fixture.whenStable();
     expect(el.querySelector('.sheet')).toBeNull();
     expect(localStorage.getItem(HELP_STORAGE_KEY)).toBe('1');
+    const reopen = el.querySelector('.reopen') as HTMLButtonElement;
+    expect(reopen.textContent?.trim()).toBe(help.open);
+    expect(reopen.getAttribute('aria-label')).toBe(help.openLabel);
 
-    (el.querySelector('.reopen') as HTMLButtonElement).click();
+    reopen.click();
     await fixture.whenStable();
     expect(el.querySelector('.sheet')).not.toBeNull();
+    expect(localStorage.getItem(HELP_STORAGE_KEY)).toBeNull();
   });
 
   it('is a non-modal labelled dialog that does not steal focus', async () => {
@@ -75,7 +97,7 @@ describe('HelpPanelComponent', () => {
     const title = document.getElementById(
       sheet.getAttribute('aria-labelledby') ?? ''
     );
-    expect(title?.textContent).toContain(UI_TEXT.help.title);
+    expect(title?.textContent).toContain(help.title);
     expect(sheet.contains(document.activeElement)).toBe(false);
   });
 
@@ -119,9 +141,7 @@ describe('HelpPanelComponent', () => {
     const fixture = TestBed.createComponent(HelpPanelComponent);
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelectorAll('dl dt').length).toBe(
-      UI_TEXT.help.controls.length
-    );
+    expect(el.querySelectorAll('dl dt').length).toBe(help.controls.length);
     expect(el.querySelector('svg')).toBeNull();
     expect(el.querySelectorAll('[data-keyboard]').length).toBe(1);
   });
@@ -133,5 +153,27 @@ describe('HelpPanelComponent', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('.sheet')
     ).toBeNull();
+  });
+});
+
+describe('HelpPanelComponent live language change', () => {
+  it('retranslates the open sheet', async () => {
+    localStorage.clear();
+    TestBed.configureTestingModule({ providers: [provideLocale('en')] });
+    await localeReady();
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('h2')?.textContent).toContain(EN.help.title);
+    await TestBed.inject(LocaleService).use('es', {
+      persist: false,
+      announce: false,
+    });
+    await fixture.whenStable();
+    expect(el.querySelector('h2')?.textContent).toContain(ES.help.title);
+    expect(el.querySelector('dt')?.textContent?.trim()).toBe(
+      ES.help.controls[0].label
+    );
+    localStorage.clear();
   });
 });
