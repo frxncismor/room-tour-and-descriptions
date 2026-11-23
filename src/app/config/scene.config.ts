@@ -93,7 +93,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
     point: [
       {
         color: 0xffb878,
-        intensity: 1.5,
+        intensity: 2.2,
         position: new Vector3(-7.2, 1.45, -7.2),
         distance: 6,
         decay: 2,
