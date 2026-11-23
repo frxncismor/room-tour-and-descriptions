@@ -1,0 +1,102 @@
+import { TestBed } from '@angular/core/testing';
+import { SceneService } from '../../services/scene.service';
+import { ViewerStateService } from '../../services/viewer-state.service';
+import { ViewerComponent } from './viewer.component';
+
+describe('ViewerComponent', () => {
+  const scene = {
+    initialize: vi.fn(),
+    loadAll: vi.fn(() => Promise.resolve()),
+    dispose: vi.fn(),
+    getObjectList: vi.fn(() => [{ id: 'sofa', name: 'Modern Sofa' }]),
+    handlePointerSelect: vi.fn(() => Promise.resolve()),
+    handlePointerMove: vi.fn(),
+    clearSelection: vi.fn(),
+    selectObject: vi.fn(),
+    resetView: vi.fn(),
+    retryLoad: vi.fn(() => Promise.resolve()),
+  };
+
+  beforeEach(() => {
+    Object.values(scene).forEach(fn => fn.mockClear());
+    localStorage.setItem('room-tour.help-dismissed', '1');
+    TestBed.configureTestingModule({
+      providers: [{ provide: SceneService, useValue: scene }],
+    });
+  });
+
+  afterEach(() => localStorage.removeItem('room-tour.help-dismissed'));
+
+  function pointer(type: string, init: PointerEventInit): PointerEvent {
+    return new PointerEvent(type, { bubbles: true, pointerId: 1, ...init });
+  }
+
+  it('initializes the scene and loads the models', async () => {
+    const fixture = TestBed.createComponent(ViewerComponent);
+    await fixture.whenStable();
+    expect(scene.initialize).toHaveBeenCalledTimes(1);
+    expect(scene.loadAll).toHaveBeenCalledTimes(1);
+    const canvas = fixture.nativeElement.querySelector('canvas');
+    expect(canvas.getAttribute('role')).toBe('img');
+    expect(canvas.getAttribute('aria-label')).toBeTruthy();
+    expect(canvas.tabIndex).toBe(0);
+  });
+
+  it('treats a short press as a click and a drag as navigation', async () => {
+    const fixture = TestBed.createComponent(ViewerComponent);
+    await fixture.whenStable();
+    const canvas = fixture.nativeElement.querySelector('canvas');
+
+    canvas.dispatchEvent(
+      pointer('pointerdown', { clientX: 100, clientY: 100 })
+    );
+    canvas.dispatchEvent(pointer('pointerup', { clientX: 102, clientY: 101 }));
+    expect(scene.handlePointerSelect).toHaveBeenCalledTimes(1);
+
+    canvas.dispatchEvent(
+      pointer('pointerdown', { clientX: 100, clientY: 100 })
+    );
+    canvas.dispatchEvent(
+      pointer('pointermove', { clientX: 140, clientY: 100 })
+    );
+    canvas.dispatchEvent(pointer('pointerup', { clientX: 140, clientY: 100 }));
+    expect(scene.handlePointerSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the panel with Escape and shows it for a selection', async () => {
+    const state = TestBed.inject(ViewerStateService);
+    const fixture = TestBed.createComponent(ViewerComponent);
+    state.selected.set({ name: 'Modern Sofa', description: 'x' });
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[role="dialog"]')).not.toBeNull();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(scene.clearSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a retry banner for model errors and calls retry', async () => {
+    const state = TestBed.inject(ViewerStateService);
+    const retry = vi.fn();
+    state.error.set({ code: 'model-load-failed', message: 'Nope', retry });
+    const fixture = TestBed.createComponent(ViewerComponent);
+    await fixture.whenStable();
+    const button = (fixture.nativeElement as HTMLElement).querySelector(
+      'app-error-banner button'
+    ) as HTMLButtonElement;
+    button.click();
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the blocking overlay when WebGL is unavailable', async () => {
+    const state = TestBed.inject(ViewerStateService);
+    state.loadStatus.set('error');
+    state.error.set({ code: 'webgl-unavailable', message: 'No WebGL' });
+    const fixture = TestBed.createComponent(ViewerComponent);
+    await fixture.whenStable();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('app-error-overlay')
+    ).not.toBeNull();
+    expect(scene.loadAll).not.toHaveBeenCalled();
+  });
+});

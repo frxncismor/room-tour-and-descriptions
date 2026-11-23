@@ -10,7 +10,7 @@ import { ViewerComponent } from './components/viewer/viewer.component';
       :host {
         display: block;
         width: 100%;
-        height: 100vh;
+        height: 100dvh;
         overflow: hidden;
       }
     `,
