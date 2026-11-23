@@ -23,6 +23,20 @@ describe('LoadingScreenComponent', () => {
     );
   });
 
+  it('shows the status with a tabular percentage', async () => {
+    const state = TestBed.inject(ViewerStateService);
+    state.loadStatus.set('loading');
+    state.loadProgress.set(7);
+    const fixture = TestBed.createComponent(LoadingScreenComponent);
+    await fixture.whenStable();
+    const status = (fixture.nativeElement as HTMLElement).querySelector(
+      '.status'
+    );
+    expect(status?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      `${UI_TEXT.loading.status} · 7%`
+    );
+  });
+
   it('shows the project title and author while loading', async () => {
     const fixture = TestBed.createComponent(LoadingScreenComponent);
     await fixture.whenStable();

@@ -109,6 +109,17 @@ describe('HelpPanelComponent', () => {
     expect(el.querySelector('.reopen')).not.toBeNull();
   });
 
+  it('lists the controls as definitions, without icons', async () => {
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('dl dt').length).toBe(
+      UI_TEXT.help.controls.length
+    );
+    expect(el.querySelector('svg')).toBeNull();
+    expect(el.querySelectorAll('[data-keyboard]').length).toBe(1);
+  });
+
   it('starts closed when it was dismissed before', async () => {
     localStorage.setItem(HELP_STORAGE_KEY, '1');
     const fixture = TestBed.createComponent(HelpPanelComponent);
