@@ -45,6 +45,8 @@ const SHEET_COLUMN_PX = 392;
 const FLAT_PIECE_MAX_THICKNESS = 0.1;
 /** Inclinación máxima (grados) de la vista hacia abajo al enfocar un objeto. */
 const FOCUS_MAX_PITCH_DEG = 30;
+/** Holgura mínima entre la cámara y cualquier obstáculo (m). */
+const CAMERA_CLEARANCE = 0.4;
 /** Ancho (px) que se asume si el canvas aún no tiene medida (p. ej. en tests). */
 const FALLBACK_VIEWPORT_WIDTH = 1280;
 
@@ -255,11 +257,14 @@ export class CameraService {
    * Acerca la cámara a `object` para verlo entero (D-04). Entre varios ángulos
    * elige el primero (el actual tiene prioridad) que quede dentro de la sala y
    * sin otro mueble de `obstacles` entre la cámara y el objetivo; si todos
-   * tapan, el de menor oclusión.
+   * tapan, el de menor oclusión. Con `approach` (dirección horizontal del
+   * frente de la pieza) el encuadre es frontal venga la cámara de donde venga;
+   * sin él, el lado de la cámara actual.
    */
   focusOn(
     object: Object3D,
-    obstacles: readonly Object3D[] = []
+    obstacles: readonly Object3D[] = [],
+    approach?: Vector3
   ): Promise<boolean> {
     if (!this.camera) return Promise.resolve(false);
     const box = new Box3().setFromObject(object);
@@ -275,7 +280,9 @@ export class CameraService {
       maxDistance
     );
 
-    const away = this.camera.position.clone().sub(sphere.center);
+    const away = approach
+      ? approach.clone()
+      : this.camera.position.clone().sub(sphere.center);
     away.y = 0;
     if (away.lengthSq() < 1e-6) away.set(0, 0, 1);
     away.normalize();
@@ -527,7 +534,13 @@ export class CameraService {
     obstacleBoxes: readonly Box3[]
   ): number {
     if (obstacleBoxes.length === 0) return 0;
-    let hidden = 0;
+    // Un obstáculo pegado a la cámara (margen del frustum cercano) tapa la
+    // vista aunque no corte ningún rayo: descarta el candidato.
+    let hidden = obstacleBoxes.some(
+      b => b.distanceToPoint(from) < CAMERA_CLEARANCE
+    )
+      ? samples.length + 1
+      : 0;
     const ray = new Ray();
     const hit = new Vector3();
     for (const sample of samples) {

@@ -4,6 +4,7 @@ import {
   Object3D,
   PerspectiveCamera,
   Scene,
+  Vector3,
   WebGLRenderer,
 } from 'three';
 import {
@@ -207,7 +208,9 @@ export class SceneService {
 
     this.generation++;
     this.stopLoop();
-    Reflect.deleteProperty(window, '__rtad');
+    if (typeof ngDevMode !== 'undefined' && ngDevMode) {
+      Reflect.deleteProperty(window, '__rtad');
+    }
     this.removeListeners();
 
     this.cameraService.dispose();
@@ -598,10 +601,20 @@ export class SceneService {
     if (!entry) return;
     this.objectInteractionService.selectObject(entry.object);
     this.state.selected.set(entry.info);
-    const obstacles = [...this.models.values()]
-      .filter(other => other !== entry)
-      .map(other => other.object);
-    void this.cameraService.focusOn(entry.object, obstacles);
+    const obstacles = [
+      ...[...this.models.values()]
+        .filter(other => other !== entry)
+        .map(other => other.object),
+      // La decoración (jarrón, reloj) también puede tapar el encuadre.
+      ...(this.decorGroup?.children ?? []),
+    ];
+    // Frente de la pieza (+Z local en el mundo): el encuadre no depende de
+    // dónde estaba la cámara.
+    entry.object.updateWorldMatrix(true, false);
+    const front = new Vector3(0, 0, 1).transformDirection(
+      entry.object.matrixWorld
+    );
+    void this.cameraService.focusOn(entry.object, obstacles, front);
   }
 
   clearSelection(): void {
@@ -664,7 +677,11 @@ export class SceneService {
 
   /** Draw calls y triángulos del último frame (three.js resetea `info.render` al *empezar* cada render, así que fuera del bucle siempre es el frame completo anterior); texturas y geometrías vivas. */
   getRenderStats(): RenderStats {
-    const info = this.renderer?.info;
+    // Solo depuración: en prod (`ngDevMode` falso) el cuerpo se elimina.
+    const info =
+      typeof ngDevMode !== 'undefined' && ngDevMode
+        ? this.renderer?.info
+        : undefined;
     return {
       calls: info?.render.calls ?? 0,
       triangles: info?.render.triangles ?? 0,
