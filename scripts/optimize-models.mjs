@@ -36,6 +36,19 @@ const MAX_TEXTURE = 1024;
 const MAX_TEXTURE_WOOD = 2048;
 // Textures whose name matches keep up to MAX_TEXTURE_WOOD (table wood grain).
 const LARGE_TEXTURE = /wood/i;
+// WebP quality for every texture (`gltf-transform webp --quality`).
+const WEBP_QUALITY = 85;
+// Per-model texture resolution for the decor pieces (spec 002). Models not listed here
+// (sofa, poker_table, bookshelf) use the defaults above. `large` names the textures that
+// get `largeSize`; every other texture is capped at `size`.
+const TEXTURE_POLICY = {
+  landscape_painting: { large: /canvas_diff/i, largeSize: 1024, size: 512 },
+  wall_clock: { size: 512 },
+  // The Poly Haven originals have 8.9k (succulent) and 11.1k (vase) triangles, well above
+  // the plan (6.1k / 2.8k): `simplify` brings them within the SC-202 triangle budget.
+  succulent: { size: 512, simplify: { ratio: 0.7, error: 0.005 } },
+  ceramic_vase: { size: 512, simplify: { ratio: 0.25, error: 0.01 } },
+};
 
 function gt(...args) {
   execFileSync('npx', ['-y', CLI, ...args], {
@@ -158,9 +171,16 @@ const work = mkdtempSync(join(tmpdir(), 'rtad-models-'));
 try {
   for (const name of models) {
     const dir = join(MODELS_DIR, name);
+    // Already optimized output is left byte-identical (re-running is not idempotent).
+    const source = JSON.parse(readFileSync(join(dir, 'scene.gltf'), 'utf8'));
+    if ((source.extensionsUsed ?? []).includes('EXT_meshopt_compression')) {
+      console.log(`${name}: already optimized, skipped`);
+      continue;
+    }
     const before = dirSize(dir);
+    const policy = TEXTURE_POLICY[name];
     const step = n => join(work, name, `${n}`, 'scene.gltf');
-    for (const n of ['1', '2', '3', '4', '5', '6'])
+    for (const n of ['1', '2', '3', '3s', '4', '5', '6'])
       mkdirSync(join(work, name, n), { recursive: true });
 
     if (name === 'bookshelf') repairBookshelf(dir);
@@ -175,9 +195,22 @@ try {
     const names = images.map(i =>
       basename(decodeURIComponent(i.uri ?? ''), extname(i.uri ?? ''))
     );
-    const large = names.filter(n => LARGE_TEXTURE.test(n));
-    const rest = names.filter(n => n && !LARGE_TEXTURE.test(n));
+    const largeRe = policy?.large ?? LARGE_TEXTURE;
+    const large = names.filter(n => largeRe.test(n));
+    const rest = names.filter(n => n && !largeRe.test(n));
     let current = step(3);
+    if (policy?.simplify) {
+      gt(
+        'simplify',
+        current,
+        step('3s'),
+        '--ratio',
+        String(policy.simplify.ratio),
+        '--error',
+        String(policy.simplify.error)
+      );
+      current = step('3s');
+    }
     const resize = (out, size, list) => {
       if (!list.length) {
         gt('copy', current, step(out));
@@ -197,9 +230,9 @@ try {
       );
       current = step(out);
     };
-    resize(4, MAX_TEXTURE_WOOD, large);
-    resize(5, MAX_TEXTURE, rest);
-    gt('webp', current, step(6));
+    resize(4, policy?.largeSize ?? MAX_TEXTURE_WOOD, large);
+    resize(5, policy?.size ?? MAX_TEXTURE, rest);
+    gt('webp', current, step(6), '--quality', String(WEBP_QUALITY));
     const final = join(work, name, 'final');
     mkdirSync(final, { recursive: true });
     gt('meshopt', step(6), join(final, 'scene.gltf'), '--level', 'high');
