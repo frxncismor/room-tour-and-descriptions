@@ -78,9 +78,9 @@ export const UI_TEXT = {
 
 /**
  * Textos por mueble, por id de `MODEL_CONFIGURATIONS`.
- * `name` coincide con el de la configuración para poder enlazar la selección.
+ * Fuente única: `MODEL_CONFIGURATIONS` toma de aquí nombre y descripción.
  */
-export const FURNITURE_TEXT: Record<string, FurnitureText> = {
+export const FURNITURE_TEXT = {
   sofa: {
     name: 'Modern Sofa',
     description:
@@ -99,9 +99,4 @@ export const FURNITURE_TEXT: Record<string, FurnitureText> = {
       'A tall, open bookshelf with several tiers of shelving for books and decorative pieces. Its slim wooden structure keeps the wall feeling light while adding useful storage and a touch of character.',
     details: 'Model: "BookShelf" by Twpic, via Sketchfab.',
   },
-};
-
-/** Busca el texto de un mueble por su nombre en la configuración. */
-export function findFurnitureText(name: string): FurnitureText | undefined {
-  return Object.values(FURNITURE_TEXT).find(entry => entry.name === name);
-}
+} satisfies Record<string, FurnitureText>;

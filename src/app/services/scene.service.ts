@@ -1,11 +1,5 @@
 import { Injectable, InjectionToken, NgZone, inject } from '@angular/core';
-import {
-  Object3D,
-  PerspectiveCamera,
-  Scene,
-  Vector3,
-  WebGLRenderer,
-} from 'three';
+import { Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import {
   DEFAULT_SCENE_CONFIG,
   MODEL_CONFIGURATIONS,
@@ -470,38 +464,5 @@ export class SceneService {
 
   getCamera(): PerspectiveCamera {
     return this.cameraService.getCamera();
-  }
-
-  // ── Compatibilidad con el visor actual (F7 lo reemplaza) ──────────
-
-  /** @deprecated F7: usar `handlePointerSelect` y `ViewerStateService.selected`. */
-  async onMouseClick(event: MouseEvent): Promise<ObjectInfo | null> {
-    await this.handlePointerSelect(event);
-    return this.state.selected();
-  }
-
-  /** @deprecated F7: usar `loadAll`. */
-  async loadSofa(): Promise<Object3D | null> {
-    return this.loadLegacy('sofa');
-  }
-
-  /** @deprecated F7: usar `loadAll`. */
-  async loadPokerTable(): Promise<Object3D | null> {
-    return this.loadLegacy('pokerTable');
-  }
-
-  /** @deprecated F7: usar `loadAll`. */
-  async loadBookshelf(): Promise<Object3D | null> {
-    return this.loadLegacy('bookshelf');
-  }
-
-  private async loadLegacy(id: ModelId): Promise<Object3D | null> {
-    await this.loadOne(id);
-    return this.models.get(id)?.object ?? null;
-  }
-
-  /** @deprecated Usar `handlePointerSelect` (el teleport lo hace el servicio). */
-  teleportTo(position: Vector3): Promise<boolean> {
-    return this.cameraService.teleportTo(position);
   }
 }

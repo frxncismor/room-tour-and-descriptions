@@ -9,7 +9,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { UI_TEXT, findFurnitureText } from '../../config/ui-text';
+import { UI_TEXT } from '../../config/ui-text';
 import { SceneService } from '../../services/scene.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
 import { DescriptionPanelComponent } from '../description-panel/description-panel.component';
@@ -57,9 +57,7 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   });
 
   protected readonly panelInfo = computed(() => {
-    const selected = this.state.selected();
-    if (!selected) return null;
-    return findFurnitureText(selected.name) ?? selected;
+    return this.state.selected();
   });
 
   protected readonly blockingError = computed(() => {
