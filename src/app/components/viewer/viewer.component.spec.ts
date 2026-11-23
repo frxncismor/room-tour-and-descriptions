@@ -63,6 +63,35 @@ describe('ViewerComponent', () => {
     expect(scene.handlePointerSelect).toHaveBeenCalledTimes(1);
   });
 
+  it('captures the pointer and survives an invalid pointerId', async () => {
+    const fixture = TestBed.createComponent(ViewerComponent);
+    await fixture.whenStable();
+    const canvas = fixture.nativeElement.querySelector('canvas');
+    const capture = vi.fn();
+    canvas.setPointerCapture = capture;
+    // jsdom/Chromium lanzan NotFoundError con un id que no está activo.
+    canvas.releasePointerCapture = () => {
+      throw new DOMException('invalid pointer', 'NotFoundError');
+    };
+
+    canvas.dispatchEvent(
+      pointer('pointerdown', { pointerId: 999, clientX: 10, clientY: 10 })
+    );
+    expect(capture).toHaveBeenCalledWith(999);
+    expect(() =>
+      canvas.dispatchEvent(
+        pointer('pointerup', { pointerId: 999, clientX: 10, clientY: 10 })
+      )
+    ).not.toThrow();
+    expect(scene.handlePointerSelect).toHaveBeenCalledTimes(1);
+
+    canvas.setPointerCapture = () => {
+      throw new DOMException('invalid pointer', 'NotFoundError');
+    };
+    canvas.dispatchEvent(pointer('pointerdown', { pointerId: 5 }));
+    canvas.dispatchEvent(pointer('pointercancel', { pointerId: 5 }));
+  });
+
   it('closes the panel with Escape and shows it for a selection', async () => {
     const state = TestBed.inject(ViewerStateService);
     const fixture = TestBed.createComponent(ViewerComponent);

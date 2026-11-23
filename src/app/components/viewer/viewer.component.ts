@@ -102,6 +102,7 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   // ── Puntero ────────────────────────────────────────────────────────
 
   protected onPointerDown(event: PointerEvent): void {
+    this.capturePointer(event, true);
     this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (this.pointers.size === 1) {
       this.startPoint = { x: event.clientX, y: event.clientY };
@@ -136,6 +137,7 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   }
 
   protected onPointerUp(event: PointerEvent): void {
+    this.capturePointer(event, false);
     if (!this.pointers.has(event.pointerId)) return;
     this.pointers.delete(event.pointerId);
     const isClick =
@@ -158,11 +160,23 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   }
 
   protected onPointerCancel(event: PointerEvent): void {
+    this.capturePointer(event, false);
     this.pointers.delete(event.pointerId);
     if (this.pointers.size === 0) {
       this.moved = false;
       this.multiTouch = false;
       this.dragging.set(false);
+    }
+  }
+
+  /** Captura/libera el puntero; un `pointerId` inválido (p. ej. ya liberado) no debe romper la interacción. */
+  private capturePointer(event: PointerEvent, capture: boolean): void {
+    const target = event.currentTarget as Element | null;
+    try {
+      if (capture) target?.setPointerCapture?.(event.pointerId);
+      else target?.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // NotFoundError: el puntero ya no existe; se ignora.
     }
   }
 

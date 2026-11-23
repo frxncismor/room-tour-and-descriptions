@@ -44,7 +44,11 @@ export const RENDERER_FACTORY = new InjectionToken<
     if (!supported) {
       throw new Error('WebGL is not available');
     }
-    const renderer = new WebGLRenderer({ canvas, antialias: true });
+    const renderer = new WebGLRenderer({
+      canvas,
+      antialias: true,
+      stencil: true, // el contorno por casco usa stencil (por defecto está desactivado)
+    });
     renderer.shadowMap.enabled = true;
     return renderer;
   },
