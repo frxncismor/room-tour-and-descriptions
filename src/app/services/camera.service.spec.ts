@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three';
-import { DEFAULT_SCENE_CONFIG } from '../config/scene.config';
+import { Box3, BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three';
+import {
+  DEFAULT_SCENE_CONFIG,
+  MODEL_CONFIGURATIONS,
+} from '../config/scene.config';
 import { CameraService } from './camera.service';
 
 describe('CameraService', () => {
@@ -135,5 +138,69 @@ describe('CameraService', () => {
     service.dispose();
     await expect(done).resolves.toBe(false);
     expect(() => service.dispose()).not.toThrow();
+  });
+
+  it('keeps the landscape fov untouched on wide screens', () => {
+    expect(service.getCamera().fov).toBe(DEFAULT_SCENE_CONFIG.camera.fov);
+    expect(service.getCamera().position.z).toBeCloseTo(
+      DEFAULT_SCENE_CONFIG.camera.initialPosition.z
+    );
+  });
+
+  describe('portrait framing (390x844)', () => {
+    const aspect = 390 / 844;
+
+    /** Cajas aproximadas de los 3 muebles (centro x/z de la config). */
+    function furnitureBoxes(): Box3[] {
+      const sizes: Record<string, number> = {
+        sofa: 3,
+        pokerTable: 1.8,
+        bookshelf: 1.4,
+      };
+      return Object.entries(MODEL_CONFIGURATIONS).map(([id, cfg]) => {
+        const half = sizes[id] / 2;
+        return new Box3(
+          new Vector3(cfg.position.x - half, 0, cfg.position.z - half),
+          new Vector3(cfg.position.x + half, 1.5, cfg.position.z + half)
+        );
+      });
+    }
+
+    function expectAllInView(): void {
+      const camera = service.getCamera();
+      camera.lookAt(0, DEFAULT_SCENE_CONFIG.camera.initialHeight * 0.8, 0);
+      camera.updateMatrixWorld(true);
+      for (const box of furnitureBoxes()) {
+        for (const x of [box.min.x, box.max.x]) {
+          // Extremos laterales a la profundidad del centro (el sofá va girado 45°).
+          const z = (box.min.z + box.max.z) / 2;
+          const p = new Vector3(x, 0.5, z).project(camera);
+          expect(Math.abs(p.x)).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+
+    it('widens the fov (capped) and steps back so the 3 pieces fit', () => {
+      service.setAspect(aspect);
+      expect(service.getCamera().fov).toBeGreaterThan(
+        DEFAULT_SCENE_CONFIG.camera.fov
+      );
+      expect(service.getCamera().fov).toBeLessThanOrEqual(90);
+      service.initialize(DEFAULT_SCENE_CONFIG.camera, aspect);
+      expect(service.getCamera().position.z).toBeGreaterThan(
+        DEFAULT_SCENE_CONFIG.camera.initialPosition.z
+      );
+      expectAllInView();
+    });
+
+    it('reset() frames the portrait view and a resize back restores the fov', async () => {
+      service.setAspect(aspect);
+      const done = service.reset();
+      service.update(5000);
+      await done;
+      expectAllInView();
+      service.setAspect(16 / 9);
+      expect(service.getCamera().fov).toBe(DEFAULT_SCENE_CONFIG.camera.fov);
+    });
   });
 });

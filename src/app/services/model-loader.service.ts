@@ -1,9 +1,19 @@
 import { Injectable } from '@angular/core';
-import { Box3, Material, Mesh, Object3D, Texture, Vector3 } from 'three';
+import {
+  Box3,
+  Color,
+  Material,
+  Mesh,
+  MeshStandardMaterial,
+  Object3D,
+  Texture,
+  Vector3,
+} from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import {
   LoadProgressCallback,
+  MaterialOverride,
   ModelConfiguration,
 } from '../interfaces/scene.interface';
 
@@ -25,6 +35,42 @@ export function disposeObject3D(root: Object3D): void {
         }
       }
       material.dispose();
+    }
+  });
+}
+
+/** Anisotropía pedida a las texturas (la GPU la limita a su máximo). */
+export const TEXTURE_ANISOTROPY = 8;
+
+/** Aplica color/rugosidad/metalicidad configurados y afina el filtrado de las texturas. */
+export function applyMaterialOverride(
+  root: Object3D,
+  override?: MaterialOverride
+): void {
+  root.traverse(child => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh) return;
+    const materials: Material[] = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    for (const material of materials) {
+      const standard = material as MeshStandardMaterial;
+      if (!standard?.isMeshStandardMaterial) continue;
+      if (override?.color !== undefined) {
+        standard.color = new Color(override.color);
+      }
+      if (override?.roughness !== undefined) {
+        standard.roughness = override.roughness;
+      }
+      if (override?.metalness !== undefined) {
+        standard.metalness = override.metalness;
+      }
+      for (const value of Object.values(standard)) {
+        if (value && (value as Texture).isTexture) {
+          (value as Texture).anisotropy = TEXTURE_ANISOTROPY;
+        }
+      }
+      standard.needsUpdate = true;
     }
   });
 }
@@ -59,6 +105,7 @@ export class ModelLoaderService {
       onProgress?.(event.loaded, total);
     });
     const model = gltf.scene;
+    applyMaterialOverride(model, config.materialOverride);
     this.applyTransformations(model, config);
     this.setupShadows(model);
     return model;

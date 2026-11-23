@@ -6,6 +6,11 @@ import { CameraConfiguration, RoomLimits } from '../interfaces/scene.interface';
 
 /** Margen (m) entre la cámara y las paredes. */
 const WALL_MARGIN = 0.5;
+/** FOV horizontal mínimo en pantallas estrechas (grados) y tope del vertical. */
+const MIN_HORIZONTAL_FOV = 50;
+const MAX_VERTICAL_FOV = 90;
+/** Metros que se retrocede la cámara inicial por cada unidad que falte a aspect 1. */
+const PORTRAIT_BACKOFF = 6;
 const MIN_CAMERA_HEIGHT = 0.3;
 const MOVE_DURATION_MS = 1200;
 const FOCUS_DURATION_MS = 900;
@@ -31,6 +36,8 @@ export class CameraService {
   private camera!: PerspectiveCamera;
   private controls: OrbitControls | null = null;
   private limits: RoomLimits = DEFAULT_SCENE_CONFIG.room.limits;
+  private baseFov = 65;
+  private aspect = 1;
   private initialHeight = 1.7;
   private initialPosition = new Vector3(0, 1.7, 3);
   private initialTarget = new Vector3(0, 1.36, 0);
@@ -44,8 +51,10 @@ export class CameraService {
       config.near,
       config.far
     );
-    this.camera.position.copy(config.initialPosition);
+    this.baseFov = config.fov;
     this.initialPosition = config.initialPosition.clone();
+    this.setAspect(aspect);
+    this.camera.position.copy(this.framedPosition());
     this.initialHeight = config.initialHeight;
     this.initialTarget = new Vector3(0, config.initialHeight * 0.8, 0);
   }
@@ -57,8 +66,29 @@ export class CameraService {
 
   setAspect(aspect: number): void {
     if (!this.camera || !(aspect > 0)) return;
+    this.aspect = aspect;
     this.camera.aspect = aspect;
+    this.camera.fov = this.fovFor(aspect);
     this.camera.updateProjectionMatrix();
+  }
+
+  /** En pantallas estrechas mantiene un FOV horizontal mínimo (con tope vertical). */
+  private fovFor(aspect: number): number {
+    if (aspect >= 1) return this.baseFov;
+    const half = Math.tan((MIN_HORIZONTAL_FOV * Math.PI) / 360) / aspect;
+    const vertical = (2 * Math.atan(half) * 180) / Math.PI;
+    return Math.min(MAX_VERTICAL_FOV, Math.max(this.baseFov, vertical));
+  }
+
+  /** Posición inicial: en pantallas estrechas retrocede (dentro de la sala). */
+  private framedPosition(): Vector3 {
+    const position = this.initialPosition.clone();
+    if (this.aspect < 1) {
+      position.z += (1 - this.aspect) * PORTRAIT_BACKOFF;
+      this.clampPoint(position);
+      position.y = this.initialPosition.y;
+    }
+    return position;
   }
 
   setupControls(domElement: HTMLElement): void {
@@ -171,7 +201,7 @@ export class CameraService {
   reset(): Promise<boolean> {
     if (!this.camera) return Promise.resolve(false);
     return this.startTween(
-      this.initialPosition.clone(),
+      this.framedPosition(),
       this.initialTarget.clone(),
       MOVE_DURATION_MS
     );

@@ -3,24 +3,56 @@ import {
   AmbientLight,
   Color,
   DirectionalLight,
+  DoubleSide,
+  Material,
   Mesh,
-  MeshPhysicalMaterial,
+  MeshStandardMaterial,
+  Object3D,
   PlaneGeometry,
   Scene,
   SpotLight,
 } from 'three';
-import { RoomColors, RoomConfiguration } from '../interfaces/scene.interface';
+import { DEFAULT_SCENE_CONFIG } from '../config/scene.config';
+import {
+  DirectionalLightConfig,
+  LightingConfiguration,
+  RoomColors,
+  RoomConfiguration,
+} from '../interfaces/scene.interface';
 
 @Injectable({
   providedIn: 'root',
 })
 export class RoomBuilderService {
-  buildRoom(scene: Scene, config: RoomConfiguration): void {
+  private readonly built: Object3D[] = [];
+
+  buildRoom(
+    scene: Scene,
+    config: RoomConfiguration,
+    lighting: LightingConfiguration = DEFAULT_SCENE_CONFIG.lighting
+  ): void {
+    const before = new Set(scene.children);
     this.setupSceneBackground(scene);
     this.createFloor(scene, config);
     this.createCeiling(scene, config);
     this.createWalls(scene, config);
-    this.setupLighting(scene, config);
+    this.setupLighting(scene, lighting);
+    this.built.push(...scene.children.filter(c => !before.has(c)));
+  }
+
+  /** Quita de la escena lo construido y libera geometrías y materiales. */
+  dispose(scene: Scene): void {
+    for (const object of this.built) {
+      scene.remove(object);
+      object.traverse(child => {
+        const mesh = child as Mesh;
+        if (!mesh.isMesh) return;
+        mesh.geometry.dispose();
+        (mesh.material as Material).dispose();
+      });
+      (object as DirectionalLight).shadow?.dispose();
+    }
+    this.built.length = 0;
   }
 
   private setupSceneBackground(scene: Scene): void {
@@ -57,7 +89,7 @@ export class RoomBuilderService {
   }
 
   private createBackWall(scene: Scene, config: RoomConfiguration): void {
-    const wallMaterial = this.createAccentWallMaterial(config.colors);
+    const wallMaterial = this.createWallMaterial(config.colors.accentWall);
     const wallGeometry = new PlaneGeometry(config.width, config.height);
     const wall = new Mesh(wallGeometry, wallMaterial);
 
@@ -68,7 +100,7 @@ export class RoomBuilderService {
   }
 
   private createFrontWall(scene: Scene, config: RoomConfiguration): void {
-    const wallMaterial = this.createMainWallMaterial(config.colors);
+    const wallMaterial = this.createWallMaterial(config.colors.mainWall);
     const wallGeometry = new PlaneGeometry(config.width, config.height);
     const wall = new Mesh(wallGeometry, wallMaterial);
 
@@ -80,7 +112,7 @@ export class RoomBuilderService {
   }
 
   private createLeftWall(scene: Scene, config: RoomConfiguration): void {
-    const wallMaterial = this.createSecondaryWallMaterial(config.colors);
+    const wallMaterial = this.createWallMaterial(config.colors.secondaryWall);
     const wallGeometry = new PlaneGeometry(config.depth, config.height);
     const wall = new Mesh(wallGeometry, wallMaterial);
 
@@ -92,7 +124,7 @@ export class RoomBuilderService {
   }
 
   private createRightWall(scene: Scene, config: RoomConfiguration): void {
-    const wallMaterial = this.createMainWallMaterial(config.colors);
+    const wallMaterial = this.createWallMaterial(config.colors.mainWall);
     const wallGeometry = new PlaneGeometry(config.depth, config.height);
     const wall = new Mesh(wallGeometry, wallMaterial);
 
@@ -103,138 +135,70 @@ export class RoomBuilderService {
     scene.add(wall);
   }
 
-  private setupLighting(scene: Scene, config: RoomConfiguration): void {
-    this.addAmbientLight(scene);
-    this.addDirectionalLight(scene);
-    this.addSpotlights(scene, config);
+  private setupLighting(scene: Scene, lighting: LightingConfiguration): void {
+    const { ambient, directional, spotlights } = lighting;
+    scene.add(new AmbientLight(ambient.color, ambient.intensity));
+    scene.add(this.createDirectionalLight(directional));
+    for (const config of spotlights) {
+      const light = new SpotLight(config.color, config.intensity);
+      light.position.copy(config.position);
+      light.target.position.copy(config.target);
+      light.angle = config.angle;
+      light.penumbra = config.penumbra;
+      light.decay = config.decay;
+      light.distance = config.distance;
+      light.castShadow = config.castShadow;
+      scene.add(light, light.target);
+    }
   }
 
-  private addAmbientLight(scene: Scene): void {
-    const ambientLight = new AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-  }
-
-  private addDirectionalLight(scene: Scene): void {
-    const directionalLight = new DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(5, 5, 5);
-    directionalLight.castShadow = true;
-    scene.add(directionalLight);
-  }
-
-  private addSpotlights(scene: Scene, config: RoomConfiguration): void {
-    this.addMainSpotlight(scene, config);
-    this.addAccentSpotlights(scene, config);
-  }
-
-  private addMainSpotlight(scene: Scene, config: RoomConfiguration): void {
-    const mainLight = new SpotLight(0xfff4e6, 1);
-    mainLight.position.set(0, config.height - 0.1, 0);
-    mainLight.angle = Math.PI / 3;
-    mainLight.penumbra = 0.7;
-    mainLight.decay = 1.5;
-    mainLight.distance = config.height * 2;
-    mainLight.castShadow = true;
-    mainLight.shadow.bias = -0.001;
-    mainLight.shadow.mapSize.width = 2048;
-    mainLight.shadow.mapSize.height = 2048;
-    scene.add(mainLight);
-  }
-
-  private addAccentSpotlights(scene: Scene, config: RoomConfiguration): void {
-    const accentLight1 = this.createAccentLight(
-      -config.width / 4,
-      config.height - 0.2,
-      -config.depth / 2 + 1,
-      -config.width / 4,
-      0,
-      -config.depth / 2,
-      config.height
-    );
-    scene.add(accentLight1);
-    scene.add(accentLight1.target);
-
-    const accentLight2 = this.createAccentLight(
-      config.width / 4,
-      config.height - 0.2,
-      -config.depth / 2 + 1,
-      config.width / 4,
-      0,
-      -config.depth / 2,
-      config.height
-    );
-    scene.add(accentLight2);
-    scene.add(accentLight2.target);
-  }
-
-  private createAccentLight(
-    x: number,
-    y: number,
-    z: number,
-    targetX: number,
-    targetY: number,
-    targetZ: number,
-    roomHeight: number
-  ): SpotLight {
-    const light = new SpotLight(0xffffff, 0.6);
-    light.position.set(x, y, z);
-    light.target.position.set(targetX, targetY, targetZ);
-    light.angle = Math.PI / 6;
-    light.penumbra = 0.5;
-    light.decay = 1.5;
-    light.distance = roomHeight * 1.5;
-    light.castShadow = true;
+  /** Luz del sol con cámara de sombra que cubre toda la sala (sin recortes). */
+  private createDirectionalLight(
+    config: DirectionalLightConfig
+  ): DirectionalLight {
+    const light = new DirectionalLight(config.color, config.intensity);
+    light.position.copy(config.position);
+    light.castShadow = config.castShadow;
+    const extent = config.shadowExtent ?? 10;
+    const size = config.shadowMapSize ?? 2048;
+    const camera = light.shadow.camera;
+    camera.left = -extent;
+    camera.right = extent;
+    camera.top = extent;
+    camera.bottom = -extent;
+    camera.near = 0.5;
+    camera.far = config.position.length() + extent * 2;
+    camera.updateProjectionMatrix();
+    light.shadow.mapSize.set(size, size);
+    light.shadow.bias = config.shadowBias ?? -0.0004;
+    light.shadow.normalBias = config.shadowNormalBias ?? 0.03;
+    light.shadow.radius = 3;
     return light;
   }
 
-  private createFloorMaterial(colors: RoomColors): MeshPhysicalMaterial {
-    return new MeshPhysicalMaterial({
+  private createFloorMaterial(colors: RoomColors): MeshStandardMaterial {
+    return new MeshStandardMaterial({
       color: colors.floor,
-      roughness: 0.7,
-      metalness: 0.2,
-      clearcoat: 0.1,
-      clearcoatRoughness: 0.4,
+      roughness: 0.6,
+      metalness: 0,
     });
   }
 
-  private createMainWallMaterial(colors: RoomColors): MeshPhysicalMaterial {
-    return new MeshPhysicalMaterial({
-      color: colors.mainWall,
+  /** Muro mate de doble cara (red de seguridad si la cámara cruza el plano). */
+  private createWallMaterial(color: number): MeshStandardMaterial {
+    return new MeshStandardMaterial({
+      color,
       roughness: 0.95,
-      metalness: 0.1,
-      clearcoat: 0.05,
-      clearcoatRoughness: 0.5,
+      metalness: 0,
+      side: DoubleSide,
     });
   }
 
-  private createAccentWallMaterial(colors: RoomColors): MeshPhysicalMaterial {
-    return new MeshPhysicalMaterial({
-      color: colors.accentWall,
-      roughness: 0.9,
-      metalness: 0.15,
-      clearcoat: 0.1,
-      clearcoatRoughness: 0.3,
-    });
-  }
-
-  private createSecondaryWallMaterial(
-    colors: RoomColors
-  ): MeshPhysicalMaterial {
-    return new MeshPhysicalMaterial({
-      color: colors.secondaryWall,
-      roughness: 0.95,
-      metalness: 0.1,
-      clearcoat: 0.05,
-      clearcoatRoughness: 0.5,
-    });
-  }
-
-  private createCeilingMaterial(colors: RoomColors): MeshPhysicalMaterial {
-    return new MeshPhysicalMaterial({
+  private createCeilingMaterial(colors: RoomColors): MeshStandardMaterial {
+    return new MeshStandardMaterial({
       color: colors.ceiling,
-      roughness: 0.9,
-      metalness: 0.1,
-      clearcoat: 0.05,
-      clearcoatRoughness: 0.5,
+      roughness: 0.95,
+      metalness: 0,
     });
   }
 }

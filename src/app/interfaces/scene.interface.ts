@@ -58,6 +58,12 @@ export interface DirectionalLightConfig {
   intensity: number;
   position: Vector3;
   castShadow: boolean;
+  /** Semilado (m) del frustum de la cámara de sombra. */
+  shadowExtent?: number;
+  /** Resolución (px) del mapa de sombra. */
+  shadowMapSize?: number;
+  shadowBias?: number;
+  shadowNormalBias?: number;
 }
 
 export interface SpotlightConfig {
@@ -78,6 +84,8 @@ export interface ModelConfiguration {
   scale: number;
   rotation: Euler;
   metadata: ObjectInfo;
+  /** Sustituciones de material (p. ej. color del sofá, que no trae textura). */
+  materialOverride?: MaterialOverride;
   /** Elevación extra sobre el suelo de la base del modelo (m). Por defecto 0. */
   yOffset?: number;
 }
@@ -99,4 +107,11 @@ export interface InteractionResult {
   floorPoint?: Vector3;
   /** Objeto 3D seleccionado en clics de mueble. */
   object?: Object3D;
+}
+
+/** Valores que sustituyen a los del material importado del modelo. */
+export interface MaterialOverride {
+  color?: number;
+  roughness?: number;
+  metalness?: number;
 }
