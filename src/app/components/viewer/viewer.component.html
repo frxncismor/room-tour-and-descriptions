@@ -1,13 +1,16 @@
 <div class="viewer-container">
-  <!-- DOM order = Tab order: help -> list -> "Initial view" -> canvas.
+  <!-- DOM order = Tab order: corner (language, brand) -> help -> list -> "Initial view" -> canvas.
        All three are absolutely positioned, so their DOM position does not
        change the layout. -->
   @if (!blockingError()) {
-    <app-brand-label />
+    <div class="corner">
+      <app-language-switcher />
+      <app-brand-label />
+    </div>
     <app-help-panel [suppressed]="!!state.selected()" [seen]="interacted()" />
     <app-object-list
       [items]="objects()"
-      [selectedName]="state.selected()?.name ?? null"
+      [selectedId]="state.selected()?.id ?? null"
       (selectItem)="selectObject($event)"
       (resetView)="resetView()"
     />
@@ -18,7 +21,7 @@
     class="scene-canvas"
     role="img"
     tabindex="0"
-    [attr.aria-label]="canvasLabel"
+    [attr.aria-label]="canvasLabel()"
     [style.cursor]="cursor()"
     (pointerdown)="onPointerDown($event)"
     (pointermove)="onPointerMove($event)"
