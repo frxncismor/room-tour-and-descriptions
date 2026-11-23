@@ -117,6 +117,22 @@ describe('DescriptionPanelComponent', () => {
   });
 });
 
+describe('DescriptionPanelComponent motion', () => {
+  it('disables its entrance animation under prefers-reduced-motion', async () => {
+    const fixture = TestBed.createComponent(DescriptionPanelComponent);
+    fixture.componentRef.setInput('info', FURNITURE_TEXT['sofa']);
+    await fixture.whenStable();
+    const css = Array.from(document.querySelectorAll('style'))
+      .map(style => style.textContent ?? '')
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    expect(css).toMatch(/animation: \S*panel-in 0\.2s/);
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{ \.panel\[?[^{]*\{ animation: none;/
+    );
+  });
+});
+
 describe('ObjectListComponent', () => {
   it('lists furniture and emits selection and reset', async () => {
     const fixture = TestBed.createComponent(ObjectListComponent);
@@ -239,6 +255,31 @@ describe('HelpPanelComponent', () => {
     await fixture.whenStable();
     expect(document.activeElement).toBe(el.querySelector('.reopen'));
     fixture.nativeElement.remove();
+  });
+
+  it('is dismissed and remembered once the user has navigated', async () => {
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.sheet')).not.toBeNull();
+
+    fixture.componentRef.setInput('seen', true);
+    await fixture.whenStable();
+    expect(el.querySelector('.sheet')).toBeNull();
+    expect(localStorage.getItem(HELP_STORAGE_KEY)).toBe('1');
+  });
+
+  it('does not come back when a selection is closed', async () => {
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+
+    fixture.componentRef.setInput('suppressed', true);
+    await fixture.whenStable();
+    fixture.componentRef.setInput('suppressed', false);
+    await fixture.whenStable();
+    expect(el.querySelector('.sheet')).toBeNull();
+    expect(el.querySelector('.reopen')).not.toBeNull();
   });
 
   it('starts closed when it was dismissed before', async () => {

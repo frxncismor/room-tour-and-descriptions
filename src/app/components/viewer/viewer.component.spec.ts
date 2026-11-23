@@ -162,4 +162,51 @@ describe('ViewerComponent', () => {
     expect(scene.resetView).toHaveBeenCalledTimes(1);
     expect(event.defaultPrevented).toBe(true);
   });
+
+  describe('help panel (H3)', () => {
+    beforeEach(() => localStorage.removeItem('room-tour.help-dismissed'));
+
+    it('is dismissed by the first drag, not by a plain press', async () => {
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      const el = fixture.nativeElement as HTMLElement;
+      const canvas = el.querySelector('canvas') as HTMLCanvasElement;
+      expect(el.querySelector('.sheet')).not.toBeNull();
+
+      canvas.dispatchEvent(
+        pointer('pointerdown', { clientX: 10, clientY: 10 })
+      );
+      await fixture.whenStable();
+      expect(el.querySelector('.sheet')).not.toBeNull();
+
+      canvas.dispatchEvent(
+        pointer('pointermove', { clientX: 60, clientY: 10 })
+      );
+      await fixture.whenStable();
+      expect(el.querySelector('.sheet')).toBeNull();
+      expect(localStorage.getItem('room-tour.help-dismissed')).toBe('1');
+    });
+
+    it('is dismissed by using the object list', async () => {
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      const el = fixture.nativeElement as HTMLElement;
+      (el.querySelector('nav button.chip') as HTMLButtonElement).click();
+      await fixture.whenStable();
+      expect(el.querySelector('.sheet')).toBeNull();
+    });
+
+    it('is dismissed by a navigation key but not by Tab', async () => {
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      const el = fixture.nativeElement as HTMLElement;
+      const canvas = el.querySelector('canvas') as HTMLCanvasElement;
+      canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+      await fixture.whenStable();
+      expect(el.querySelector('.sheet')).not.toBeNull();
+      canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      await fixture.whenStable();
+      expect(el.querySelector('.sheet')).toBeNull();
+    });
+  });
 });
