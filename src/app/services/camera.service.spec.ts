@@ -239,7 +239,7 @@ describe('CameraService', () => {
     /** Cajas aproximadas de los 3 muebles (centro x/z de la config). */
     function furnitureBoxes(): Box3[] {
       const sizes: Record<string, { width: number; height: number }> = {
-        sofa: { width: 2.2, height: 0.95 },
+        sofa: { width: 3.6, height: 0.95 },
         pokerTable: { width: 1.4, height: 0.9 },
         bookshelf: { width: 1.4, height: 2 },
       };
@@ -307,9 +307,13 @@ describe('CameraService', () => {
       expect(service.getCamera().fov).toBeLessThanOrEqual(90);
       service.initialize(DEFAULT_SCENE_CONFIG.camera, aspect);
       service.setupControls(canvas);
-      expect(service.getCamera().position.z).toBeGreaterThan(
-        DEFAULT_SCENE_CONFIG.camera.initialPosition.z
-      );
+      const position = service.getCamera().position;
+      const heading = service.getTarget().clone().sub(position);
+      // Diagonal: looks sideways as much as forward, from under the 4 m ceiling.
+      expect(Math.abs(heading.x)).toBeGreaterThan(3);
+      expect(Math.abs(heading.z)).toBeGreaterThan(2);
+      expect(position.y).toBeLessThan(DEFAULT_SCENE_CONFIG.room.height);
+      expect(heading.y).toBeLessThan(0);
       expectAllInView();
     });
 
@@ -325,19 +329,23 @@ describe('CameraService', () => {
 
     it.each([
       [390, 844],
-      [360, 740],
+      [360, 780],
       [430, 932],
     ])(
-      'frames the strip tightly and centred at %ix%i (all 3 in view)',
+      'frames the 3 pieces diagonally, filling >= 35 % of the height at %ix%i',
       (width, height) => {
         service.initialize(DEFAULT_SCENE_CONFIG.camera, width / height);
         service.setupControls(canvas);
         expectAllInView();
         const e = projectedExtent();
-        // The 3 pieces span ~8 m across but only ~2 m tall: at this aspect the
-        // width is the limit, so the strip can fill ~16 % of the NDC height (box-based) at most.
-        expect((e.maxY - e.minY) / 2).toBeGreaterThan(0.15);
-        expect(Math.abs((e.maxY + e.minY) / 2)).toBeLessThan(0.1);
+        expect((e.maxY - e.minY) / 2).toBeGreaterThanOrEqual(0.35);
+        expect(Math.abs((e.maxY + e.minY) / 2)).toBeLessThan(0.2);
+        // Camera stays inside the room limits.
+        const p = service.getCamera().position;
+        const l = DEFAULT_SCENE_CONFIG.room.limits;
+        expect(p.x).toBeLessThanOrEqual(l.maxX);
+        expect(p.z).toBeGreaterThanOrEqual(l.minZ);
+        expect(p.y).toBeLessThan(DEFAULT_SCENE_CONFIG.room.height);
       }
     );
 
