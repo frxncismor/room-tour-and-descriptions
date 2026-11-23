@@ -57,12 +57,15 @@ function gt(...args) {
  *   3. closes the gaps between tiers (each tier grows half a gap up/down, so sides, back and
  *      boards of neighbouring tiers meet and the carcass reads as one closed box),
  *   4. makes the material opaque (no alphaMode).
- * Skipped when the model is already compressed (nothing to repair on optimized output).
+ * Skipped when the model is already compressed (nothing to repair on optimized output) or
+ * already repaired (marker `asset.extras.repaired`, so a re-run after a failed pipeline step
+ * leaves the .bin byte-identical instead of deforming it a second time).
  */
 function repairBookshelf(dir) {
   const gltfPath = join(dir, 'scene.gltf');
   const gltf = JSON.parse(readFileSync(gltfPath, 'utf8'));
   if ((gltf.extensionsUsed ?? []).includes('EXT_meshopt_compression')) return;
+  if (gltf.asset?.extras?.repaired) return;
   const binPath = join(dir, gltf.buffers[0].uri);
   const bin = Buffer.from(readFileSync(binPath));
   const primitive = gltf.meshes[0].primitives[0];
@@ -130,6 +133,7 @@ function repairBookshelf(dir) {
     pos[i * 3 + 2] = newLo + ((z - lo) / (hi - lo)) * (newHi - newLo);
   }
   delete gltf.materials[0].alphaMode;
+  gltf.asset.extras = { ...gltf.asset.extras, repaired: true };
   writeFileSync(binPath, bin);
   writeFileSync(gltfPath, JSON.stringify(gltf));
   console.log(
