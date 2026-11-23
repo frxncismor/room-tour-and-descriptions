@@ -1,9 +1,11 @@
 import {
+  AlwaysStencilFunc,
   Box3,
   BufferGeometry,
   Material,
   Mesh,
   Object3D,
+  ReplaceStencilOp,
   Texture,
   Vector3,
 } from 'three';
@@ -14,11 +16,19 @@ import {
   DecorTextures,
 } from './decor-builder.service';
 
-/** AABB aproximadas de los muebles (plan §1); la colocación fina es la F3. */
+/**
+ * AABB REAL del sofá cargado (T-343): medida con GLTFLoader sobre
+ * assets/models/sofa (rotación π/4 en Y, centrado en (-3, -3), base en y = 0),
+ * el mismo cálculo que ModelLoaderService.applyTransformations. La aproximada
+ * (-5,65…-0,35) sobreestimaba la caja en 0,5 m por lado.
+ */
 const SOFA = new Box3(
-  new Vector3(-5.65, 0, -5.65),
-  new Vector3(-0.35, 1.332, -0.35)
+  new Vector3(-5.16, 0, -5.595),
+  new Vector3(-0.84, 1.332, -0.405)
 );
+/** Altura del asiento del sofá (cojines de asiento, medida en el glTF). */
+const SEAT_TOP = 0.585;
+/** AABB aproximadas del resto de muebles (plan §1). */
 const FURNITURE: Record<string, Box3> = {
   sofa: SOFA,
   pokerTable: new Box3(
@@ -152,6 +162,21 @@ describe('DecorBuilderService', () => {
       other.dispose();
     });
 
+    it('los materiales de cojines y manta escriben stencil = 1 (cuentan como silueta del sofá) y los demás no', () => {
+      const textureSet = service.build(DECOR3, fakeTextures());
+      for (const mesh of meshes(textureSet.group)) {
+        const m = mesh.material as Material;
+        const isTextile = mesh.name.startsWith('textile:');
+        expect(m.stencilWrite, mesh.name).toBe(isTextile);
+        if (isTextile) {
+          expect(m.stencilRef, mesh.name).toBe(1);
+          expect(m.stencilFunc, mesh.name).toBe(AlwaysStencilFunc);
+          expect(m.stencilZPass, mesh.name).toBe(ReplaceStencilOp);
+        }
+      }
+      textureSet.dispose();
+    });
+
     it('aplica lino (map + normalMap) a cortinas y textiles, y la obra a su lámina', () => {
       const textures = fakeTextures();
       const withTextures = service.build(DECOR3, textures);
@@ -261,12 +286,39 @@ describe('DecorBuilderService', () => {
       expect(volume(overlap) / volume(blanket)).toBeGreaterThanOrEqual(0.25);
     });
 
-    it('los cojines quedan en y ∈ [0,45; 0,75] y con ≥ 0,05 m entre ellos', () => {
+    it('cada cojín interseca la AABB real del sofá en al menos el 25 % de su volumen', () => {
+      const volume = (box: Box3) => {
+        const s = box.getSize(new Vector3());
+        return s.x * s.y * s.z;
+      };
+      for (const { id, box } of build.pieces.filter(
+        p => p.kind === 'cushion'
+      )) {
+        const overlap = box.clone().intersect(SOFA);
+        expect(volume(overlap) / volume(box), id).toBeGreaterThanOrEqual(0.25);
+      }
+    });
+
+    it('cojines y manta quedan dentro de la AABB real del sofá y apoyados en el asiento', () => {
+      for (const { id, kind, box } of build.pieces.filter(p =>
+        textile(p.kind)
+      )) {
+        expect(SOFA.containsBox(box), id).toBe(true);
+        // Los cojines no se hunden en el asiento (holgura 2 cm); la manta puede
+        // caer hasta su  por el borde delantero.
+        const slack =
+          kind === 'throw' ? DECOR3.textiles.throw.drape + 0.02 : 0.02;
+        expect(box.min.y, id).toBeGreaterThanOrEqual(SEAT_TOP - slack);
+        expect(box.min.y, id).toBeLessThanOrEqual(SEAT_TOP + 0.05);
+      }
+    });
+
+    it('los cojines descansan sobre el asiento (y ∈ [0,60; 0,95]) y con ≥ 0,05 m entre ellos', () => {
       const cushions = build.pieces.filter(p => p.kind === 'cushion');
       for (const { box } of cushions) {
         const centre = box.getCenter(new Vector3());
-        expect(centre.y).toBeGreaterThanOrEqual(0.45);
-        expect(centre.y).toBeLessThanOrEqual(0.75);
+        expect(centre.y).toBeGreaterThanOrEqual(0.6);
+        expect(centre.y).toBeLessThanOrEqual(0.95);
       }
       expect(
         cushions[0].box.distanceToPoint(

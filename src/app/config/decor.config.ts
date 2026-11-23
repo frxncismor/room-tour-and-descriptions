@@ -249,7 +249,7 @@ export const DECOR3: Decor3Config = {
     panelHeight: 2.77,
     foldAmplitude: 0.04,
     foldPeriod: 0.13,
-    color: 0x8f9d82,
+    color: 0xb3c1a3,
     roughness: 1,
     tileSize: 0.5,
     rod: { x: -7.88, y: 2.85, zFrom: -6.5, zTo: -3.5, radius: 0.0125 },
@@ -276,31 +276,36 @@ export const DECOR3: Decor3Config = {
     cushionSize: 0.45,
     cushionThickness: 0.12,
     cushionPuff: 0.03,
-    // Posiciones PROVISIONALES sobre el asiento (sofá girado π/4 en (-3, -3));
-    // T-343 las fija con la AABB real del sofá y capturas.
+    // Colocación fina (T-343) con la AABB REAL del sofá cargado (ver SOFA_REAL
+    // en decor-builder.service.spec.ts). Medidas en el marco del sofá (x ancho,
+    // z fondo, +z hacia la sala; el sofá gira π/4 en (-3, -3)): asiento a
+    // 0,585 m, cojines de respaldo inclinados 45° con su frente en z ≈ -0,70 y
+    // -0,88; asiento libre entre z -0,70 y el borde delantero (-0,22).
+    // Los cojines se apoyan en el asiento reclinados contra el respaldo
+    // (41°) y la manta cae sobre el borde delantero del asiento.
     cushions: [
       {
         id: 'cushion-cream',
-        color: 0xeadfcb,
-        position: new Vector3(-4.41, 0.6, -3.42),
-        rotation: new Euler(-0.15, Math.PI / 4, 0, 'YXZ'),
+        color: 0xfff0d2,
+        position: new Vector3(-3.933, 0.8, -3.156),
+        rotation: new Euler(-0.72, Math.PI / 4 + 0.06, 0, 'YXZ'),
       },
       {
         id: 'cushion-sage',
-        color: 0x94a283,
-        position: new Vector3(-3.42, 0.6, -4.41),
-        rotation: new Euler(-0.15, Math.PI / 4, 0, 'YXZ'),
+        color: 0xb4c3a2,
+        position: new Vector3(-2.66, 0.8, -4.64),
+        rotation: new Euler(-0.72, Math.PI / 4 - 0.08, 0, 'YXZ'),
       },
     ],
     throw: {
       id: 'throw',
-      color: 0xc18f45,
-      position: new Vector3(-1.8, 0.5, -3.21),
-      rotationY: Math.PI / 4,
-      width: 1.25,
-      depth: 0.8,
-      foldAmplitude: 0.025,
-      foldPeriod: 0.25,
+      color: 0xeb9f45,
+      position: new Vector3(-2.894, 0.6, -3.601),
+      rotationY: Math.PI / 4 + 0.06,
+      width: 0.95,
+      depth: 0.75,
+      foldAmplitude: 0.012,
+      foldPeriod: 0.2,
       drape: 0.1,
     },
   },

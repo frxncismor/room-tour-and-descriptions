@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
   AdditiveBlending,
+  AlwaysStencilFunc,
   Box3,
   BoxGeometry,
   BufferGeometry,
@@ -22,6 +23,7 @@ import {
   Side,
   RepeatWrapping,
   RGBAFormat,
+  ReplaceStencilOp,
   SRGBColorSpace,
   Texture,
   UnsignedByteType,
@@ -611,9 +613,21 @@ export class DecorBuilderService {
     }
 
     // ── textiles: cojines y manta ──────────────────────────────────────────
+    // Escriben stencil = 1 como el sofá seleccionado: así su silueta cuenta como
+    // parte del mueble y el casco del contorno no los rellena donde lo tapan.
+    const markAsSofaSilhouette = (key: string): string => {
+      const m = materials.get(key)!;
+      m.stencilWrite = true;
+      m.stencilRef = 1;
+      m.stencilFunc = AlwaysStencilFunc;
+      m.stencilZPass = ReplaceStencilOp;
+      return key;
+    };
     const cushionKeys = textiles.cushions.map(cushion =>
-      material(`textile:${cushion.id}`, () =>
-        linenMaterial(cushion.color, textiles.roughness, textiles.normalScale)
+      markAsSofaSilhouette(
+        material(`textile:${cushion.id}`, () =>
+          linenMaterial(cushion.color, textiles.roughness, textiles.normalScale)
+        )
       )
     );
     textiles.cushions.forEach((cushion, index) => {
@@ -645,12 +659,14 @@ export class DecorBuilderService {
     });
     {
       const blanket = textiles.throw;
-      const throwKey = material('textile:throw', () =>
-        linenMaterial(
-          blanket.color,
-          textiles.roughness,
-          textiles.normalScale,
-          DoubleSide
+      const throwKey = markAsSofaSilhouette(
+        material('textile:throw', () =>
+          linenMaterial(
+            blanket.color,
+            textiles.roughness,
+            textiles.normalScale,
+            DoubleSide
+          )
         )
       );
       const geometry = new PlaneGeometry(blanket.width, blanket.depth, 24, 16);
