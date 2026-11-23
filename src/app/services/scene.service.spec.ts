@@ -6,14 +6,23 @@ import {
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  Raycaster,
   Scene,
+  Texture,
+  TextureLoader,
   Vector3,
 } from 'three';
 import {
+  DECOR_CONFIGURATIONS,
   DEFAULT_SCENE_CONFIG,
   MODEL_CONFIGURATIONS,
 } from '../config/scene.config';
-import { ModelConfiguration, ObjectInfo } from '../interfaces/scene.interface';
+import { FURNITURE_TEXT } from '../config/ui-text';
+import {
+  DecorConfiguration,
+  ModelConfiguration,
+  ObjectInfo,
+} from '../interfaces/scene.interface';
 import { ModelLoaderService } from './model-loader.service';
 import { ObjectInteractionService } from './object-interaction.service';
 import { RoomBuilderService } from './room-builder.service';
@@ -72,9 +81,11 @@ describe('SceneService', () => {
   let cancelSpy: ReturnType<typeof vi.spyOn>;
 
   const pathToId = (path: string) =>
-    Object.entries(MODEL_CONFIGURATIONS).find(
+    Object.entries({ ...MODEL_CONFIGURATIONS, ...DECOR_CONFIGURATIONS }).find(
       ([, c]) => c.path === path
     )?.[0] ?? '';
+  const MODEL_COUNT = Object.keys(MODEL_CONFIGURATIONS).length;
+  let textureLoad: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     failing = new Set();
@@ -94,9 +105,12 @@ describe('SceneService', () => {
       });
 
     renderer = createStubRenderer();
+    textureLoad = vi
+      .spyOn(TextureLoader.prototype, 'loadAsync')
+      .mockImplementation(async () => new Texture());
     loadModel = vi.fn(
       async (
-        config: ModelConfiguration,
+        config: ModelConfiguration | DecorConfiguration,
         onProgress?: (loaded: number, total: number) => void
       ) => {
         onProgress?.(50, 100);
@@ -285,15 +299,15 @@ describe('SceneService', () => {
 
     expect(state.loadStatus()).toBe('error');
     expect(state.error()?.code).toBe('model-load-failed');
-    expect(state.error()?.message).toContain('Poker Table');
-    expect(service.getObjectList()).toHaveLength(2);
+    expect(state.error()?.message).toContain(FURNITURE_TEXT.pokerTable.name);
+    expect(service.getObjectList()).toHaveLength(MODEL_COUNT - 1);
     expect(state.sceneReady()).toBe(true);
 
     failing.clear();
     await service.retryLoad();
     expect(state.loadStatus()).toBe('ready');
     expect(state.error()).toBeNull();
-    expect(service.getObjectList()).toHaveLength(3);
+    expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
   });
 
   it('error.retry() reloads the failed model', async () => {
@@ -303,7 +317,7 @@ describe('SceneService', () => {
     failing.clear();
     state.error()?.retry?.();
     await vi.waitFor(() => expect(state.loadStatus()).toBe('ready'));
-    expect(service.getObjectList()).toHaveLength(3);
+    expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
   });
 
   it('reports WebGL unavailable instead of throwing', () => {
@@ -439,7 +453,9 @@ describe('SceneService', () => {
     service.handlePointerMove(null);
     expect(setHover).toHaveBeenLastCalledWith(null);
 
-    const object = service.getScene().children.find(c => c.type === 'Group');
+    const object = service
+      .getScene()
+      .children.find(c => c.type === 'Group' && c.name === '');
     const info = { name: 'x' } as ObjectInfo;
     const set = vi.spyOn(state.hovered, 'set');
     const notify = interaction.onHoverChange!;
@@ -547,7 +563,7 @@ describe('SceneService', () => {
       MODEL_CONFIGURATIONS.sofa.path
     );
     expect(service.getObjectList().map(o => o.id)).toContain('sofa');
-    expect(service.getObjectList()).toHaveLength(2);
+    expect(service.getObjectList()).toHaveLength(MODEL_COUNT - 1);
   });
 
   it('retryLoad does nothing before initialize or when everything is loaded', async () => {
@@ -633,6 +649,115 @@ describe('SceneService', () => {
       expect(remove).toHaveBeenCalledWith('resize', expect.any(Function));
       window.dispatchEvent(new Event('resize'));
       expect(renderer.setSize).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── T-232 / T-234: decoración y texturas ────────────────────────────
+
+  describe('decor and textures', () => {
+    it('loadAll puts decor in a non-inspectable group', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      const decor = service.getScene().getObjectByName('decor')!;
+      expect(decor.children).toHaveLength(
+        Object.keys(DECOR_CONFIGURATIONS).length
+      );
+      const ids = service.getObjectList().map(o => o.id);
+      expect(ids).not.toContain('clock');
+      expect(ids).not.toContain('vase');
+      expect(ids.sort()).toEqual(Object.keys(MODEL_CONFIGURATIONS).sort());
+    });
+
+    it('decor never receives raycast hits', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      const decor = service.getScene().getObjectByName('decor')!;
+      const ray = new Raycaster(new Vector3(0, 0, 5), new Vector3(0, 0, -1));
+      expect(ray.intersectObject(decor, true)).toEqual([]);
+      const interaction = TestBed.inject(ObjectInteractionService);
+      for (const child of decor.children) {
+        expect(interaction.getObjectInfo(child)).toBeUndefined();
+      }
+    });
+
+    it('decor progress keys count and progress is monotone up to 100', async () => {
+      const seen: number[] = [];
+      service.initialize(canvas);
+      const set = state.loadProgress.set.bind(state.loadProgress);
+      vi.spyOn(state.loadProgress, 'set').mockImplementation(v => {
+        seen.push(v);
+        set(v);
+      });
+      await service.loadAll();
+      expect(seen).toEqual([...seen].sort((a, b) => a - b));
+      expect(seen.at(-1)).toBe(100);
+      expect(loadModel).toHaveBeenCalledTimes(
+        MODEL_COUNT + Object.keys(DECOR_CONFIGURATIONS).length
+      );
+    });
+
+    it('stays loading while a texture is slow', async () => {
+      const releases: ((t: Texture) => void)[] = [];
+      textureLoad.mockImplementation(
+        () => new Promise<Texture>(resolve => releases.push(resolve))
+      );
+      service.initialize(canvas);
+      const done = service.loadAll();
+      await vi.waitFor(() => expect(loadModel).toHaveBeenCalled());
+      await new Promise(r => setTimeout(r, 20));
+      expect(state.loadStatus()).toBe('loading');
+      expect(state.sceneReady()).toBe(false);
+      expect(state.loadProgress()).toBeLessThan(100);
+      textureLoad.mockImplementation(async () => new Texture());
+      releases.forEach(release => release(new Texture()));
+      await done;
+      expect(state.loadStatus()).toBe('ready');
+    });
+
+    it('a failed texture keeps the scene usable, reports it and can retry', async () => {
+      textureLoad.mockRejectedValue(new Error('404'));
+      service.initialize(canvas);
+      await service.loadAll();
+      expect(state.loadStatus()).toBe('error');
+      expect(state.error()?.code).toBe('model-load-failed');
+      expect(state.error()?.message).toContain('Floor texture');
+      expect(state.sceneReady()).toBe(true);
+      expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+
+      textureLoad.mockImplementation(async () => new Texture());
+      await service.retryLoad();
+      expect(state.loadStatus()).toBe('ready');
+      expect(state.error()).toBeNull();
+    });
+
+    it('retryLoad reloads a failed decor piece only', async () => {
+      failing.add('clock');
+      service.initialize(canvas);
+      await service.loadAll();
+      expect(state.error()?.message).toContain(
+        DECOR_CONFIGURATIONS.clock.label
+      );
+      expect(
+        service.getScene().getObjectByName('decor')!.children
+      ).toHaveLength(Object.keys(DECOR_CONFIGURATIONS).length - 1);
+
+      failing.clear();
+      loadModel.mockClear();
+      await service.retryLoad();
+      expect(loadModel).toHaveBeenCalledTimes(1);
+      expect(loadModel.mock.calls[0][0].path).toBe(
+        DECOR_CONFIGURATIONS.clock.path
+      );
+      expect(state.loadStatus()).toBe('ready');
+    });
+
+    it('dispose releases decor geometries', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      runFrame();
+      service.dispose();
+      expect(renderer.info.memory.geometries).toBe(0);
+      expect(service.getObjectList()).toEqual([]);
     });
   });
 });

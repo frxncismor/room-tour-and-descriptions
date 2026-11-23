@@ -1,5 +1,11 @@
 import { Euler, Vector3 } from 'three';
-import { SceneConfiguration } from '../interfaces/scene.interface';
+import {
+  DecorConfiguration,
+  FloorTextures,
+  RugTextures,
+  SceneConfiguration,
+  TrimConfiguration,
+} from '../interfaces/scene.interface';
 import { FURNITURE_TEXT } from './ui-text';
 
 export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
@@ -108,4 +114,69 @@ export const MODEL_CONFIGURATIONS = {
     yOffset: 0,
     metadata: FURNITURE_TEXT.bookshelf,
   },
+  landscapePainting: {
+    path: 'assets/models/landscape_painting/scene.gltf',
+    position: new Vector3(-4, 0, -7.975),
+    scale: 2,
+    rotation: new Euler(),
+    yOffset: 1.2,
+    metadata: FURNITURE_TEXT.landscapePainting,
+  },
+  succulent: {
+    path: 'assets/models/succulent/scene.gltf',
+    position: new Vector3(1.85, 0, -7.55),
+    scale: 2.2,
+    rotation: new Euler(0, Math.PI / 6, 0),
+    yOffset: 0,
+    metadata: FURNITURE_TEXT.succulent,
+  },
+};
+
+/** Decoración real no interactiva: el clic y el hover la atraviesan. */
+export const DECOR_CONFIGURATIONS = {
+  clock: {
+    label: 'Wall clock',
+    path: 'assets/models/wall_clock/scene.gltf',
+    position: new Vector3(4, 0, -7.95),
+    scale: 2,
+    rotation: new Euler(),
+    yOffset: 1.38,
+  },
+  vase: {
+    label: 'Ceramic vase',
+    path: 'assets/models/ceramic_vase/scene.gltf',
+    position: new Vector3(-1.85, 0, -7.55),
+    scale: 2.2,
+    rotation: new Euler(),
+    yOffset: 0,
+  },
+} satisfies Record<string, DecorConfiguration>;
+
+export const FLOOR_TEXTURES: FloorTextures = {
+  label: 'Floor texture',
+  diffuse: 'assets/textures/floor/diff.webp',
+  normal: 'assets/textures/floor/nor.webp',
+  arm: 'assets/textures/floor/arm.webp',
+  repeat: { x: 16 / 1.7, y: 16 / 1.7 },
+  normalScale: 0.6,
+};
+
+export const RUG_TEXTURES: RugTextures = {
+  label: 'Rug texture',
+  diffuse: 'assets/textures/rug/diff.webp',
+  normal: 'assets/textures/rug/nor.webp',
+  tint: 0xf0e6d8,
+  width: 4.2,
+  depth: 3.0,
+  center: { x: -1.5, y: -1.5 },
+  y: 0.004,
+  rotationY: Math.PI / 4,
+  repeat: { x: 4.2 / 0.27, y: 3.0 / 0.27 },
+};
+
+export const TRIM: TrimConfiguration = {
+  height: 0.12,
+  depth: 0.02,
+  color: 0xf3ece1,
+  roughness: 0.8,
 };

@@ -92,6 +92,50 @@ export interface ModelConfiguration {
   yOffset?: number;
 }
 
+/**
+ * Pieza decorativa real, no interactiva: sin ficha ni entrada en la lista, y
+ * con el raycast anulado. `label` solo se usa en el aviso si no carga.
+ */
+export type DecorConfiguration = Omit<ModelConfiguration, 'metadata'> & {
+  label: string;
+};
+
+/** Rutas y parámetros del suelo de madera (T-233). */
+export interface FloorTextures {
+  label: string;
+  diffuse: string;
+  normal: string;
+  /** Mapa ARM (oclusión, rugosidad, metal): se usa el canal G como rugosidad. */
+  arm: string;
+  repeat: { x: number; y: number };
+  normalScale: number;
+}
+
+/** Rutas, medidas y parámetros de la alfombra (T-233). */
+export interface RugTextures {
+  label: string;
+  diffuse: string;
+  normal: string;
+  /** Tinte multiplicado por la textura. */
+  tint: number;
+  /** Medidas del plano (m). */
+  width: number;
+  depth: number;
+  /** Centro en el suelo (x, z). */
+  center: { x: number; y: number };
+  /** Elevación sobre el suelo (m). */
+  y: number;
+  rotationY: number;
+  repeat: { x: number; y: number };
+}
+
+export interface TrimConfiguration {
+  height: number;
+  depth: number;
+  color: number;
+  roughness: number;
+}
+
 /** Punto en coordenadas de cliente (px), p. ej. un `PointerEvent`. */
 export interface ScreenPoint {
   pointerType?: string;
