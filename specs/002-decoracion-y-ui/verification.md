@@ -96,6 +96,22 @@ Sin la ejecución atípica (40,1) la mediana final móvil sería 7,45 (×1,26): 
 **Con vsync** (sin `--uncapped`, 5 pares alternados, `scripts-r2\f4\capped\`): escritorio base y final 6,1 ms en las 5 ejecuciones (**×1,00**); móvil 6,1 vs 6,1 (×1,00; p95 12,2 ms en ambos).
 Es decir: a la cadencia del monitor (≈165 Hz) no hay pérdida (≥ 55 fps de SC-004/SC-204 de sobra), pero el coste por fotograma sin tope sube un 29–32 %.
 
+### Re-medición tras el paso a (sin sombras en suculenta/jarrón) — 2026-11-23, **✗ se mantiene**
+
+Método: base = `git archive 7b1c78c` + `npm ci` + `npm run build` (carpeta temporal, ya borrada), final = HEAD `780597d` (este worktree); builds de producción servidas a la vez (4311/4312). `baseline-capture.mjs --uncapped --prod --no-shots`, 300 fotogramas, vista inicial con ayuda cerrada, GPU real (`--use-angle=d3d11`, RTX 4060), perfil nuevo por ejecución, **pares intercalados base→final**, móvil emulado CPU ×4 (criterio) y escritorio (informativo). **20 pares** (2 tandas de 10). Temporizador de `performance.now()` con 0,1 ms de resolución.
+La máquina no estaba en reposo: carga media de CPU **≈37 %** (mín 7 %, máx 100 %) medida antes/después de cada ejecución.
+
+| 20 pares                | mediana base | mediana final | cociente final/base: mediana | rango (mín–máx) |
+| ----------------------- | ------------ | ------------- | ---------------------------- | --------------- |
+| Móvil CPU ×4 (criterio) | 6,6 ms       | 7,4 ms        | **×1,16 ✗** (límite ×1,10)   | 0,34–1,66       |
+| Escritorio              | 0,75 ms      | 1,0 ms        | ×1,31 (informativo)          | 0,75–2,17       |
+
+Por tandas, móvil: 1,114 (pares 1–10) y 1,182 (pares 11–20). Cociente por par (móvil): 1,08 1,45 1,49 1,06 1,28 0,34 1,01 1,14 1,29 1,09 1,16 1,20 0,96 1,66 1,59 1,52 1,47 1,10 1,16 0,96.
+
+**Paso b probado y revertido.** Suculenta simplificada de `ratio 0,7 / error 0,005` a `ratio 0,4 / error 0,01` (≈3 056 tris en total, `scene.bin` 55 → 38 kB; pérdida visual casi nula, solo una faceta leve en el tiesto; capturas `runs\11221609\capturas\r2-sc204-{antes,despues}-{desktop,mobile}-{initial,succulent}.png`). Re-medición con 12 pares: móvil **×1,158** (rango 0,87–1,60; medianas 5,75 → 7,15 ms), es decir, no baja de la mediana anterior (×1,16). Criterio 3: se revierten `scripts/optimize-models.mjs` y `src/assets/models/succulent/**` (`git checkout`); no hay cambios de código.
+
+Lectura: el sobrecoste sin límite (≈+0,8 ms en móvil ×4, 1–2 fotogramas del temporizador) no viene de la geometría de la suculenta, y el ruido entre pares (0,34–1,66) es del orden del efecto. A vsync (≈165 Hz) el cociente sigue siendo ×1,00 (medido arriba). **Decisión pendiente del principal**: aceptar SC-204 con vsync (el requisito real, ≥ 55 fps) o seguir buscando la fuente del sobrecoste (p. ej. bisecar por pieza: cuadro, reloj, alfombra, texturas de suelo).
+
 Veredicto: **✗** por el criterio literal (mediana ≤ base × 1,10 en escritorio y móvil). No se ha arreglado nada: se devuelve con cifras para que el orquestador aplique el plan aprobado
 (quitar sombras de suculenta/jarrón y volver a medir; si aún falla, simplificar la suculenta).
 Referencia de contexto: el aumento coincide con +19 draw calls (+13 %) y +21 texturas; la CPU de envío de comandos domina en estas medidas sin límite.
