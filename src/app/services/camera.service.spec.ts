@@ -204,6 +204,63 @@ describe('CameraService', () => {
       expect(service.getTarget().x).toBeCloseTo(-4, 0);
     });
 
+    it('keeps a focused wall piece out of the description sheet column at 1280x800', async () => {
+      service.setAspect(1280 / 800);
+      const painting = box(-4, 1.66, -7.975, 1.21, 0.93, 0.04);
+      service.getCamera().position.set(0, 1.7, 4.5);
+
+      const done = service.focusOn(painting);
+      service.update(5000);
+      await expect(done).resolves.toBe(true);
+
+      const camera = service.getCamera();
+      camera.updateMatrixWorld(true);
+      // Columna de la ficha: 392 px de 1280 -> NDC x >= 1 - 2 * 392 / 1280.
+      const sheetStart = 1 - (2 * 392) / 1280;
+      const bounds = new Box3().setFromObject(painting);
+      for (const x of [bounds.min.x, bounds.max.x])
+        for (const y of [bounds.min.y, bounds.max.y])
+          for (const z of [bounds.min.z, bounds.max.z]) {
+            const ndc = new Vector3(x, y, z).project(camera);
+            expect(ndc.x).toBeLessThanOrEqual(sheetStart + 1e-2);
+            expect(ndc.x).toBeGreaterThanOrEqual(-1);
+          }
+    });
+
+    it('views a flat wall piece almost head-on (<= 12 degrees)', async () => {
+      service.setAspect(1280 / 800);
+      const painting = box(-4, 1.66, -7.975, 1.21, 0.93, 0.04);
+      service.getCamera().position.set(3, 1.7, -2);
+
+      const done = service.focusOn(painting);
+      service.update(5000);
+      await expect(done).resolves.toBe(true);
+
+      const camera = service.getCamera();
+      const view = painting
+        .getWorldPosition(new Vector3())
+        .sub(camera.position)
+        .setY(0)
+        .normalize();
+      const angle = Math.acos(view.dot(new Vector3(0, 0, -1)));
+      expect(angle).toBeLessThanOrEqual((12 * Math.PI) / 180);
+    });
+
+    it('looks down at most 30 degrees at a small floor piece', async () => {
+      service.setAspect(390 / 844);
+      const plant = box(1.85, 0.3, -7.55, 0.4, 0.6, 0.4);
+      service.getCamera().position.set(7, 3.8, -1.5);
+
+      const done = service.focusOn(plant);
+      service.update(5000);
+      await expect(done).resolves.toBe(true);
+
+      const camera = service.getCamera();
+      const toPlant = plant.position.clone().sub(camera.position);
+      const pitch = Math.atan2(-toPlant.y, Math.hypot(toPlant.x, toPlant.z));
+      expect(pitch).toBeLessThanOrEqual((32 * Math.PI) / 180);
+    });
+
     it('keeps the default candidate when nothing blocks it', async () => {
       const target = box(0, 0.5, -3);
       const faraway = box(4, 0.5, 0, 1, 1, 1);

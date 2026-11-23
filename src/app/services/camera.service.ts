@@ -35,6 +35,18 @@ const FOCUS_MARGIN = 0.12;
 /** En retrato: borde superior de la ficha inferior (~30 % del alto) y bajo la barra de botones (NDC). */
 const SHEET_BOTTOM_NDC = -0.32;
 const TOP_BAR_NDC = 0.78;
+/**
+ * En apaisado la ficha ocupa una columna a la derecha: ancho de la ficha
+ * (360 px, ver description-panel) + margen derecho (16 px) + holgura (16 px).
+ * Debe coincidir con el CSS de `description-panel`.
+ */
+const SHEET_COLUMN_PX = 392;
+/** Grosor máximo (m) para tratar una pieza como plana y colgada (cuadro, reloj). */
+const FLAT_PIECE_MAX_THICKNESS = 0.1;
+/** Inclinación máxima (grados) de la vista hacia abajo al enfocar un objeto. */
+const FOCUS_MAX_PITCH_DEG = 30;
+/** Ancho (px) que se asume si el canvas aún no tiene medida (p. ej. en tests). */
+const FALLBACK_VIEWPORT_WIDTH = 1280;
 
 interface Tween {
   fromPosition: Vector3;
@@ -267,6 +279,21 @@ export class CameraService {
     away.y = 0;
     if (away.lengthSq() < 1e-6) away.set(0, 0, 1);
     away.normalize();
+    // Una pieza plana se enfoca de frente (por su normal, del lado de la cámara).
+    const size = box.getSize(new Vector3());
+    const thinAxis = size.x < size.z ? 'x' : 'z';
+    const wide = thinAxis === 'x' ? size.z : size.x;
+    if (
+      size[thinAxis] <= FLAT_PIECE_MAX_THICKNESS &&
+      size[thinAxis] < wide / 4
+    ) {
+      const normal = new Vector3(
+        thinAxis === 'x' ? 1 : 0,
+        0,
+        thinAxis === 'z' ? 1 : 0
+      );
+      away.copy(normal.multiplyScalar(Math.sign(away.dot(normal)) || 1));
+    }
 
     const pose = this.pickFocusPose(
       box,
@@ -279,9 +306,28 @@ export class CameraService {
   }
 
   /** Zona de pantalla (NDC) libre de ficha y botones; en retrato deja sitio abajo a la ficha. */
-  private visibleBand(): { bottom: number; top: number } {
+  private visibleBand(): {
+    bottom: number;
+    top: number;
+    left: number;
+    right: number;
+  } {
     const blend = this.clamp((1 - this.aspect) / 0.3, 0, 1);
+    const width =
+      this.controls?.domElement?.clientWidth || FALLBACK_VIEWPORT_WIDTH;
+    // Solo en apaisado (aspect > 1, donde la ficha va a la derecha): la zona
+    // libre acaba donde empieza la columna de la ficha.
+    const sheetRight =
+      this.aspect > 1
+        ? this.clamp(
+            1 - (2 * SHEET_COLUMN_PX) / width,
+            -1 + 2 * FOCUS_MARGIN,
+            1
+          )
+        : 1;
     return {
+      left: -(1 - FOCUS_MARGIN),
+      right: Math.min(1 - FOCUS_MARGIN, sheetRight),
       bottom: -(1 - FOCUS_MARGIN) * (1 - blend) + SHEET_BOTTOM_NDC * blend,
       top: (1 - FOCUS_MARGIN) * (1 - blend) + TOP_BAR_NDC * blend,
     };
@@ -315,6 +361,7 @@ export class CameraService {
     const targetFor = (k: number): Vector3 =>
       lookAt.clone().addScaledVector(dir, k);
 
+    const band = this.visibleBand();
     let target = lookAt;
     if (desiredY !== 0) {
       let lo = 0;
@@ -326,14 +373,33 @@ export class CameraService {
       }
       target = targetFor(lo);
     }
-    const band = this.visibleBand();
-    const limitX = 1 - FOCUS_MARGIN;
+    if (band.right < 1 - FOCUS_MARGIN - 1e-3) {
+      // La ficha ocupa la derecha: si el mueble invade su columna, se desplaza
+      // el objetivo hacia la derecha de la cámara lo justo para que no la pise.
+      const right = new Vector3(dir.z, 0, -dir.x);
+      const base = target;
+      const maxX = (shift: number): number => {
+        const shifted = base.clone().addScaledVector(right, shift);
+        return Math.max(...corners.map(c => project(shifted, c).x));
+      };
+      if (maxX(0) > band.right) {
+        let lo = 0;
+        let hi = horizontal * 0.5;
+        for (let i = 0; i < 16; i++) {
+          const mid = (lo + hi) / 2;
+          if (maxX(mid) > band.right) lo = mid;
+          else hi = mid;
+        }
+        target = base.clone().addScaledVector(right, hi);
+      }
+    }
     let overflow = 0;
     for (const corner of corners) {
       const ndc = project(target, corner);
       overflow = Math.max(
         overflow,
-        Math.abs(ndc.x) - limitX,
+        ndc.x - band.right,
+        band.left - ndc.x,
         ndc.y - band.top,
         band.bottom - ndc.y
       );
@@ -391,7 +457,12 @@ export class CameraService {
             probe,
             center,
             dir,
-            height,
+            // Sin mirar demasiado desde arriba objetos pequeños y cercanos.
+            Math.min(
+              height,
+              center.y +
+                distance * Math.tan((FOCUS_MAX_PITCH_DEG * Math.PI) / 180)
+            ),
             distance,
             desiredY,
             corners

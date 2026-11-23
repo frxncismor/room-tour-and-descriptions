@@ -6,6 +6,7 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  Object3D,
   Raycaster,
   MeshStandardMaterial,
   Texture,
@@ -114,6 +115,85 @@ describe('ModelLoaderService', () => {
     expect(box.min.y).toBeCloseTo(0);
     expect((box.min.x + box.max.x) / 2).toBeCloseTo(3);
     expect((box.min.z + box.max.z) / 2).toBeCloseTo(-2);
+  });
+
+  it('does not cast shadows when castShadow is false, but still receives them', async () => {
+    const model = await service.loadModel(config({ castShadow: false }));
+    const meshes: Mesh[] = [];
+    model.traverse(c => (c as Mesh).isMesh && meshes.push(c as Mesh));
+    expect(meshes.length).toBeGreaterThan(0);
+    expect(meshes.every(m => !m.castShadow && m.receiveShadow)).toBe(true);
+  });
+
+  it('casts shadows by default on opaque meshes', async () => {
+    const model = await service.loadModel(config());
+    const mesh = model.children[0] as Mesh;
+    expect(mesh.castShadow).toBe(true);
+  });
+
+  describe('mergeMeshes', () => {
+    function multiMeshScene(): Group {
+      const group = new Group();
+      const shared = new MeshStandardMaterial();
+      const other = new MeshStandardMaterial();
+      const make = (
+        x: number,
+        material: MeshStandardMaterial,
+        name: string
+      ) => {
+        const geometry = new BoxGeometry(1, 1, 1);
+        geometry.clearGroups();
+        // Posiciones cuantizadas (i16 normalizado) como las del pipeline meshopt.
+        const mesh = new Mesh(geometry, material);
+        mesh.name = name;
+        mesh.position.set(x, 0.5, 0);
+        mesh.rotation.y = 0.3;
+        group.add(mesh);
+        return mesh;
+      };
+      make(0, shared, 'a');
+      make(2, shared, 'b');
+      make(4, shared, 'c');
+      make(6, other, 'd');
+      return group;
+    }
+
+    const meshesOf = (root: Group | Object3D) => {
+      const out: Mesh[] = [];
+      root.traverse(c => (c as Mesh).isMesh && out.push(c as Mesh));
+      return out;
+    };
+
+    it('merges meshes that share a material and keeps the overall box', async () => {
+      loadAsync.mockImplementation((() =>
+        Promise.resolve({ scene: multiMeshScene() })) as never);
+      const plain = await service.loadModel(config());
+      const merged = await service.loadModel(config({ mergeMeshes: true }));
+
+      expect(meshesOf(plain)).toHaveLength(4);
+      expect(meshesOf(merged)).toHaveLength(2);
+      const sizeOf = (o: Object3D) =>
+        new Box3().setFromObject(o).getSize(new Vector3());
+      expect(sizeOf(merged).x).toBeCloseTo(sizeOf(plain).x, 4);
+      expect(sizeOf(merged).y).toBeCloseTo(sizeOf(plain).y, 4);
+      const triangles = (o: Object3D) =>
+        meshesOf(o).reduce((n, m) => n + m.geometry.index!.count / 3, 0);
+      expect(triangles(merged)).toBe(triangles(plain));
+    });
+
+    it('keeps shadows, raycast target and a single shared material per merged mesh', async () => {
+      loadAsync.mockImplementation((() =>
+        Promise.resolve({ scene: multiMeshScene() })) as never);
+      const merged = await service.loadModel(
+        config({ mergeMeshes: true, castShadow: false })
+      );
+      const meshes = meshesOf(merged);
+      expect(meshes.every(m => !m.castShadow && m.receiveShadow)).toBe(true);
+      expect(new Set(meshes.map(m => m.material)).size).toBe(2);
+      merged.updateMatrixWorld(true);
+      const ray = new Raycaster(new Vector3(2, 5, -2), new Vector3(0, -1, 0));
+      expect(ray.intersectObject(merged, true).length).toBeGreaterThan(0);
+    });
   });
 
   it('applies yOffset on top of the floor', async () => {
