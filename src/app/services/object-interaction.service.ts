@@ -50,16 +50,6 @@ export interface HoverTarget {
   info: ObjectInfo;
 }
 
-interface EmissiveBackup {
-  color: Color;
-  intensity: number;
-}
-
-interface EmissiveMaterial extends Material {
-  emissive: Color;
-  emissiveIntensity: number;
-}
-
 const OUTLINE_NAME = '__selection-outline';
 const OUTLINE_COLOR = 0x2f8fa8;
 const OUTLINE_PULSE_COLOR = 0x8fe3f5;
@@ -67,26 +57,52 @@ const OUTLINE_PULSE_AMPLITUDE = 0.5;
 const OUTLINE_PULSE_SPEED = 0.003;
 /** Grosor del contorno en px CSS: constante en pantalla, sea cual sea el mueble o la distancia. */
 export const OUTLINE_THICKNESS_PX = 3;
-/** Empuje (m) del casco hacia el fondo: oculta los destellos de caras traseras interiores. */
-export const OUTLINE_DEPTH_PUSH = 0.025;
+/**
+ * Empuje (m) del casco hacia el fondo: oculta los destellos de caras traseras
+ * interiores. Debe ser muy pequeño: con valores de centímetros el casco queda
+ * tras la propia malla o la pared y el contorno desaparece (estantería).
+ */
+export const OUTLINE_DEPTH_PUSH = 0;
+/** Sesgo de profundidad (negativo = hacia la cámara): gana el empate con paredes/suelo pegados al mueble. */
+export const OUTLINE_POLYGON_OFFSET = -4;
 /** Atributo con normales suavizadas (por posición) que guía la extrusión del contorno. */
 export const OUTLINE_NORMAL_ATTRIBUTE = 'outlineNormal';
-const HOVER_EMISSIVE_COLOR = 0x3a6a78;
-const HOVER_EMISSIVE_INTENSITY = 0.35;
+/** Hover: contorno fino y semitransparente; no toca los materiales del mueble. */
+const HOVER_OUTLINE_NAME = '__hover-outline';
+const HOVER_OUTLINE_COLOR = 0x8fc9d8;
+export const HOVER_OUTLINE_THICKNESS_PX = 1.75;
+export const HOVER_OUTLINE_OPACITY = 0.7;
 const TELEPORT_MARGIN = 1.5;
 const TELEPORT_MAX_CLAMP = 2;
 
-/** Mallas transparentes (vasos, cristal): su casco se vería a través y las rellenaría. */
-function isTranslucent(mesh: Mesh): boolean {
-  const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  return list.length > 0 && list.every(m => m.transparent || m.opacity < 1);
+function isTranslucentMaterial(m: Material): boolean {
+  return m.transparent || m.opacity < 1;
 }
 
-function hasEmissive(material: Material): material is EmissiveMaterial {
-  return (
-    'emissive' in material &&
-    (material as EmissiveMaterial).emissive instanceof Color
-  );
+/**
+ * Mallas transparentes (vasos, cristal): su casco se vería a través y las
+ * rellenaría. Con material array solo cuenta si TODAS sus partes lo son; si es
+ * mixto, el casco se pinta y `outlineGroups` excluye las partes translúcidas.
+ */
+export function isTranslucent(mesh: Mesh): boolean {
+  const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  return list.length > 0 && list.every(isTranslucentMaterial);
+}
+
+/** Grupos de geometría opacos de un material array (null = toda la malla). */
+export function outlineGroups(
+  mesh: Mesh
+): { start: number; count: number }[] | null {
+  if (!Array.isArray(mesh.material)) return null;
+  const materials = mesh.material;
+  if (!materials.some(isTranslucentMaterial)) return null;
+  return mesh.geometry.groups
+    .filter(
+      g =>
+        g.materialIndex !== undefined &&
+        !isTranslucentMaterial(materials[g.materialIndex])
+    )
+    .map(g => ({ start: g.start, count: g.count }));
 }
 
 /**
@@ -153,14 +169,18 @@ export class ObjectInteractionService {
   private outline: Group | null = null;
   private outlineMaterial: MeshBasicMaterial | null = null;
   /** Desplazamiento del contorno en NDC (se actualiza con el tamaño del canvas). */
-  private readonly outlineOffset = { value: new Vector2() };
+  private readonly outlineOffset = { value: new Vector2(0.01, 0.01) };
+  private hoverOutline: Group | null = null;
+  private hoverMaterial: MeshBasicMaterial | null = null;
+  private readonly hoverOffset = { value: new Vector2(0.01, 0.01) };
+  /** Tamaño del canvas en px CSS, cacheado (evita `getBoundingClientRect` por frame). */
+  private canvasSize: { width: number; height: number } | null = null;
   private selected: Object3D | null = null;
 
   private pendingHover: Vector2 | null = null;
   private hoverDirty = false;
   private hovered: HoverTarget | null = null;
   private readonly pulseColor = new Color(OUTLINE_PULSE_COLOR);
-  private readonly emissiveBackup = new Map<Material, EmissiveBackup>();
 
   /** Notificación opcional de cambios de hover (F4b la conecta a señales). */
   onHoverChange: ((target: HoverTarget | null) => void) | null = null;
@@ -172,6 +192,21 @@ export class ObjectInteractionService {
   /** Elemento cuyo rectángulo define las coordenadas NDC (el canvas). */
   setCanvas(canvas: HTMLElement | null): void {
     this.canvas = canvas;
+    this.canvasSize = null;
+  }
+
+  /** Tamaño actual del canvas (px CSS); SceneService lo actualiza al redimensionar. */
+  setCanvasSize(width: number, height: number): void {
+    if (width <= 0 || height <= 0) return;
+    this.canvasSize = { width, height };
+    this.outlineOffset.value.set(
+      (2 * OUTLINE_THICKNESS_PX) / width,
+      (2 * OUTLINE_THICKNESS_PX) / height
+    );
+    this.hoverOffset.value.set(
+      (2 * HOVER_OUTLINE_THICKNESS_PX) / width,
+      (2 * HOVER_OUTLINE_THICKNESS_PX) / height
+    );
   }
 
   /** Cámara y escena usadas por el hover (el clic las recibe por parámetro). */
@@ -319,7 +354,6 @@ export class ObjectInteractionService {
         ((Math.sin(timeMs * OUTLINE_PULSE_SPEED) + 1) / 2) *
         OUTLINE_PULSE_AMPLITUDE;
       this.outlineMaterial.color.setHex(OUTLINE_COLOR).lerp(this.pulseColor, t);
-      this.updateOutlineOffset();
     }
     if (this.hoverDirty) {
       this.hoverDirty = false;
@@ -348,6 +382,7 @@ export class ObjectInteractionService {
       this.outlineMaterial = null;
     }
     this.selected = null;
+    this.hoverDirty = true; // re-evalúa el hover (el objeto ya no está seleccionado)
   }
 
   clearSelection(): void {
@@ -376,7 +411,7 @@ export class ObjectInteractionService {
 
   dispose(): void {
     this.removeOutline();
-    this.restoreEmissive();
+    this.removeHoverOutline();
     this.hovered = null;
     this.pendingHover = null;
     this.hoverDirty = false;
@@ -401,7 +436,8 @@ export class ObjectInteractionService {
   private isOutline(object: Object3D): boolean {
     let current: Object3D | null = object;
     while (current) {
-      if (current.name === OUTLINE_NAME) return true;
+      if (current.name === OUTLINE_NAME || current.name === HOVER_OUTLINE_NAME)
+        return true;
       current = current.parent;
     }
     return false;
@@ -413,12 +449,25 @@ export class ObjectInteractionService {
 
   private select(root: Object3D): void {
     this.selected = root;
-    this.outlineMaterial = this.createOutlineMaterial();
-    this.updateOutlineOffset();
-    const outline = new Group();
-    outline.name = OUTLINE_NAME;
+    this.ensureCanvasSize();
+    // Al seleccionar, el contorno de hover se retira (el de selección lo sustituye).
+    this.removeHoverOutline();
+    this.outlineMaterial = this.createOutlineMaterial(
+      { color: OUTLINE_COLOR },
+      this.outlineOffset,
+      'selection-outline'
+    );
+    this.outline = this.buildOutline(root, this.outlineMaterial, OUTLINE_NAME);
+  }
 
-    // El contorno vive como hijo del objeto: hereda su transformación.
+  /** Grupo de cascos (uno por malla opaca) como hijo de `root`: hereda su transformación. */
+  private buildOutline(
+    root: Object3D,
+    material: MeshBasicMaterial,
+    name: string
+  ): Group {
+    const outline = new Group();
+    outline.name = name;
     root.updateMatrixWorld(true);
     const rootInverse = root.matrixWorld.clone().invert();
     const meshes: Mesh[] = [];
@@ -433,7 +482,21 @@ export class ObjectInteractionService {
     });
     for (const mesh of meshes) {
       ensureOutlineNormals(mesh.geometry);
-      const clone = new Mesh(mesh.geometry, this.outlineMaterial);
+      const groups = outlineGroups(mesh);
+      let geometry = mesh.geometry;
+      if (groups) {
+        // Material mixto: casco solo sobre las partes opacas.
+        geometry = geometry.clone();
+        geometry.clearGroups();
+        const index = mesh.geometry.getIndex();
+        const source = index ? Array.from(index.array) : null;
+        const picked: number[] = [];
+        for (const g of groups)
+          for (let i = g.start; i < g.start + g.count; i++)
+            picked.push(source ? source[i] : i);
+        geometry.setIndex(picked);
+      }
+      const clone = new Mesh(geometry, material);
       clone.raycast = () => undefined;
       clone.matrixAutoUpdate = false;
       clone.matrix.copy(rootInverse).multiply(mesh.matrixWorld);
@@ -442,7 +505,7 @@ export class ObjectInteractionService {
     }
     outline.raycast = () => undefined;
     root.add(outline);
-    this.outline = outline;
+    return outline;
   }
 
   /**
@@ -451,13 +514,22 @@ export class ObjectInteractionService {
    * grosor constante en pantalla, sin escalar la malla (no se desplaza ni engorda
    * en piezas con el origen lejos de su centro).
    */
-  private createOutlineMaterial(): MeshBasicMaterial {
+  private createOutlineMaterial(
+    params: { color: number; opacity?: number },
+    offset: { value: Vector2 },
+    cacheKey: string
+  ): MeshBasicMaterial {
     const material = new MeshBasicMaterial({
-      color: OUTLINE_COLOR,
+      ...params,
+      transparent: params.opacity !== undefined,
+      depthWrite: params.opacity === undefined,
       side: BackSide,
+      polygonOffset: true,
+      polygonOffsetFactor: OUTLINE_POLYGON_OFFSET,
+      polygonOffsetUnits: OUTLINE_POLYGON_OFFSET,
     });
     material.onBeforeCompile = shader => {
-      shader.uniforms['uOutlineOffset'] = this.outlineOffset;
+      shader.uniforms['uOutlineOffset'] = offset;
       shader.vertexShader = shader.vertexShader
         .replace(
           'void main() {',
@@ -471,23 +543,20 @@ void main() {`
 mvPosition.z -= ${OUTLINE_DEPTH_PUSH.toFixed(3)};
 gl_Position = projectionMatrix * mvPosition;
 vec3 outlineViewNormal = normalMatrix * ${OUTLINE_NORMAL_ATTRIBUTE};
-vec2 outlineDir = ( projectionMatrix * vec4( outlineViewNormal, 0.0 ) ).xy;
+vec2 outlineDir = ( projectionMatrix * vec4( outlineViewNormal, 0.0 ) ).xy / uOutlineOffset;
 float outlineLen = length( outlineDir );
 if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOffset * gl_Position.w;`
         );
     };
-    material.customProgramCacheKey = () => 'selection-outline';
+    material.customProgramCacheKey = () => cacheKey;
     return material;
   }
 
-  /** Convierte el grosor en px CSS a NDC según el tamaño actual del canvas. */
-  private updateOutlineOffset(): void {
+  /** Si nadie ha informado del tamaño, lo lee una sola vez del canvas. */
+  private ensureCanvasSize(): void {
+    if (this.canvasSize) return;
     const rect = this.canvas?.getBoundingClientRect?.();
-    if (!rect || rect.width === 0 || rect.height === 0) return;
-    this.outlineOffset.value.set(
-      (2 * OUTLINE_THICKNESS_PX) / rect.width,
-      (2 * OUTLINE_THICKNESS_PX) / rect.height
-    );
+    if (rect) this.setCanvasSize(rect.width, rect.height);
   }
 
   private resolveHover(): void {
@@ -509,38 +578,38 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
   }
 
   private applyHover(target: HoverTarget | null): void {
-    if (this.hovered?.object === target?.object) return;
-    this.restoreEmissive();
+    const same = this.hovered?.object === target?.object;
+    // Mismo objeto: nada que hacer, salvo que haya perdido su contorno al deseleccionarse.
+    if (
+      same &&
+      (!target || this.hoverOutline || target.object === this.selected)
+    )
+      return;
+    this.removeHoverOutline();
     this.hovered = target;
-    if (target) this.highlight(target.object);
-    this.onHoverChange?.(target);
-  }
-
-  private highlight(root: Object3D): void {
-    root.traverse(child => {
-      if (!(child as Mesh).isMesh || this.isOutline(child)) return;
-      const material = (child as Mesh).material;
-      const list = Array.isArray(material) ? material : [material];
-      for (const m of list) {
-        if (!hasEmissive(m) || this.emissiveBackup.has(m)) continue;
-        this.emissiveBackup.set(m, {
-          color: m.emissive.clone(),
-          intensity: m.emissiveIntensity,
-        });
-        m.emissive.set(HOVER_EMISSIVE_COLOR);
-        m.emissiveIntensity = HOVER_EMISSIVE_INTENSITY;
-      }
-    });
-  }
-
-  private restoreEmissive(): void {
-    for (const [material, backup] of this.emissiveBackup) {
-      if (hasEmissive(material)) {
-        material.emissive.copy(backup.color);
-        material.emissiveIntensity = backup.intensity;
-      }
+    // El seleccionado ya tiene su contorno; el hover nunca toca los materiales.
+    if (target && target.object !== this.selected) {
+      this.ensureCanvasSize();
+      this.hoverMaterial = this.createOutlineMaterial(
+        { color: HOVER_OUTLINE_COLOR, opacity: HOVER_OUTLINE_OPACITY },
+        this.hoverOffset,
+        'hover-outline'
+      );
+      this.hoverOutline = this.buildOutline(
+        target.object,
+        this.hoverMaterial,
+        HOVER_OUTLINE_NAME
+      );
     }
-    this.emissiveBackup.clear();
+    if (!same) this.onHoverChange?.(target);
+  }
+
+  private removeHoverOutline(): void {
+    this.hoverOutline?.removeFromParent();
+    this.hoverOutline?.clear();
+    this.hoverOutline = null;
+    this.hoverMaterial?.dispose();
+    this.hoverMaterial = null;
   }
 
   private validateTeleportationPosition(position: Vector3): Vector3 | null {

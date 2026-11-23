@@ -306,6 +306,7 @@ export class SceneService {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(width, height, false);
     this.cameraService.setAspect(height > 0 ? width / height : 1);
+    this.objectInteractionService.setCanvasSize(width, height);
   }
 
   private handleResize(): void {

@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  Box3,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -12,7 +13,10 @@ import {
 } from 'three';
 import {
   ensureOutlineNormals,
+  isTranslucent,
   ObjectInteractionService,
+  OUTLINE_DEPTH_PUSH,
+  OUTLINE_POLYGON_OFFSET,
   OUTLINE_NORMAL_ATTRIBUTE,
   OUTLINE_THICKNESS_PX,
 } from './object-interaction.service';
@@ -273,9 +277,11 @@ describe('ObjectInteractionService', () => {
 
   it('rescales the outline offset when the canvas is resized', async () => {
     await click(100, 100);
-    canvas.getBoundingClientRect = () =>
-      ({ left: 0, top: 0, width: 400, height: 100 }) as DOMRect;
+    const spy = vi.spyOn(canvas, 'getBoundingClientRect');
+    service.setCanvasSize(400, 100);
     service.update(0);
+    service.update(16);
+    expect(spy).not.toHaveBeenCalled(); // sin lecturas de layout por frame
     const material = (furniture.children[0].children[0] as Mesh)
       .material as MeshBasicMaterial;
     const shader = {
@@ -294,24 +300,129 @@ describe('ObjectInteractionService', () => {
     expect(result.object).toBe(furniture);
   });
 
-  it('applies and restores the hover highlight', () => {
+  const snapshot = (m: MeshStandardMaterial) => ({
+    emissive: m.emissive.getHex(),
+    emissiveIntensity: m.emissiveIntensity,
+    color: m.color.getHex(),
+    map: m.map,
+    opacity: m.opacity,
+    transparent: m.transparent,
+  });
+
+  it('shows a thin translucent hover outline and leaves materials untouched', () => {
     const material = furniture.material as MeshStandardMaterial;
-    const original = material.emissive.getHex();
+    material.emissive.setRGB(0.2, 0.1, 0.05);
+    material.emissiveIntensity = 0.7;
+    const before = snapshot(material);
     const changes: (string | null)[] = [];
     service.onHoverChange = t => changes.push(t?.info.name ?? null);
     service.setContext(camera, scene);
 
     service.setHover({ x: 0, y: 0 });
-    expect(material.emissive.getHex()).toBe(original); // throttle: aún no
     service.update(16);
     expect(service.getHovered()?.info.name).toBe('Box');
-    expect(material.emissive.getHex()).not.toBe(original);
+    const hover = furniture.children.find(c => c.name === '__hover-outline')!;
+    expect(hover).toBeDefined();
+    const hull = (hover.children[0] as Mesh).material as MeshBasicMaterial;
+    expect(hull.transparent).toBe(true);
+    expect(hull.opacity).toBeLessThan(1);
+    expect(snapshot(material)).toEqual(before); // ni emisivo, ni color, ni mapa
 
     service.setHover(null);
     service.update(32);
     expect(service.getHovered()).toBeNull();
-    expect(material.emissive.getHex()).toBe(original);
+    expect(furniture.children.some(c => c.name === '__hover-outline')).toBe(
+      false
+    );
+    expect(snapshot(material)).toEqual(before);
     expect(changes).toEqual(['Box', null]);
+  });
+
+  it('keeps materials identical with hover and selection, and swaps outlines', async () => {
+    const material = furniture.material as MeshStandardMaterial;
+    const before = snapshot(material);
+    service.setContext(camera, scene);
+    service.setHover({ x: 0, y: 0 });
+    service.update(16);
+    await click(100, 100);
+    expect(snapshot(material)).toEqual(before);
+    const names = furniture.children.map(c => c.name);
+    expect(names).toContain('__selection-outline');
+    expect(names).not.toContain('__hover-outline'); // el seleccionado no duplica contorno
+    service.clearSelection();
+    service.update(48);
+    expect(furniture.children.some(c => c.name === '__hover-outline')).toBe(
+      true
+    ); // vuelve el hover si el puntero sigue encima
+    expect(snapshot(material)).toEqual(before);
+  });
+
+  it('builds a hull for every opaque mesh and keeps the push small relative to its size', async () => {
+    const root = new Mesh(new BoxGeometry(0.4, 0.4, 0.4));
+    root.material = new MeshStandardMaterial();
+    const child = new Mesh(
+      new BoxGeometry(1, 2, 0.3),
+      new MeshStandardMaterial()
+    );
+    root.add(child);
+    scene.add(root);
+    service.addObject(root, { name: 'Group', description: '' });
+    service.selectObject(root);
+    const outline = root.children.find(c => c.name === '__selection-outline')!;
+    expect(outline.children.length).toBe(2);
+    for (const mesh of [root, child]) {
+      mesh.geometry.computeBoundingBox();
+      const size = mesh.geometry.boundingBox!.getSize(new Vector3());
+      const smallest = Math.min(size.x, size.y, size.z);
+      // empuje < 5 % de la dimensión menor: el casco no queda tras la malla ni la pared
+      expect(Math.abs(OUTLINE_DEPTH_PUSH)).toBeLessThan(smallest * 0.05);
+    }
+    const hullMaterial = (outline.children[0] as Mesh)
+      .material as MeshBasicMaterial;
+    // sesgo hacia la cámara: gana el empate con paredes/suelo pegados al mueble
+    expect(hullMaterial.polygonOffset).toBe(true);
+    expect(OUTLINE_POLYGON_OFFSET).toBeLessThan(0);
+    expect(new Box3().setFromObject(outline).isEmpty()).toBe(false);
+  });
+
+  it('uses a pixel-space stroke direction so thickness is isotropic', async () => {
+    await click(100, 100);
+    const material = (furniture.children[0].children[0] as Mesh)
+      .material as MeshBasicMaterial;
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader: VERTEX_STUB,
+    };
+    material.onBeforeCompile(shader as never, null as never);
+    expect(shader.vertexShader).toContain('/ uOutlineOffset');
+  });
+
+  describe('translucent materials', () => {
+    const glass = () =>
+      new MeshStandardMaterial({ transparent: true, opacity: 0.4 });
+
+    it('treats a mixed opaque+glass array as opaque and outlines only the opaque part', () => {
+      const geometry = new BoxGeometry(1, 1, 1);
+      geometry.clearGroups();
+      geometry.addGroup(0, 6, 0);
+      geometry.addGroup(6, 30, 1);
+      const mixed = new Mesh(geometry, [new MeshStandardMaterial(), glass()]);
+      expect(isTranslucent(mixed)).toBe(false);
+      mixed.position.set(2, 0.5, 0);
+      scene.add(mixed);
+      service.addObject(mixed, { name: 'Mixed', description: '' });
+      service.selectObject(mixed);
+      const outline = mixed.children.find(
+        c => c.name === '__selection-outline'
+      )!;
+      const hull = outline.children[0] as Mesh;
+      expect(hull.geometry.getIndex()!.count).toBe(6); // solo el grupo opaco
+    });
+
+    it('skips a mesh whose materials are all translucent', () => {
+      const all = new Mesh(new BoxGeometry(1, 1, 1), [glass(), glass()]);
+      expect(isTranslucent(all)).toBe(true);
+    });
   });
 
   it('dispose clears outline, hover and objects', async () => {
