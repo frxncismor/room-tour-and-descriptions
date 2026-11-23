@@ -5,6 +5,8 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  NeutralToneMapping,
+  NoToneMapping,
   Object3D,
   Raycaster,
   Scene,
@@ -47,6 +49,8 @@ function createStubRenderer(): SceneRenderer & {
       render: { calls: 0, triangles: 0 },
     } as SceneRenderer['info'],
     shadowMap: { enabled: true } as SceneRenderer['shadowMap'],
+    toneMapping: NoToneMapping,
+    toneMappingExposure: 1,
     setSize: vi.fn(),
     setPixelRatio: vi.fn(),
     dispose: vi.fn(),
@@ -153,6 +157,14 @@ describe('SceneService', () => {
     rafCallbacks.delete(id);
     cb(time);
   };
+
+  it('initialize applies the configured tone mapping and exposure', () => {
+    service.initialize(canvas);
+    expect(renderer.toneMapping).toBe(NeutralToneMapping);
+    expect(renderer.toneMappingExposure).toBe(
+      DEFAULT_SCENE_CONFIG.renderer.exposure
+    );
+  });
 
   it('initialize starts one rAF loop and is idempotent', () => {
     service.initialize(canvas);

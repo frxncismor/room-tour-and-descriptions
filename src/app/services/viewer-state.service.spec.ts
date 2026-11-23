@@ -21,7 +21,7 @@ describe('ViewerStateService', () => {
     state.loadStatus.set('error');
     state.loadProgress.set(80);
     state.error.set({ code: 'x', message: 'y' });
-    state.selected.set({ name: 'a', description: 'b' });
+    state.selected.set({ id: 'sofa', name: 'a', description: 'b' });
     state.hovered.set('sofa');
     state.sceneReady.set(true);
 

@@ -1,6 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import {
   AmbientLight,
+  HemisphereLight,
+  Light,
+  Object3D,
+  PointLight,
   DirectionalLight,
   DoubleSide,
   Color,
@@ -62,6 +66,24 @@ describe('RoomBuilderService', () => {
     expect(spots.every(s => !s.castShadow)).toBe(true);
   });
 
+  it('builds seven lights: ambient, hemisphere, sun, 3 spots, 1 point', () => {
+    const isLight = (c: Object3D) => (c as Light).isLight;
+    expect(scene.children.filter(isLight)).toHaveLength(7);
+    const hemi = scene.children.find(
+      c => (c as HemisphereLight).isHemisphereLight
+    ) as HemisphereLight;
+    expect(hemi.intensity).toBe(lighting.hemisphere.intensity);
+    expect(hemi.groundColor.getHex()).toBe(lighting.hemisphere.groundColor);
+    const points = scene.children.filter(
+      c => (c as PointLight).isPointLight
+    ) as PointLight[];
+    expect(points).toHaveLength(1);
+    expect(points[0].position.toArray()).toEqual(
+      lighting.point[0].position.toArray()
+    );
+    expect(points[0].castShadow).toBe(false);
+  });
+
   it('sizes the directional shadow camera to cover the whole room', () => {
     const sun = scene.children.find(
       c => (c as DirectionalLight).isDirectionalLight
@@ -86,6 +108,7 @@ describe('RoomBuilderService', () => {
     const material = meshes()[0].material as MeshStandardMaterial;
     const spy = vi.spyOn(material, 'dispose');
     service.dispose(scene);
+    expect(scene.children.filter(c => (c as Light).isLight)).toHaveLength(0);
     expect(scene.children).toHaveLength(0);
     expect(spy).toHaveBeenCalled();
   });

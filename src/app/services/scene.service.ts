@@ -1,6 +1,9 @@
 import { Injectable, InjectionToken, NgZone, inject } from '@angular/core';
 import {
+  ACESFilmicToneMapping,
   Group,
+  NeutralToneMapping,
+  NoToneMapping,
   Object3D,
   PerspectiveCamera,
   Scene,
@@ -44,6 +47,12 @@ const TEXTURE_SETS: Record<RoomTextureSet, { label: string }> = {
   rug: RUG_TEXTURES,
 };
 
+const TONE_MAPPING = {
+  neutral: NeutralToneMapping,
+  aces: ACESFilmicToneMapping,
+  none: NoToneMapping,
+} as const;
+
 /** Subconjunto de WebGLRenderer que usa SceneService (permite stubs en tests). */
 export type SceneRenderer = Pick<
   WebGLRenderer,
@@ -53,6 +62,8 @@ export type SceneRenderer = Pick<
   | 'dispose'
   | 'forceContextLoss'
   | 'shadowMap'
+  | 'toneMapping'
+  | 'toneMappingExposure'
   | 'info'
 >;
 
@@ -173,6 +184,9 @@ export class SceneService {
       return;
     }
 
+    this.renderer.toneMapping =
+      TONE_MAPPING[DEFAULT_SCENE_CONFIG.renderer.toneMapping];
+    this.renderer.toneMappingExposure = DEFAULT_SCENE_CONFIG.renderer.exposure;
     this.canvas = canvas;
     this.scene = new Scene();
     this.cameraService.setRoomLimits(DEFAULT_SCENE_CONFIG.room.limits);

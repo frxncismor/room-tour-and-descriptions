@@ -1,6 +1,9 @@
 import { Euler, Object3D, Vector3 } from 'three';
+import type { FurnitureId } from '../i18n/messages';
 
 export interface ObjectInfo {
+  /** Id del mueble (clave de `MODEL_CONFIGURATIONS`). */
+  id: FurnitureId;
   name: string;
   description: string;
   /** Datos secundarios (autoría, origen). */
@@ -11,6 +14,13 @@ export interface SceneConfiguration {
   camera: CameraConfiguration;
   room: RoomConfiguration;
   lighting: LightingConfiguration;
+  renderer: RendererConfiguration;
+}
+
+/** Tone mapping del renderer: `neutral` (PBR Neutral de Khronos), `aces` o ninguno. */
+export interface RendererConfiguration {
+  toneMapping: 'neutral' | 'aces' | 'none';
+  exposure: number;
 }
 
 export interface CameraConfiguration {
@@ -47,7 +57,26 @@ export interface RoomLimits {
 export interface LightingConfiguration {
   ambient: AmbientLightConfig;
   directional: DirectionalLightConfig;
+  /** Luz de rebote: el color de «suelo» calienta la cara inferior del techo. */
+  hemisphere: HemisphereLightConfig;
   spotlights: SpotlightConfig[];
+  /** Luces puntuales sin sombra (lámpara de pie). */
+  point: PointLightConfig[];
+}
+
+export interface HemisphereLightConfig {
+  skyColor: number;
+  groundColor: number;
+  intensity: number;
+}
+
+export interface PointLightConfig {
+  color: number;
+  intensity: number;
+  position: Vector3;
+  distance: number;
+  decay: number;
+  castShadow: boolean;
 }
 
 export interface AmbientLightConfig {

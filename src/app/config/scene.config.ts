@@ -25,7 +25,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
       mainWall: 0xf5e6d3,
       accentWall: 0x6f8f8c,
       secondaryWall: 0xe6d5c9,
-      ceiling: 0xfaf4ec,
+      ceiling: 0xf1e2cf,
     },
     limits: {
       minX: -8,
@@ -36,12 +36,17 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
   },
   lighting: {
     ambient: {
-      color: 0xfff6ec,
-      intensity: 0.7,
+      color: 0xfff1e4,
+      intensity: 0.4,
+    },
+    hemisphere: {
+      skyColor: 0xfff6ea,
+      groundColor: 0xf0d9bd,
+      intensity: 1.2,
     },
     directional: {
-      color: 0xfff1de,
-      intensity: 1.3,
+      color: 0xffe2c4,
+      intensity: 1.15,
       position: new Vector3(5, 6, 5),
       castShadow: true,
       shadowExtent: 10,
@@ -52,7 +57,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
     // Puntos de luz sin sombra: solo dan calidez y realzan la pared de acento.
     spotlights: [
       {
-        color: 0xfff4e6,
+        color: 0xffd9b0,
         intensity: 10,
         position: new Vector3(0, 3.9, 0),
         target: new Vector3(0, 0, 0),
@@ -63,7 +68,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
         castShadow: false,
       },
       {
-        color: 0xffffff,
+        color: 0xffcf9f,
         intensity: 6,
         position: new Vector3(-4, 3.8, -7),
         target: new Vector3(-4, 0, -8),
@@ -74,7 +79,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
         castShadow: false,
       },
       {
-        color: 0xffffff,
+        color: 0xffcf9f,
         intensity: 6,
         position: new Vector3(4, 3.8, -7),
         target: new Vector3(4, 0, -8),
@@ -85,7 +90,19 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
         castShadow: false,
       },
     ],
+    // Lámpara de pie: única luz puntual, sin sombra (2700 K).
+    point: [
+      {
+        color: 0xffb878,
+        intensity: 1.5,
+        position: new Vector3(-7.2, 1.45, -7.2),
+        distance: 6,
+        decay: 2,
+        castShadow: false,
+      },
+    ],
   },
+  renderer: { toneMapping: 'neutral', exposure: 1.1 },
 };
 
 export const MODEL_CONFIGURATIONS = {
@@ -96,7 +113,7 @@ export const MODEL_CONFIGURATIONS = {
     rotation: new Euler(0, Math.PI / 4, 0),
     yOffset: 0,
     materialOverride: { color: 0xa65f3a, roughness: 0.9, metalness: 0 },
-    metadata: FURNITURE_TEXT.sofa,
+    metadata: { id: 'sofa' as const, ...FURNITURE_TEXT.sofa },
   },
   pokerTable: {
     path: 'assets/models/poker_table/scene.gltf',
@@ -104,7 +121,7 @@ export const MODEL_CONFIGURATIONS = {
     scale: 1,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: FURNITURE_TEXT.pokerTable,
+    metadata: { id: 'pokerTable' as const, ...FURNITURE_TEXT.pokerTable },
   },
   bookshelf: {
     path: 'assets/models/bookshelf/scene.gltf',
@@ -112,17 +129,20 @@ export const MODEL_CONFIGURATIONS = {
     scale: 1,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: FURNITURE_TEXT.bookshelf,
+    metadata: { id: 'bookshelf' as const, ...FURNITURE_TEXT.bookshelf },
   },
   landscapePainting: {
     path: 'assets/models/landscape_painting/scene.gltf',
     position: new Vector3(-4, 0, -7.975),
     scale: 2,
     rotation: new Euler(),
-    yOffset: 1.2,
+    yOffset: 1.14,
     castShadow: false,
     mergeMeshes: true,
-    metadata: FURNITURE_TEXT.landscapePainting,
+    metadata: {
+      id: 'landscapePainting' as const,
+      ...FURNITURE_TEXT.landscapePainting,
+    },
   },
   succulent: {
     path: 'assets/models/succulent/scene.gltf',
@@ -132,7 +152,7 @@ export const MODEL_CONFIGURATIONS = {
     yOffset: 0,
     castShadow: false,
     mergeMeshes: true,
-    metadata: FURNITURE_TEXT.succulent,
+    metadata: { id: 'succulent' as const, ...FURNITURE_TEXT.succulent },
   },
 };
 
@@ -144,7 +164,7 @@ export const DECOR_CONFIGURATIONS = {
     position: new Vector3(4, 0, -7.95),
     scale: 2,
     rotation: new Euler(),
-    yOffset: 1.38,
+    yOffset: 1.28,
     castShadow: false,
     mergeMeshes: true,
   },
@@ -173,7 +193,7 @@ export const RUG_TEXTURES: RugTextures = {
   label: 'Rug texture',
   diffuse: 'assets/textures/rug/diff.webp',
   normal: 'assets/textures/rug/nor.webp',
-  tint: 0xffe9d0,
+  tint: 0xffd9b3,
   borderColor: 0xd8c7ad,
   borderWidth: 0.12,
   width: 4.2,

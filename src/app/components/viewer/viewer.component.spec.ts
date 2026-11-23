@@ -98,7 +98,11 @@ describe('ViewerComponent', () => {
   it('closes the panel with Escape and shows it for a selection', async () => {
     const state = TestBed.inject(ViewerStateService);
     const fixture = TestBed.createComponent(ViewerComponent);
-    state.selected.set({ name: FURNITURE_TEXT.sofa.name, description: 'x' });
+    state.selected.set({
+      id: 'sofa',
+      name: FURNITURE_TEXT.sofa.name,
+      description: 'x',
+    });
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[role="dialog"]')).not.toBeNull();
