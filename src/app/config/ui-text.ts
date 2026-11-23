@@ -41,7 +41,7 @@ export const UI_TEXT = {
   list: {
     title: 'Pieces',
     resetView: 'Reset view',
-    resetViewLabel: 'Return to the initial view',
+    resetViewLabel: 'Reset view to the initial position',
   },
   help: {
     title: 'Controls',
