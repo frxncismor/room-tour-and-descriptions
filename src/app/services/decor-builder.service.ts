@@ -7,8 +7,8 @@ import {
   BufferGeometry,
   Color,
   CylinderGeometry,
-  DataTexture,
   DoubleSide,
+  DataTexture,
   Euler,
   Group,
   LinearFilter,
@@ -31,7 +31,11 @@ import {
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Decor3Config } from '../config/decor.config';
+import {
+  Decor3Config,
+  DecorTextilesConfig,
+  DecorThrowConfig,
+} from '../config/decor.config';
 
 /**
  * Texturas ya cargadas por clave de carga (`art:<id>`, `fabric:<id>`). Un valor
@@ -135,6 +139,96 @@ function scaleUv(geometry: BufferGeometry, u: number, v: number): void {
     uv.setXY(i, uv.getX(i) * u, uv.getY(i) * v);
   }
   uv.needsUpdate = true;
+}
+
+/**
+ * Cojín: caja de esquinas y aristas redondeadas (la proyección de siempre de
+ * `RoundedBoxGeometry`, con una malla de pocos segmentos) y cara abombada por
+ * `cushionPuff`. Centrado, grosor en Z. Normales analíticas: sin costuras.
+ */
+export function createCushionGeometry(
+  textiles: Pick<
+    DecorTextilesConfig,
+    'cushionSize' | 'cushionThickness' | 'cushionPuff' | 'cushionCorner'
+  >
+): BufferGeometry {
+  const { cushionSize: size, cushionThickness: thick, cushionPuff } = textiles;
+  const radius = Math.min(textiles.cushionCorner, thick / 2);
+  const half = size / 2;
+  const inner = new Vector3(half - radius, half - radius, thick / 2 - radius);
+  const geometry = new BoxGeometry(size, size, thick, 8, 8, 4);
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const point = new Vector3();
+  const clamped = new Vector3();
+  const direction = new Vector3();
+  for (let i = 0; i < position.count; i++) {
+    point.fromBufferAttribute(position, i);
+    clamped.set(
+      Math.max(-inner.x, Math.min(inner.x, point.x)),
+      Math.max(-inner.y, Math.min(inner.y, point.y)),
+      Math.max(-inner.z, Math.min(inner.z, point.z))
+    );
+    direction.subVectors(point, clamped).normalize();
+    const xn = point.x / half;
+    const yn = point.y / half;
+    const sign = Math.sign(point.z);
+    const bulge = (1 - xn * xn) * (1 - yn * yn);
+    // Abombado: la superficie z = f(x, y) tiene normal ∝ (-fx, -fy, 1).
+    const slope = (cushionPuff * sign) / half;
+    const weight = Math.abs(direction.z);
+    const nx = direction.x + weight * slope * 2 * xn * (1 - yn * yn);
+    const ny = direction.y + weight * slope * 2 * yn * (1 - xn * xn);
+    const length = Math.hypot(nx, ny, direction.z);
+    position.setXYZ(
+      i,
+      clamped.x + direction.x * radius,
+      clamped.y + direction.y * radius,
+      clamped.z + direction.z * radius + sign * cushionPuff * bulge
+    );
+    normal.setXYZ(i, nx / length, ny / length, direction.z / length);
+  }
+  return geometry;
+}
+
+/**
+ * Manta: losa de tela con grosor (dos capas y borde), pliegue ancho y suave,
+ * un doblez a lo largo y caída de los bordes largos. En el plano XY, grosor en
+ * Z; la cara superior es +Z.
+ */
+export function createThrowGeometry(
+  blanket: DecorThrowConfig,
+  tileSize: number
+): BufferGeometry {
+  const geometry = new BoxGeometry(
+    blanket.width,
+    blanket.depth,
+    blanket.thickness,
+    16,
+    14,
+    1
+  );
+  const position = geometry.getAttribute('position');
+  const halfW = blanket.width / 2;
+  const halfD = blanket.depth / 2;
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const wave =
+      blanket.foldAmplitude *
+      Math.sin((2 * Math.PI * (x + halfW)) / blanket.foldPeriod);
+    // Doblez a lo largo: una cresta suave donde la tela se dobla sobre sí misma.
+    const crease = blanket.creaseHeight * Math.exp(-(((y + 0.12) / 0.07) ** 2));
+    // Los bordes largos (y = ±depth/2) caen como sobre el brazo o el puf.
+    const edge = Math.max(0, Math.abs(y) / halfD - 0.55) / 0.45;
+    position.setZ(
+      i,
+      position.getZ(i) + wave + crease - blanket.drape * edge * edge
+    );
+  }
+  geometry.computeVertexNormals();
+  scaleUv(geometry, blanket.width / tileSize, blanket.depth / tileSize);
+  return geometry;
 }
 
 /** Cilindro con el eje en Z, centrado (placas y brazos de los apliques, barra). */
@@ -268,6 +362,16 @@ export class DecorBuilderService {
         ...(side === undefined ? {} : { side }),
       });
       result.normalScale = new Vector2(normalScale, normalScale);
+      return result;
+    };
+
+    // El lino de la difusa (nivel 20–95 %) oscurece el tinte: se compensa para
+    // que crema y arena se lean como tales.
+    const brighten = (
+      result: MeshStandardMaterial,
+      factor: number
+    ): MeshStandardMaterial => {
+      result.color.multiplyScalar(factor);
       return result;
     };
 
@@ -626,33 +730,21 @@ export class DecorBuilderService {
     const cushionKeys = textiles.cushions.map(cushion =>
       markAsSofaSilhouette(
         material(`textile:${cushion.id}`, () =>
-          linenMaterial(cushion.color, textiles.roughness, textiles.normalScale)
+          brighten(
+            linenMaterial(
+              cushion.color,
+              textiles.roughness,
+              textiles.normalScale
+            ),
+            textiles.brightness
+          )
         )
       )
     );
     textiles.cushions.forEach((cushion, index) => {
-      const size = textiles.cushionSize;
-      const geometry = new BoxGeometry(
-        size,
-        size,
-        textiles.cushionThickness,
-        10,
-        10,
-        3
-      );
-      const position = geometry.getAttribute('position');
-      const half = size / 2;
-      for (let i = 0; i < position.count; i++) {
-        const x = position.getX(i) / half;
-        const y = position.getY(i) / half;
-        const z = position.getZ(i);
-        const bulge = (1 - x * x) * (1 - y * y);
-        position.setZ(i, z + Math.sign(z) * textiles.cushionPuff * bulge);
-      }
-      geometry.computeVertexNormals();
       collector.add(
         cushionKeys[index],
-        geometry,
+        createCushionGeometry(textiles),
         matrixOf(cushion.position, cushion.rotation),
         collector.piece(cushion.id, 'cushion')
       );
@@ -661,37 +753,20 @@ export class DecorBuilderService {
       const blanket = textiles.throw;
       const throwKey = markAsSofaSilhouette(
         material('textile:throw', () =>
-          linenMaterial(
-            blanket.color,
-            textiles.roughness,
-            textiles.normalScale,
-            DoubleSide
+          brighten(
+            linenMaterial(
+              blanket.color,
+              textiles.roughness,
+              textiles.normalScale
+            ),
+            textiles.brightness
           )
         )
       );
-      const geometry = new PlaneGeometry(blanket.width, blanket.depth, 24, 16);
-      const position = geometry.getAttribute('position');
-      const halfW = blanket.width / 2;
-      for (let i = 0; i < position.count; i++) {
-        const x = position.getX(i);
-        const y = position.getY(i);
-        const fold =
-          blanket.foldAmplitude *
-          Math.sin((2 * Math.PI * (x + halfW)) / blanket.foldPeriod);
-        // Los bordes largos (y = ±depth/2) caen como sobre el brazo o el puf.
-        const edge = Math.max(0, Math.abs(y) / (blanket.depth / 2) - 0.6) / 0.4;
-        position.setZ(i, fold - blanket.drape * edge * edge);
-      }
-      geometry.computeVertexNormals();
-      scaleUv(
-        geometry,
-        blanket.width / textiles.tileSize,
-        blanket.depth / textiles.tileSize
-      );
-      // El plano mira a +Z: se tumba para que su normal apunte arriba.
+      // La losa mira a +Z: se tumba para que su cara superior apunte arriba.
       collector.add(
         throwKey,
-        geometry,
+        createThrowGeometry(blanket, textiles.tileSize),
         matrixOf(
           blanket.position,
           new Euler(-Math.PI / 2, blanket.rotationY, 0, 'YXZ')
