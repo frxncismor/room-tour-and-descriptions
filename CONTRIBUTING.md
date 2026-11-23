@@ -6,6 +6,7 @@
 
 - Node.js 22 or higher (LTS)
 - npm
+- A browser with WebGL to run the viewer (unit tests do not need one)
 
 ### Installation
 
@@ -21,16 +22,18 @@ npm ci
 npm start
 ```
 
+The app is served at <http://localhost:4200>.
+
 #### Linting
 
 ```bash
-# Run linting
+# Run ESLint (flat config in eslint.config.js)
 npm run lint
 
 # Fix linting issues automatically
 npm run lint:fix
 
-# Run comprehensive lint check
+# ESLint + Prettier check (the same command CI runs)
 npm run lint:check
 ```
 
@@ -49,19 +52,26 @@ npx prettier --check "src/**/*.{ts,html,scss}"
 #### Testing
 
 ```bash
-# Run unit tests (headless, single run)
+# Run unit tests (single run, Vitest + jsdom, no browser needed)
 npm test
 
-# Interactive watch mode
+# Watch mode
 npm run test:watch
+
+# A single spec file
+npm test -- --include "**/camera.service.spec.ts"
 ```
 
 #### Build
 
 ```bash
-# Build for production
+# Build for production (output in dist/interior-viewer/browser)
 npm run build
 ```
+
+The production build enforces bundle budgets (see `angular.json`); keep the initial bundle under them.
+
+Before opening a pull request, run `npm run lint:check && npm run build && npm test`. The same three steps run in GitHub Actions on every push and pull request.
 
 ## Code Quality
 
@@ -71,7 +81,7 @@ This project uses several tools to maintain code quality:
 
 - Automatically runs linting on staged files before commit
 - Configured in `package.json` under `lint-staged`
-- Runs Angular linting and Prettier formatting
+- Runs ESLint (with `--fix`) and Prettier on staged files
 
 ### Prettier
 
@@ -82,7 +92,7 @@ This project uses several tools to maintain code quality:
 ### ESLint
 
 - JavaScript/TypeScript linting
-- Configuration in `.eslintrc.json`
+- Flat configuration in `eslint.config.js` (`typescript-eslint` + `angular-eslint`)
 - Integrates with Angular linting
 
 ### Husky
@@ -97,8 +107,8 @@ This project uses several tools to maintain code quality:
 
 Before each commit, the following checks run automatically:
 
-1. Angular linting on staged TypeScript, HTML, and SCSS files
-2. Prettier formatting on staged files
+1. ESLint on staged TypeScript and HTML files
+2. Prettier formatting on staged TypeScript, HTML, SCSS, JSON and Markdown files
 3. If any check fails, the commit is blocked
 
 ### Commit Message Format
@@ -131,8 +141,12 @@ refactor(services): apply SOLID principles
 
 ### Angular
 
-- Use standalone components
+- Use standalone components and signals; the app is zoneless, so do not rely on Zone.js
+- Run per-frame work from the single render loop in `SceneService`, never from extra `requestAnimationFrame` callbacks
+- Dispose of Three.js geometries, materials and textures you create
+- Keep user-facing text in `src/app/config/ui-text.ts` (English)
 - Follow Angular style guide
+- Add or update a Vitest spec next to the code you change
 - Use dependency injection
 - Implement OnDestroy for cleanup
 
@@ -150,7 +164,7 @@ refactor(services): apply SOLID principles
 If lint-staged fails:
 
 1. Check if all dependencies are installed: `npm install`
-2. Run linting manually: `npm run lint`
+2. Run linting manually: `npm run lint:check`
 3. Fix formatting issues: `npm run format`
 
 ### Pre-commit Hook Issues

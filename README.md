@@ -1,149 +1,182 @@
-# 🏠 3D Room Tour & Descriptions
+# 3D Room Tour & Descriptions
 
-> **An interactive 3D room viewer built with Angular 17 and Three.js — explore a virtual room, click on furniture, and read object descriptions through an immersive browser experience.**
+An interactive 3D living room that runs entirely in the browser. Walk around by clicking the floor, click or tap any piece of furniture to zoom in on it and read about it, and use the keyboard-friendly furniture list if you prefer not to use a pointer.
 
-[![Angular](https://img.shields.io/badge/Angular-17-DD0031?logo=angular&logoColor=white)](https://angular.io/)
-[![Three.js](https://img.shields.io/badge/Three.js-0.162-000000?logo=threedotjs&logoColor=white)](https://threejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Angular Material](https://img.shields.io/badge/Angular%20Material-17-FF4081?logo=angular&logoColor=white)](https://material.angular.io/)
+[![Angular](https://img.shields.io/badge/Angular-21-DD0031?logo=angular&logoColor=white)](https://angular.dev/)
+[![Three.js](https://img.shields.io/badge/Three.js-0.187-000000?logo=threedotjs&logoColor=white)](https://threejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vitest](https://img.shields.io/badge/tested%20with-Vitest%204-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-000000?logo=vercel)](https://room-tour-and-descriptions.vercel.app/)
 
----
+**[Open the live demo](https://room-tour-and-descriptions.vercel.app/)**
 
-## 🌐 Live Demo
+![A short tour: clicking the floor moves the camera, clicking the sofa zooms in and shows its description](docs/media/tour.gif)
 
-**[room-tour-and-descriptions.vercel.app](https://room-tour-and-descriptions.vercel.app/)**
+|                                             Desktop                                              |                                        Mobile                                        |
+| :----------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------: |
+|              ![Desktop view of the room](docs/media/desktop-overview-1280x800.png)               |          ![Mobile view of the room](docs/media/mobile-overview-390x844.png)          |
+| ![A selected piece of furniture with its description](docs/media/desktop-furniture-1280x800.png) | ![A selected piece of furniture on a phone](docs/media/mobile-furniture-390x844.png) |
 
----
+## Table of contents
 
-## 📋 Table of Contents
+- [Features](#features)
+- [Controls](#controls)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Scripts](#scripts)
+- [Architecture](#architecture)
+- [Technical decisions](#technical-decisions)
+- [Performance](#performance)
+- [3D model credits and licenses](#3d-model-credits-and-licenses)
+- [Contributing](#contributing)
+- [License](#license)
+- [Author](#author)
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Technology Stack](#-technology-stack)
-- [Architecture](#-architecture)
-- [Getting Started](#-getting-started)
-- [Usage](#-usage)
-- [Code Quality](#-code-quality)
+## Features
 
----
+- **Walk the room**: click or tap the floor and the camera glides there, limited to the room bounds.
+- **Inspect furniture**: click or tap a piece and the camera moves close to it, the piece gets an outline and a description panel opens. Hovering shows which pieces are clickable.
+- **Orbit, pan and zoom** with mouse, touch (one-finger rotate, two-finger pan and pinch) or the arrow keys.
+- **Accessible alternative**: a list of the furniture (plus an _Initial view_ button) works with the keyboard and screen readers; the description panel is announced as a dialog and closes with `Esc`.
+- **Responsive**: the initial framing adapts to portrait screens so all three pieces stay visible on a phone.
+- **Realistic lighting**: soft shadows, matte walls and tuned material for the sofa.
+- **Loading and error states**: a progress screen while models download, and clear messages (with a retry button) if WebGL is unavailable, the context is lost or a model fails to load.
+- **Light assets**: the three models were reduced from about 51 MB to about 2.4 MB (see [Performance](#performance)).
 
-## 🎯 Overview
+## Controls
 
-A modern, interactive 3D room viewer built with Angular 17 and Three.js. Users can explore a virtual room, interact with furniture objects, and view detailed descriptions through an immersive 3D experience. The project demonstrates advanced 3D web rendering, clean Angular architecture, and production-grade code quality tooling.
+| Input                                       | Action                     |
+| ------------------------------------------- | -------------------------- |
+| Left mouse drag / one finger                | Look around                |
+| Right mouse drag / two fingers / arrow keys | Slide sideways             |
+| Wheel / pinch                               | Zoom                       |
+| Click or tap the floor                      | Walk to that point         |
+| Click or tap a piece of furniture           | Zoom in and read about it  |
+| `Esc`                                       | Close the details panel    |
+| `Home`                                      | Return to the initial view |
 
----
+The **? Help** button in the corner reopens these instructions at any time.
 
-## ✨ Features
+## Tech stack
 
-- **Interactive 3D Environment** — Navigate through a beautifully designed virtual room
-- **Object Interaction** — Click on furniture to view detailed descriptions
-- **Smooth Navigation** — Orbit controls with teleportation system for seamless movement
-- **Glassmorphism UI** — Clean, modern interface with glass-effect overlays
-- **Real-time Rendering** — High-quality 3D graphics with shadows and dynamic lighting
-- **Responsive Design** — Works across different screen sizes and devices
+| Area            | Technology                                                                          |
+| --------------- | ----------------------------------------------------------------------------------- |
+| Framework       | Angular 21 (standalone components, signals, zoneless change detection)              |
+| 3D              | Three.js 0.187 (`three/addons` for `GLTFLoader`, `OrbitControls`, `MeshoptDecoder`) |
+| Language        | TypeScript 5.9 (strict)                                                             |
+| Styling         | SCSS with CSS custom properties; no UI component library                            |
+| Unit tests      | Vitest 4 with jsdom, through the Angular `@angular/build:unit-test` builder         |
+| Lint and format | ESLint 9 (flat config, `angular-eslint`, `typescript-eslint`), Prettier             |
+| Git hooks       | Husky + lint-staged                                                                 |
+| CI              | GitHub Actions (lint, build, test on Node 22)                                       |
+| Hosting         | Vercel (deploys on every push)                                                      |
 
----
+## Getting started
 
-## 🚀 Technology Stack
-
-### Frontend
-| Technology | Purpose |
-|------------|---------|
-| **Angular 17** | SPA framework with standalone components |
-| **TypeScript** | Full type safety |
-| **Three.js 0.162** | 3D rendering engine |
-| **Angular Material 17** | UI components (dialogs, overlays) |
-| **SCSS** | Component styling |
-
-### Development Tools
-| Tool | Purpose |
-|------|---------|
-| **ESLint** | Code linting with Angular-specific rules |
-| **Prettier** | Consistent code formatting |
-| **Husky** | Git hooks for pre-commit quality checks |
-| **Lint-Staged** | Run linters only on staged files |
-| **EditorConfig** | Consistent editor settings across IDEs |
-
----
-
-## 🏗️ Architecture
-
-The project follows SOLID principles with a clean service-oriented architecture:
-
-```
-src/app/
-├── components/
-│   └── viewer/           # Main 3D viewer component
-├── services/
-│   ├── scene.service.ts          # 3D scene, camera, and lighting
-│   ├── model-loader.service.ts   # 3D model loading and management
-│   ├── camera-controller.service.ts  # Camera movement and teleportation
-│   └── object-interaction.service.ts # Object selection and info display
-└── app.config.ts
-```
-
-### Key Services
-- **SceneService** — Manages the Three.js scene, camera, renderer, and lighting setup
-- **ModelLoaderService** — Handles async loading of GLTF/GLB 3D models
-- **CameraControllerService** — Orbit controls and floor-click teleportation
-- **ObjectInteractionService** — Raycasting for object selection and description display
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 18+
-- npm or yarn
-
-### Installation
+Requirements: Node.js 22 or newer and npm.
 
 ```bash
 git clone https://github.com/frxncismor/room-tour-and-descriptions.git
 cd room-tour-and-descriptions
-npm install
+npm ci
 npm start
 ```
 
-Open `http://localhost:4200` in your browser.
+Open <http://localhost:4200>. The viewer needs a browser with WebGL enabled.
 
-### Build for Production
+## Scripts
 
-```bash
-npm run build
+| Command              | What it does                                         |
+| -------------------- | ---------------------------------------------------- |
+| `npm start`          | Dev server with live reload on port 4200             |
+| `npm run build`      | Production build into `dist/interior-viewer/browser` |
+| `npm run watch`      | Development build in watch mode                      |
+| `npm test`           | Unit tests, single headless run (Vitest + jsdom)     |
+| `npm run test:watch` | Unit tests in watch mode                             |
+| `npm run lint`       | ESLint through the Angular CLI                       |
+| `npm run lint:fix`   | ESLint with automatic fixes                          |
+| `npm run lint:check` | ESLint plus a Prettier check (what CI runs)          |
+| `npm run format`     | Format `src/` with Prettier                          |
+
+## Architecture
+
+```
+AppComponent
+└─ ViewerComponent            owns the <canvas> and wires the services
+   ├─ LoadingScreenComponent  progress bar while the models download
+   ├─ ErrorOverlayComponent   WebGL unavailable / context lost
+   ├─ ErrorBannerComponent    a model failed to load, with retry
+   ├─ HelpPanelComponent      controls for mouse, touch and keyboard
+   ├─ DescriptionPanelComponent  furniture details (dialog, Esc to close)
+   └─ ObjectListComponent     accessible list of furniture + initial view
+
+Services (providedIn root, idempotent dispose)
+  SceneService             renderer, render loop, resize, teardown; coordinates the rest
+  CameraService            camera + OrbitControls, bounds, animated teleport and focus, reset
+  ObjectInteractionService raycasting, hover, selection and outline (no loop of its own)
+  ModelLoaderService       GLTFLoader + MeshoptDecoder, aggregated progress, floor placement
+  RoomBuilderService       floor, walls, ceiling and lights from configuration
+  ViewerStateService       signals: load progress/status, error, selected, hovered
+
+config/   scene.config.ts (room, lights, models)  ·  ui-text.ts (all user-facing text)
 ```
 
----
+Source layout:
 
-## 🎮 Usage
+```
+src/app/
+├── components/   UI components
+├── services/     3D and state services, each with its spec
+├── config/       scene configuration and UI text
+└── interfaces/   shared types
+src/assets/
+├── models/       optimized glTF models (sofa, poker_table, bookshelf)
+└── brand/        favicon, touch icon and social preview image
+docs/             assets pipeline, screenshots and baseline captures
+```
 
-### Navigation Controls
-| Input | Action |
-|-------|--------|
-| **Mouse Drag** | Rotate camera around the scene |
-| **Click on Floor** | Teleport to that location |
-| **Click on Objects** | View object name and description |
-| **Scroll** | Zoom in / out |
+## Technical decisions
 
-### Interactive Objects
-- **Modern Sofa** — Contemporary living room sofa
-- **Poker Table** — Professional gaming table
-- **Bookshelf** — Modern storage unit for books and decoration
+- **Zoneless Angular with signals.** The scene is driven by a single `requestAnimationFrame` loop that runs outside Angular, so a frame never triggers change detection; only meaningful state changes (selection, progress, errors) go through signals.
+- **One render loop.** `SceneService` owns the loop and calls `update` on the camera and interaction services each frame. Services never schedule their own animation frames.
+- **Selection by outline.** The selected piece gets cloned back-face meshes as an outline that is disposed on deselection, so repeated clicks never leak GPU resources.
+- **Camera moves to what you click.** Floor clicks teleport with an eased animation clamped to the room bounds; furniture clicks frame the piece.
+- **Assets optimized in place.** WebP textures and meshopt-compressed geometry, without KTX2 (no extra transcoder to ship). The originals are kept in git history. See [docs/assets-pipeline.md](docs/assets-pipeline.md) for how to regenerate them.
+- **No UI component library.** The interface is a few small custom components, which keeps the bundle small and the visuals consistent.
+- **English UI, centralized text.** All user-facing strings live in `src/app/config/ui-text.ts`.
 
----
+## Performance
 
-## 🛠️ Code Quality
+Measured on a production build (`npm run build`):
 
-This project enforces code quality at every stage:
+| Metric                    | Value                                |
+| ------------------------- | ------------------------------------ |
+| Initial JavaScript bundle | 843 kB raw, about 188 kB transferred |
+| 3D models (all three)     | about 2.4 MB, down from about 51 MB  |
 
-- **Pre-commit hooks** via Husky + Lint-Staged run ESLint and Prettier before every commit
-- **SOLID principles** applied throughout the service architecture
-- **Strict TypeScript** for end-to-end type safety
-- **Angular standalone components** for optimal tree-shaking and modularity
+Per-model sizes before and after are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
 
----
+## 3D model credits and licenses
 
-## 🤝 Contact
+The models come from [Sketchfab](https://sketchfab.com/) and are used under the Sketchfab Standard license. Credit to their authors:
 
-Built by [Francisco Morales](https://frxncismor.dev) · [GitHub](https://github.com/frxncismor)
+| Model                                 | Author       | Source                                                                                                            |
+| ------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| SOFA SET                              | FREEDomplant | [Sketchfab](https://sketchfab.com/3d-models/sofa-set-2fc4feb7793144f5ae04901082d4d3d2)                            |
+| Poker Board Game Table - Downloadable | Lília Mara   | [Sketchfab](https://sketchfab.com/3d-models/poker-board-game-table-downloadable-c68dbd76122840b59c8783f623fde050) |
+| BookShelf                             | Twpic        | [Sketchfab](https://sketchfab.com/3d-models/bookshelf-ed697dcb7e634c1e92ed0192364588e6)                           |
+
+License terms: <https://sketchfab.com/licenses>. The models were resized, texture-compressed and quantized for the web; the geometry and design are the authors' work.
+
+## Contributing
+
+Setup, commands, code standards and the commit format are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+The source code is released under the [MIT License](LICENSE). The 3D models keep their own licenses (see above).
+
+## Author
+
+Built by **Francisco Moreno** · [GitHub](https://github.com/frxncismor)
