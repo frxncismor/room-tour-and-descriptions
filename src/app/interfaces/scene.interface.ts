@@ -78,7 +78,18 @@ export interface ModelConfiguration {
   scale: number;
   rotation: Euler;
   metadata: ObjectInfo;
+  /** Elevación extra sobre el suelo de la base del modelo (m). Por defecto 0. */
+  yOffset?: number;
 }
+
+/** Punto en coordenadas de cliente (px), p. ej. un `PointerEvent`. */
+export interface ScreenPoint {
+  clientX: number;
+  clientY: number;
+}
+
+/** Progreso de descarga de un modelo (bytes). `total` es 0 si se desconoce. */
+export type LoadProgressCallback = (loaded: number, total: number) => void;
 
 export interface InteractionResult {
   objectInfo: ObjectInfo | null;
