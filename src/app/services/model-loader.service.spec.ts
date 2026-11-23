@@ -6,6 +6,7 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  Raycaster,
   MeshStandardMaterial,
   Texture,
   Vector3,
@@ -16,6 +17,7 @@ import {
   ModelLoaderService,
   TEXTURE_ANISOTROPY,
   applyMaterialOverride,
+  disableRaycast,
   disposeObject3D,
 } from './model-loader.service';
 
@@ -172,15 +174,29 @@ describe('applyMaterialOverride', () => {
 });
 
 describe('MODEL_CONFIGURATIONS grounding', () => {
-  it('places every model base on the floor (yOffset 0)', async () => {
+  it('places every model base at its yOffset (the floor unless hung)', async () => {
     const { MODEL_CONFIGURATIONS } = await import('../config/scene.config');
     const service = TestBed.inject(ModelLoaderService);
     vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockImplementation((() =>
       Promise.resolve({ scene: fakeScene() })) as never);
     for (const cfg of Object.values(MODEL_CONFIGURATIONS)) {
       const model = await service.loadModel(cfg);
-      expect(new Box3().setFromObject(model).min.y).toBeCloseTo(0, 2);
+      expect(new Box3().setFromObject(model).min.y).toBeCloseTo(
+        cfg.yOffset ?? 0,
+        2
+      );
     }
     vi.restoreAllMocks();
+  });
+});
+
+describe('disableRaycast', () => {
+  it('makes every mesh of the tree invisible to raycasters', () => {
+    const group = fakeScene();
+    const ray = new Raycaster(new Vector3(10, 5, 20), new Vector3(0, 0, -1));
+    group.updateMatrixWorld(true);
+    expect(ray.intersectObject(group, true).length).toBeGreaterThan(0);
+    disableRaycast(group);
+    expect(ray.intersectObject(group, true)).toEqual([]);
   });
 });

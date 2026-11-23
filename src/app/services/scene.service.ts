@@ -1,8 +1,17 @@
 import { Injectable, InjectionToken, NgZone, inject } from '@angular/core';
-import { Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import {
+  Group,
+  Object3D,
+  PerspectiveCamera,
+  Scene,
+  WebGLRenderer,
+} from 'three';
+import {
+  DECOR_CONFIGURATIONS,
   DEFAULT_SCENE_CONFIG,
+  FLOOR_TEXTURES,
   MODEL_CONFIGURATIONS,
+  RUG_TEXTURES,
 } from '../config/scene.config';
 import {
   ModelConfiguration,
@@ -10,18 +19,29 @@ import {
   ScreenPoint,
 } from '../interfaces/scene.interface';
 import { CameraService } from './camera.service';
-import { ModelLoaderService, disposeObject3D } from './model-loader.service';
+import {
+  ModelLoaderService,
+  disableRaycast,
+  disposeObject3D,
+} from './model-loader.service';
 import {
   ObjectInteractionService,
   PointerLike,
 } from './object-interaction.service';
-import { RoomBuilderService } from './room-builder.service';
+import { RoomBuilderService, RoomTextureSet } from './room-builder.service';
 import { ViewerStateService } from './viewer-state.service';
 
 /** Global de Angular: el build de producción lo fija a false y elimina el bloque. */
 declare const ngDevMode: boolean | undefined;
 
 export type ModelId = keyof typeof MODEL_CONFIGURATIONS;
+type DecorId = keyof typeof DECOR_CONFIGURATIONS;
+
+/** Texturas de la sala que cuentan en el progreso (clave `tex:<set>`). */
+const TEXTURE_SETS: Record<RoomTextureSet, { label: string }> = {
+  floor: FLOOR_TEXTURES,
+  rug: RUG_TEXTURES,
+};
 
 /** Subconjunto de WebGLRenderer que usa SceneService (permite stubs en tests). */
 export type SceneRenderer = Pick<
@@ -90,9 +110,13 @@ export class SceneService {
     { object: Object3D; info: ObjectInfo }
   >();
   private readonly objectIds = new Map<Object3D, ModelId>();
-  private readonly modelProgress = new Map<ModelId, number>();
-  private readonly failed = new Map<ModelId, unknown>();
-  private readonly pending = new Map<ModelId, Promise<void>>();
+  private decorGroup: Group | null = null;
+  private readonly decorLoaded = new Set<DecorId>();
+  private readonly texturesLoaded = new Set<RoomTextureSet>();
+  /** Progreso 0-1 por clave: `<modelo>`, `decor:<id>` o `tex:<set>`. */
+  private readonly modelProgress = new Map<string, number>();
+  private readonly failed = new Map<string, unknown>();
+  private readonly pending = new Map<string, Promise<void>>();
 
   private readonly zone = inject(NgZone);
   private readonly rendererFactory = inject(RENDERER_FACTORY);
@@ -198,6 +222,9 @@ export class SceneService {
       this.scene.clear();
     }
     this.models.clear();
+    this.decorGroup = null;
+    this.decorLoaded.clear();
+    this.texturesLoaded.clear();
     this.objectIds.clear();
     this.modelProgress.clear();
     this.failed.clear();
@@ -338,7 +365,44 @@ export class SceneService {
     return Object.keys(MODEL_CONFIGURATIONS) as ModelId[];
   }
 
-  /** Carga todos los modelos; los fallos van a `ViewerStateService.error`. */
+  private decorIds(): DecorId[] {
+    return Object.keys(DECOR_CONFIGURATIONS) as DecorId[];
+  }
+
+  private textureSets(): RoomTextureSet[] {
+    return Object.keys(TEXTURE_SETS) as RoomTextureSet[];
+  }
+
+  /** Todas las piezas que cuentan en la carga: modelos, decoración y texturas. */
+  private allKeys(): string[] {
+    return [
+      ...this.modelIds(),
+      ...this.decorIds().map(id => `decor:${id}`),
+      ...this.textureSets().map(set => `tex:${set}`),
+    ];
+  }
+
+  private isLoaded(key: string): boolean {
+    if (key.startsWith('decor:')) {
+      return this.decorLoaded.has(key.slice(6) as DecorId);
+    }
+    if (key.startsWith('tex:')) {
+      return this.texturesLoaded.has(key.slice(4) as RoomTextureSet);
+    }
+    return this.models.has(key as ModelId);
+  }
+
+  private label(key: string): string {
+    if (key.startsWith('decor:')) {
+      return DECOR_CONFIGURATIONS[key.slice(6) as DecorId].label;
+    }
+    if (key.startsWith('tex:')) {
+      return TEXTURE_SETS[key.slice(4) as RoomTextureSet].label;
+    }
+    return MODEL_CONFIGURATIONS[key as ModelId].metadata.name;
+  }
+
+  /** Carga todo: modelos, decoración y texturas; los fallos van a `ViewerStateService.error`. */
   async loadAll(): Promise<void> {
     if (!this.isInitialized) {
       console.warn('Scene not initialized');
@@ -347,19 +411,31 @@ export class SceneService {
     this.state.loadStatus.set('loading');
     this.state.loadProgress.set(0);
     this.clearLoadError();
-    await this.loadModels(this.modelIds());
+    await this.load(this.allKeys());
   }
 
-  /** Reintenta los modelos que fallaron (o solo `id`). */
+  /** Carga las piezas decorativas no interactivas (sin ficha ni selección). */
+  async loadDecor(keys?: string[]): Promise<void> {
+    const wanted = keys ?? this.decorIds().map(id => `decor:${id}`);
+    await Promise.allSettled(wanted.map(key => this.loadDecorOne(key)));
+  }
+
+  /** Carga las texturas del suelo y la alfombra. */
+  async loadTextures(keys?: string[]): Promise<void> {
+    const wanted = keys ?? this.textureSets().map(set => `tex:${set}`);
+    await Promise.allSettled(wanted.map(key => this.loadTextureOne(key)));
+  }
+
+  /** Reintenta lo que falló (o solo `id`: un modelo o una clave `decor:`/`tex:`). */
   async retryLoad(id?: string): Promise<void> {
     if (!this.isInitialized) return;
-    const ids = id
-      ? this.modelIds().filter(m => m === id)
-      : this.modelIds().filter(m => !this.models.has(m));
-    if (ids.length === 0) return;
+    const keys = id
+      ? this.allKeys().filter(k => k === id)
+      : this.allKeys().filter(k => !this.isLoaded(k));
+    if (keys.length === 0) return;
     this.state.loadStatus.set('loading');
     this.clearLoadError();
-    await this.loadModels(ids);
+    await this.load(keys);
   }
 
   /** Solo borra errores de carga: un `render-failed` o de WebGL sigue vigente. */
@@ -369,22 +445,27 @@ export class SceneService {
     }
   }
 
-  private async loadModels(ids: ModelId[]): Promise<void> {
+  private async load(keys: string[]): Promise<void> {
     const generation = this.generation;
-    ids.forEach(id => {
-      this.failed.delete(id);
-      if (!this.models.has(id)) this.modelProgress.set(id, 0);
+    keys.forEach(key => {
+      this.failed.delete(key);
+      if (!this.isLoaded(key)) this.modelProgress.set(key, 0);
     });
     this.publishProgress();
 
-    await Promise.allSettled(ids.map(id => this.loadOne(id)));
+    const decor = keys.filter(k => k.startsWith('decor:'));
+    const textures = keys.filter(k => k.startsWith('tex:'));
+    const models = keys.filter(k => !k.includes(':'));
+    await Promise.allSettled([
+      ...models.map(key => this.loadOne(key as ModelId)),
+      this.loadDecor(decor),
+      this.loadTextures(textures),
+    ]);
     if (generation !== this.generation) return;
 
     this.publishProgress();
     if (this.failed.size > 0) {
-      const names = [...this.failed.keys()].map(
-        id => MODEL_CONFIGURATIONS[id].metadata.name
-      );
+      const names = [...this.failed.keys()].map(key => this.label(key));
       this.state.loadStatus.set('error');
       this.state.error.set({
         code: 'model-load-failed',
@@ -398,53 +479,105 @@ export class SceneService {
     this.canvas?.setAttribute('data-ready', 'true');
   }
 
-  /** Carga un modelo una sola vez (llamadas concurrentes comparten la promesa). */
-  private loadOne(id: ModelId): Promise<void> {
-    if (this.models.has(id)) return Promise.resolve();
-    const running = this.pending.get(id);
+  /** Ejecuta `task` una sola vez por clave (llamadas concurrentes comparten la promesa). */
+  private once(
+    key: string,
+    task: (generation: number) => Promise<void>
+  ): Promise<void> {
+    const running = this.pending.get(key);
     if (running) return running;
-
     const generation = this.generation;
-    const config: ModelConfiguration = MODEL_CONFIGURATIONS[id];
-    const task = this.modelLoaderService
-      .loadModel(config, (loaded, total) => {
-        if (generation !== this.generation) return;
-        this.modelProgress.set(
-          id,
-          total > 0 ? Math.min(loaded / total, 0.99) : 0
-        );
-        this.publishProgress();
-      })
-      .then(object => {
-        if (generation !== this.generation) {
-          disposeObject3D(object);
-          return;
-        }
-        this.scene.add(object);
-        this.models.set(id, { object, info: config.metadata });
-        this.objectIds.set(object, id);
-        this.objectInteractionService.addObject(object, config.metadata);
-        this.modelProgress.set(id, 1);
-      })
+    const promise = task(generation)
       .catch(error => {
-        console.error(`Error loading model ${config.path}:`, error);
-        if (generation === this.generation) this.failed.set(id, error);
+        console.error(`Error loading ${key}:`, error);
+        if (generation === this.generation) this.failed.set(key, error);
       })
       .finally(() => {
-        this.pending.delete(id);
+        this.pending.delete(key);
       });
-    this.pending.set(id, task);
-    return task;
+    this.pending.set(key, promise);
+    return promise;
   }
 
-  /** Progreso agregado 0–100 sin dividir entre totales desconocidos. */
+  private setProgress(key: string, generation: number, fraction: number): void {
+    if (generation !== this.generation) return;
+    this.modelProgress.set(key, Math.min(fraction, 0.99));
+    this.publishProgress();
+  }
+
+  /** Carga un modelo interactivo una sola vez. */
+  private loadOne(id: ModelId): Promise<void> {
+    if (this.models.has(id)) return Promise.resolve();
+    const config: ModelConfiguration = MODEL_CONFIGURATIONS[id];
+    return this.once(id, async generation => {
+      const object = await this.modelLoaderService.loadModel(
+        config,
+        (loaded, total) =>
+          this.setProgress(id, generation, total > 0 ? loaded / total : 0)
+      );
+      if (generation !== this.generation) {
+        disposeObject3D(object);
+        return;
+      }
+      this.scene.add(object);
+      this.models.set(id, { object, info: config.metadata });
+      this.objectIds.set(object, id);
+      this.objectInteractionService.addObject(object, config.metadata);
+      this.modelProgress.set(id, 1);
+    });
+  }
+
+  /** Decoración: va al grupo `decor`, sin registrarse en la interacción y sin raycast. */
+  private loadDecorOne(key: string): Promise<void> {
+    const id = key.slice(6) as DecorId;
+    if (this.decorLoaded.has(id)) return Promise.resolve();
+    const config = DECOR_CONFIGURATIONS[id];
+    return this.once(key, async generation => {
+      const object = await this.modelLoaderService.loadModel(
+        config,
+        (loaded, total) =>
+          this.setProgress(key, generation, total > 0 ? loaded / total : 0)
+      );
+      if (generation !== this.generation) {
+        disposeObject3D(object);
+        return;
+      }
+      disableRaycast(object);
+      this.decorGroup ??= this.createDecorGroup();
+      this.decorGroup.add(object);
+      this.decorLoaded.add(id);
+      this.modelProgress.set(key, 1);
+    });
+  }
+
+  private createDecorGroup(): Group {
+    const group = new Group();
+    group.name = 'decor';
+    this.scene.add(group);
+    return group;
+  }
+
+  private loadTextureOne(key: string): Promise<void> {
+    const set = key.slice(4) as RoomTextureSet;
+    if (this.texturesLoaded.has(set)) return Promise.resolve();
+    return this.once(key, async generation => {
+      await this.roomBuilderService.loadTextures(set, fraction =>
+        this.setProgress(key, generation, fraction)
+      );
+      if (generation !== this.generation) return;
+      this.texturesLoaded.add(set);
+      this.modelProgress.set(key, 1);
+    });
+  }
+
+  /** Progreso agregado 0-100 sin dividir entre totales desconocidos. */
   private publishProgress(): void {
-    const ids = this.modelIds();
-    const sum = ids.reduce(
-      (acc, id) => acc + (this.modelProgress.get(id) ?? 0),
+    const keys = this.allKeys();
+    const sum = keys.reduce(
+      (acc, key) => acc + (this.modelProgress.get(key) ?? 0),
       0
     );
-    const percent = Math.round((sum / ids.length) * 100);
+    const percent = Math.round((sum / keys.length) * 100);
     this.state.loadProgress.set(
       Math.max(this.state.loadProgress(), Math.min(percent, 100))
     );

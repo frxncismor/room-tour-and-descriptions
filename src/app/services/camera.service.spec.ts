@@ -187,6 +187,23 @@ describe('CameraService', () => {
           }
     });
 
+    it('frames a flat wall piece (1.21 x 0.93 x 0.04 at z = -7.975) from its front', async () => {
+      const painting = box(-4, 1.66, -7.975, 1.21, 0.93, 0.04);
+      service.getCamera().position.set(0, 1.7, 4.5);
+
+      const done = service.focusOn(painting);
+      service.update(5000);
+      await expect(done).resolves.toBe(true);
+
+      const camera = service.getCamera();
+      expect(camera.position.z).toBeGreaterThan(-7);
+      // Mira hacia el muro (-Z) con menos de 30° respecto de la normal del cuadro.
+      const view = service.getTarget().clone().sub(camera.position).normalize();
+      const angle = Math.acos(view.dot(new Vector3(0, 0, -1)));
+      expect(angle).toBeLessThanOrEqual((30 * Math.PI) / 180);
+      expect(service.getTarget().x).toBeCloseTo(-4, 0);
+    });
+
     it('keeps the default candidate when nothing blocks it', async () => {
       const target = box(0, 0.5, -3);
       const faraway = box(4, 0.5, 0, 1, 1, 1);
@@ -320,24 +337,31 @@ describe('CameraService', () => {
   describe('portrait framing (390x844)', () => {
     const aspect = 390 / 844;
 
+    /** Piezas que el encuadre inicial debe abarcar (las piezas nuevas del muro del fondo quedan fuera: se ven al caminar). */
+    const FRAMED = ['sofa', 'pokerTable', 'bookshelf'];
+
     /** Cajas aproximadas de los 3 muebles (centro x/z de la config). */
     function furnitureBoxes(): Box3[] {
       const sizes: Record<string, { width: number; height: number }> = {
         sofa: { width: 3.6, height: 0.95 },
         pokerTable: { width: 1.4, height: 0.9 },
         bookshelf: { width: 1.4, height: 2 },
+        landscapePainting: { width: 1.21, height: 2.13 },
+        succulent: { width: 0.4, height: 0.59 },
       };
-      return Object.entries(MODEL_CONFIGURATIONS).map(([id, cfg]) => {
-        const half = sizes[id].width / 2;
-        return new Box3(
-          new Vector3(cfg.position.x - half, 0, cfg.position.z - half),
-          new Vector3(
-            cfg.position.x + half,
-            sizes[id].height,
-            cfg.position.z + half
-          )
-        );
-      });
+      return Object.entries(MODEL_CONFIGURATIONS)
+        .filter(([id]) => FRAMED.includes(id))
+        .map(([id, cfg]) => {
+          const half = sizes[id].width / 2;
+          return new Box3(
+            new Vector3(cfg.position.x - half, 0, cfg.position.z - half),
+            new Vector3(
+              cfg.position.x + half,
+              sizes[id].height,
+              cfg.position.z + half
+            )
+          );
+        });
     }
 
     /** Rango NDC (x, y) de las 8 esquinas de cada caja con la cámara actual. */

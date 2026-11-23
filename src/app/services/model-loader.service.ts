@@ -40,6 +40,13 @@ export function disposeObject3D(root: Object3D): void {
   });
 }
 
+/** Hace que ninguna malla del árbol reciba clics ni hover (la decoración). */
+export function disableRaycast(root: Object3D): void {
+  root.traverse(child => {
+    if ((child as Mesh).isMesh) child.raycast = () => undefined;
+  });
+}
+
 /** Anisotropía pedida a las texturas (la GPU la limita a su máximo). */
 export const TEXTURE_ANISOTROPY = 8;
 
@@ -95,7 +102,7 @@ export class ModelLoaderService {
    * ficheros secundarios y no salta al final. `total` crece al descubrirlos.
    */
   async loadModel(
-    config: ModelConfiguration,
+    config: Omit<ModelConfiguration, 'metadata'>,
     onProgress?: LoadProgressCallback
   ): Promise<Object3D> {
     const cleanPath = config.path.replace(/^\/+/, '');
@@ -143,7 +150,7 @@ export class ModelLoaderService {
    */
   private applyTransformations(
     model: Object3D,
-    config: ModelConfiguration
+    config: Omit<ModelConfiguration, 'metadata'>
   ): void {
     model.position.set(0, 0, 0);
     model.rotation.copy(config.rotation);
