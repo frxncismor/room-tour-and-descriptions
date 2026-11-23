@@ -30,10 +30,7 @@ import { ViewerStateService } from '../../services/viewer-state.service';
         >
           <div class="fill" [style.width.%]="progress()"></div>
         </div>
-        <p class="status">
-          <span>{{ text.status }}</span>
-          <span class="percent">{{ progress() }}%</span>
-        </p>
+        <p class="status">{{ text.status }} · {{ progress() }}%</p>
       </div>
     </div>
   `,
@@ -44,58 +41,59 @@ import { ViewerStateService } from '../../services/viewer-state.service';
       z-index: 30;
       display: grid;
       place-items: center;
-      background: radial-gradient(
-        ellipse at 50% 38%,
-        var(--color-surface) 0%,
-        var(--color-bg) 70%
-      );
+      background: var(--paper);
       opacity: 1;
-      transition: opacity 0.4s ease;
+      transition: opacity var(--dur-3) var(--ease);
     }
     .loading.done {
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
       transition:
-        opacity 0.4s ease,
-        visibility 0s linear 0.4s;
+        opacity var(--dur-3) var(--ease),
+        visibility 0s linear var(--dur-3);
     }
     .card {
-      width: min(86vw, 340px);
+      display: grid;
+      justify-items: center;
+      gap: var(--space-4);
+      width: min(86vw, 280px);
       text-align: center;
     }
     h1 {
-      margin: 0;
-      font-size: 1.9rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--color-text);
+      font-size: var(--fs-display);
+      font-weight: 400;
+      color: var(--ink);
     }
     .byline {
-      margin: 4px 0 32px;
-      font-size: 0.9rem;
-      color: var(--color-text-muted);
+      margin: calc(var(--space-2) * -1) 0 0;
+      font-size: var(--fs-label);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
     }
     .bar {
-      height: 8px;
-      overflow: hidden;
-      background: rgb(31 41 55 / 0.12);
-      border-radius: 999px;
+      width: 240px;
+      max-width: 100%;
+      height: 2px;
+      margin-top: var(--space-3);
+      background: var(--rule);
     }
     .fill {
       height: 100%;
-      background: var(--color-accent-strong);
-      transition: width 0.25s ease;
+      background: var(--clay);
+      transition: width var(--dur-2) var(--ease);
     }
     .status {
-      display: flex;
-      justify-content: space-between;
-      margin: 10px 0 0;
-      font-size: 0.85rem;
-      color: var(--color-text-muted);
-    }
-    .percent {
+      margin: 0;
+      font-size: var(--fs-small);
+      color: var(--ink-muted);
       font-variant-numeric: tabular-nums;
+    }
+    @media (max-width: 600px) {
+      h1 {
+        font-size: 2rem;
+      }
     }
     @media (prefers-reduced-motion: reduce) {
       .loading,

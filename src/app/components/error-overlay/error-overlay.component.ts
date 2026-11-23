@@ -30,30 +30,30 @@ import { ViewerError } from '../../services/viewer-state.service';
       z-index: 40;
       display: grid;
       place-items: center;
-      padding: 16px;
-      background: var(--color-bg);
+      padding: var(--space-4);
+      background: var(--paper-sunk);
     }
     .card {
       width: min(92vw, 420px);
-      padding: 28px;
-      text-align: center;
-      background: var(--color-surface);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-md);
+      padding: var(--space-5);
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius-2);
+      box-shadow: var(--shadow-panel);
     }
     h1 {
-      margin: 0 0 12px;
-      font-size: 1.25rem;
-      color: var(--color-text);
+      margin: 0 0 var(--space-3);
+      font-size: var(--fs-title);
+      color: var(--ink);
     }
     p {
-      margin: 0 0 10px;
-      line-height: 1.5;
-      color: var(--color-text);
+      margin: 0 0 var(--space-2);
+      line-height: var(--lh-body);
+      color: var(--ink);
     }
     .help {
-      font-size: 0.9rem;
-      color: var(--color-text-muted);
+      font-size: var(--fs-small);
+      color: var(--ink-muted);
     }
   `,
 })
