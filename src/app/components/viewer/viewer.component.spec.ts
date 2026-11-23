@@ -191,6 +191,7 @@ describe('ViewerComponent', () => {
       cancelable: true,
     });
     canvas.dispatchEvent(event);
+    expect(scene.clearSelection).toHaveBeenCalledTimes(1);
     expect(scene.resetView).toHaveBeenCalledTimes(1);
     expect(event.defaultPrevented).toBe(true);
   });
