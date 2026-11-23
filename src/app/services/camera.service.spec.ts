@@ -152,45 +152,89 @@ describe('CameraService', () => {
 
     /** Cajas aproximadas de los 3 muebles (centro x/z de la config). */
     function furnitureBoxes(): Box3[] {
-      const sizes: Record<string, number> = {
-        sofa: 3,
-        pokerTable: 1.8,
-        bookshelf: 1.4,
+      const sizes: Record<string, { width: number; height: number }> = {
+        sofa: { width: 2.2, height: 0.95 },
+        pokerTable: { width: 1.4, height: 0.9 },
+        bookshelf: { width: 1.4, height: 2 },
       };
       return Object.entries(MODEL_CONFIGURATIONS).map(([id, cfg]) => {
-        const half = sizes[id] / 2;
+        const half = sizes[id].width / 2;
         return new Box3(
           new Vector3(cfg.position.x - half, 0, cfg.position.z - half),
-          new Vector3(cfg.position.x + half, 1.5, cfg.position.z + half)
+          new Vector3(
+            cfg.position.x + half,
+            sizes[id].height,
+            cfg.position.z + half
+          )
         );
       });
     }
 
-    function expectAllInView(): void {
+    /** Rango NDC (x, y) de las 8 esquinas de cada caja con la cámara actual. */
+    function projectedExtent(): {
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+    } {
       const camera = service.getCamera();
-      camera.lookAt(0, DEFAULT_SCENE_CONFIG.camera.initialHeight * 0.8, 0);
+      camera.lookAt(service.getTarget());
       camera.updateMatrixWorld(true);
+      camera.updateProjectionMatrix();
+      const extent = { minX: 9, maxX: -9, minY: 9, maxY: -9 };
       for (const box of furnitureBoxes()) {
-        for (const x of [box.min.x, box.max.x]) {
-          // Extremos laterales a la profundidad del centro (el sofá va girado 45°).
-          const z = (box.min.z + box.max.z) / 2;
-          const p = new Vector3(x, 0.5, z).project(camera);
-          expect(Math.abs(p.x)).toBeLessThanOrEqual(1);
-        }
+        for (const x of [box.min.x, box.max.x])
+          for (const y of [box.min.y, box.max.y])
+            for (const z of [box.min.z, box.max.z]) {
+              const p = new Vector3(x, y, z).project(camera);
+              extent.minX = Math.min(extent.minX, p.x);
+              extent.maxX = Math.max(extent.maxX, p.x);
+              extent.minY = Math.min(extent.minY, p.y);
+              extent.maxY = Math.max(extent.maxY, p.y);
+            }
       }
+      return extent;
     }
 
-    it('widens the fov (capped) and steps back so the 3 pieces fit', () => {
+    function expectAllInView(): void {
+      const e = projectedExtent();
+      expect(e.minX).toBeGreaterThanOrEqual(-1);
+      expect(e.maxX).toBeLessThanOrEqual(1);
+      expect(e.minY).toBeGreaterThanOrEqual(-1);
+      expect(e.maxY).toBeLessThanOrEqual(1);
+    }
+
+    /** Encuadre anterior (antes de FX1): cámara baja a ras de la sala. */
+    function legacyHeightFraction(): number {
+      service.initialize(DEFAULT_SCENE_CONFIG.camera, aspect);
+      service.getCamera().position.set(0, 1.7, 7.7);
+      service.getTarget().set(0, 1.36, 0);
+      const e = projectedExtent();
+      return (e.maxY - e.minY) / 2;
+    }
+
+    it('widens the fov (capped) and frames the 3 pieces inside the view', () => {
       service.setAspect(aspect);
       expect(service.getCamera().fov).toBeGreaterThan(
         DEFAULT_SCENE_CONFIG.camera.fov
       );
       expect(service.getCamera().fov).toBeLessThanOrEqual(90);
       service.initialize(DEFAULT_SCENE_CONFIG.camera, aspect);
+      service.setupControls(canvas);
       expect(service.getCamera().position.z).toBeGreaterThan(
         DEFAULT_SCENE_CONFIG.camera.initialPosition.z
       );
       expectAllInView();
+    });
+
+    it('fills clearly more of the height than the old low framing and is vertically centred', () => {
+      const before = legacyHeightFraction();
+      service.initialize(DEFAULT_SCENE_CONFIG.camera, aspect);
+      service.setupControls(canvas);
+      const e = projectedExtent();
+      const fraction = (e.maxY - e.minY) / 2;
+      expect(fraction).toBeGreaterThan(before * 1.5);
+      expect(Math.abs((e.maxY + e.minY) / 2)).toBeLessThan(0.25);
     });
 
     it('reset() frames the portrait view and a resize back restores the fov', async () => {
@@ -201,6 +245,26 @@ describe('CameraService', () => {
       expectAllInView();
       service.setAspect(16 / 9);
       expect(service.getCamera().fov).toBe(DEFAULT_SCENE_CONFIG.camera.fov);
+    });
+
+    it('reframes on resize while the view is untouched, and keeps a user-moved view', () => {
+      service.setAspect(aspect);
+      const portraitPosition = service.getCamera().position.clone();
+      expect(portraitPosition.y).toBeGreaterThan(2);
+      service.setAspect(16 / 9);
+      expect(service.getCamera().position.y).toBeCloseTo(
+        DEFAULT_SCENE_CONFIG.camera.initialPosition.y
+      );
+      service.setAspect(aspect);
+      expect(
+        service.getCamera().position.distanceTo(portraitPosition)
+      ).toBeLessThan(0.01);
+
+      void service.teleportTo(new Vector3(2, 0, 1));
+      service.update(5000);
+      const moved = service.getCamera().position.clone();
+      service.setAspect(16 / 9);
+      expect(service.getCamera().position.distanceTo(moved)).toBeLessThan(0.01);
     });
   });
 });

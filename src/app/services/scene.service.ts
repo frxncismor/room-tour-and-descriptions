@@ -454,6 +454,7 @@ export class SceneService {
     return {
       clientX: point.clientX,
       clientY: point.clientY,
+      pointerType: point.pointerType,
       target: this.canvas,
     } as unknown as MouseEvent;
   }

@@ -94,6 +94,7 @@ export interface ModelConfiguration {
 
 /** Punto en coordenadas de cliente (px), p. ej. un `PointerEvent`. */
 export interface ScreenPoint {
+  pointerType?: string;
   clientX: number;
   clientY: number;
 }

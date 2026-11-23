@@ -9,8 +9,15 @@ const WALL_MARGIN = 0.5;
 /** FOV horizontal mínimo en pantallas estrechas (grados) y tope del vertical. */
 const MIN_HORIZONTAL_FOV = 50;
 const MAX_VERTICAL_FOV = 90;
-/** Metros que se retrocede la cámara inicial por cada unidad que falte a aspect 1. */
-const PORTRAIT_BACKOFF = 6;
+/**
+ * Vista inicial en retrato (aspect <= PORTRAIT_FULL_ASPECT): la cámara sube y
+ * mira hacia abajo, al centro de los muebles, para que la profundidad de la
+ * sala llene el alto en vez de dejar techo y suelo vacíos. Entre aspect 1 y
+ * PORTRAIT_FULL_ASPECT se mezcla con la vista de escritorio (sin saltos).
+ */
+const PORTRAIT_FULL_ASPECT = 0.5;
+const PORTRAIT_POSITION = new Vector3(-0.35, 3.9, 6.3);
+const PORTRAIT_TARGET = new Vector3(-0.35, 0.1, -4.2);
 const MIN_CAMERA_HEIGHT = 0.3;
 const MOVE_DURATION_MS = 1200;
 const FOCUS_DURATION_MS = 900;
@@ -42,7 +49,12 @@ export class CameraService {
   private initialPosition = new Vector3(0, 1.7, 3);
   private initialTarget = new Vector3(0, 1.36, 0);
   private tween: Tween | null = null;
-  private readonly onControlsStart = () => this.cancelAnimation();
+  /** true mientras la cámara sigue en la vista inicial (sin que el usuario la mueva). */
+  private atFramedPose = true;
+  private readonly onControlsStart = () => {
+    this.atFramedPose = false;
+    this.cancelAnimation();
+  };
 
   initialize(config: CameraConfiguration, aspect = 1): void {
     this.camera = new PerspectiveCamera(
@@ -53,10 +65,11 @@ export class CameraService {
     );
     this.baseFov = config.fov;
     this.initialPosition = config.initialPosition.clone();
-    this.setAspect(aspect);
-    this.camera.position.copy(this.framedPosition());
     this.initialHeight = config.initialHeight;
     this.initialTarget = new Vector3(0, config.initialHeight * 0.8, 0);
+    this.atFramedPose = true;
+    this.setAspect(aspect);
+    this.camera.position.copy(this.framedPosition());
   }
 
   setRoomLimits(limits: RoomLimits): void {
@@ -70,6 +83,13 @@ export class CameraService {
     this.camera.aspect = aspect;
     this.camera.fov = this.fovFor(aspect);
     this.camera.updateProjectionMatrix();
+    // Si el usuario aún no ha movido la cámara, la vista inicial se reencuadra.
+    if (this.atFramedPose && !this.tween) {
+      this.camera.position.copy(this.framedPosition());
+      this.controls?.target.copy(this.framedTarget());
+      this.applyDistanceLimit();
+      this.controls?.update();
+    }
   }
 
   /** En pantallas estrechas mantiene un FOV horizontal mínimo (con tope vertical). */
@@ -80,15 +100,26 @@ export class CameraService {
     return Math.min(MAX_VERTICAL_FOV, Math.max(this.baseFov, vertical));
   }
 
-  /** Posición inicial: en pantallas estrechas retrocede (dentro de la sala). */
+  /** Mezcla 0 (escritorio) → 1 (retrato completo) según el aspect. */
+  private portraitBlend(): number {
+    if (this.aspect >= 1) return 0;
+    return this.clamp((1 - this.aspect) / (1 - PORTRAIT_FULL_ASPECT), 0, 1);
+  }
+
+  /** Posición inicial: en retrato sube y se aleja (dentro de la sala). */
   private framedPosition(): Vector3 {
-    const position = this.initialPosition.clone();
-    if (this.aspect < 1) {
-      position.z += (1 - this.aspect) * PORTRAIT_BACKOFF;
-      this.clampPoint(position);
-      position.y = this.initialPosition.y;
-    }
+    const position = this.initialPosition
+      .clone()
+      .lerp(PORTRAIT_POSITION, this.portraitBlend());
+    this.clampPoint(position);
     return position;
+  }
+
+  /** Punto de mira inicial: en retrato baja al centro de los muebles. */
+  private framedTarget(): Vector3 {
+    return this.initialTarget
+      .clone()
+      .lerp(PORTRAIT_TARGET, this.portraitBlend());
   }
 
   setupControls(domElement: HTMLElement): void {
@@ -103,7 +134,7 @@ export class CameraService {
     // El paneo (botón derecho, dos dedos, flechas) queda en el plano horizontal.
     controls.enablePan = true;
     controls.screenSpacePanning = false;
-    controls.target.copy(this.initialTarget);
+    controls.target.copy(this.framedTarget());
     controls.addEventListener('start', this.onControlsStart);
     // Flechas del teclado con el canvas enfocado.
     if (!domElement.hasAttribute('tabindex')) {
@@ -119,9 +150,14 @@ export class CameraService {
     if (!this.controls) return;
     const halfWidth = (this.limits.maxX - this.limits.minX) / 2;
     const halfDepth = (this.limits.maxZ - this.limits.minZ) / 2;
+    // La vista inicial (retrato) puede quedar algo más lejos que el semi-lado.
+    const framed = this.camera
+      ? this.framedPosition().distanceTo(this.framedTarget()) + 0.1
+      : 0;
     this.controls.maxDistance = Math.max(
       this.controls.minDistance + 1,
-      Math.min(halfWidth, halfDepth)
+      Math.min(halfWidth, halfDepth),
+      framed
     );
   }
 
@@ -202,9 +238,12 @@ export class CameraService {
     if (!this.camera) return Promise.resolve(false);
     return this.startTween(
       this.framedPosition(),
-      this.initialTarget.clone(),
+      this.framedTarget(),
       MOVE_DURATION_MS
-    );
+    ).then(completed => {
+      if (completed) this.atFramedPose = true;
+      return completed;
+    });
   }
 
   /** Cancela la animación en curso; su promesa resuelve `false`. */
@@ -226,6 +265,7 @@ export class CameraService {
     duration: number
   ): Promise<boolean> {
     this.cancelAnimation();
+    this.atFramedPose = false;
     const target = this.controls?.target ?? new Vector3();
 
     if (this.prefersReducedMotion()) {

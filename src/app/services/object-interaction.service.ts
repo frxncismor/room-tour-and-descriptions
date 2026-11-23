@@ -25,7 +25,22 @@ export interface PointerLike {
   clientY: number;
   target?: EventTarget | null;
   currentTarget?: EventTarget | null;
+  /** 'touch' activa la tolerancia táctil de `handleClick`. */
+  pointerType?: string;
 }
+
+/** Opciones de `handleClick`. */
+export interface ClickOptions {
+  /** Anula `event.pointerType`. */
+  pointerType?: string;
+  /** Tolerancia en px CSS; por defecto 14 con toque y 0 con ratón/lápiz. */
+  tolerancePx?: number;
+}
+
+/** Tolerancia por defecto del toque (px CSS) y rayos por anillo. */
+export const TOUCH_TOLERANCE_PX = 14;
+const TOLERANCE_RINGS = [0.5, 1];
+const TOLERANCE_RAYS = 8;
 
 /** Objeto bajo el cursor; `name` sirve de id para el cursor/UI. */
 export interface HoverTarget {
@@ -108,7 +123,8 @@ export class ObjectInteractionService {
   async handleClick(
     event: PointerLike,
     camera: PerspectiveCamera,
-    scene: Scene
+    scene: Scene,
+    options: ClickOptions = {}
   ): Promise<InteractionResult> {
     try {
       this.setContext(camera, scene);
@@ -116,6 +132,15 @@ export class ObjectInteractionService {
       const intersects = this.intersect(ndc, camera, scene);
 
       this.clearSelection();
+
+      const tolerance = this.tolerancePx(event, options);
+      if (tolerance > 0 && !this.hitsFurnitureFirst(intersects)) {
+        const near = this.nearbyFurniture(event, tolerance, camera, scene);
+        if (near) {
+          this.select(near.root);
+          return { objectInfo: near.info, success: true, object: near.root };
+        }
+      }
 
       for (const intersect of intersects) {
         const object = intersect.object;
@@ -146,6 +171,59 @@ export class ObjectInteractionService {
         error: error instanceof Error ? error.message : 'Interaction failed',
       };
     }
+  }
+
+  /** Toque (o tolerancia explícita) → radio en px CSS; ratón/lápiz → 0. */
+  private tolerancePx(event: PointerLike, options: ClickOptions): number {
+    if (options.tolerancePx !== undefined)
+      return Math.max(0, options.tolerancePx);
+    const type = options.pointerType ?? event.pointerType;
+    return type === 'touch' ? TOUCH_TOLERANCE_PX : 0;
+  }
+
+  /** ¿El primer impacto relevante (mueble o suelo) es un mueble? */
+  private hitsFurnitureFirst(
+    hits: ReturnType<ObjectInteractionService['intersect']>
+  ): boolean {
+    return this.firstFurniture(hits) !== null;
+  }
+
+  /** Mueble alcanzado antes que el suelo (las paredes no bloquean, como en el clic). */
+  private firstFurniture(
+    hits: ReturnType<ObjectInteractionService['intersect']>
+  ): { root: Object3D; info: ObjectInfo } | null {
+    for (const hit of hits) {
+      if (this.isFloorClick(hit.object)) return null;
+      const root = this.findRootObject(hit.object);
+      const info = root ? this.objects.get(root) : undefined;
+      if (root && info) return { root, info };
+    }
+    return null;
+  }
+
+  /** Anillos de rayos alrededor del punto; gana el mueble del anillo más cercano. */
+  private nearbyFurniture(
+    event: PointerLike,
+    tolerancePx: number,
+    camera: PerspectiveCamera,
+    scene: Scene
+  ): { root: Object3D; info: ObjectInfo } | null {
+    const base = this.getMousePosition(event);
+    const element = this.canvas ?? (event.currentTarget as HTMLElement);
+    const rect = element.getBoundingClientRect();
+    for (const ring of TOLERANCE_RINGS) {
+      const radius = tolerancePx * ring;
+      for (let i = 0; i < TOLERANCE_RAYS; i++) {
+        const angle = (i / TOLERANCE_RAYS) * Math.PI * 2;
+        const ndc = new Vector2(
+          base.x + ((Math.cos(angle) * radius) / rect.width) * 2,
+          base.y - ((Math.sin(angle) * radius) / rect.height) * 2
+        );
+        const found = this.firstFurniture(this.intersect(ndc, camera, scene));
+        if (found) return found;
+      }
+    }
+    return null;
   }
 
   /** Coordenadas NDC respecto al rectángulo del canvas (no de `event.target`). */

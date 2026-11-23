@@ -325,6 +325,24 @@ describe('SceneService', () => {
     expect(service.getCamera().position.x).toBeCloseTo(2, 0);
   });
 
+  it('handlePointerSelect forwards pointerType so touch gets tolerance', async () => {
+    service.initialize(canvas);
+    const interaction = TestBed.inject(ObjectInteractionService);
+    const handleClick = vi.spyOn(interaction, 'handleClick');
+    await service.handlePointerSelect({
+      clientX: 10,
+      clientY: 10,
+      pointerType: 'touch',
+    });
+    expect(handleClick.mock.calls[0][0]).toMatchObject({
+      clientX: 10,
+      clientY: 10,
+      pointerType: 'touch',
+    });
+    await service.handlePointerSelect({ clientX: 10, clientY: 10 });
+    expect(handleClick.mock.calls[1][0].pointerType).toBeUndefined();
+  });
+
   it('the loop calls update on the interaction service every frame', () => {
     service.initialize(canvas);
     const interaction = TestBed.inject(ObjectInteractionService);
