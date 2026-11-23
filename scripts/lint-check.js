@@ -8,7 +8,7 @@ console.log('🔍 Running lint checks...\n');
 try {
   // Run Angular linting
   console.log('📝 Running Angular linting...');
-  execSync('ng lint', { stdio: 'inherit' });
+  execSync('npm run lint', { stdio: 'inherit' });
   console.log('✅ Angular linting passed\n');
 
   // Run Prettier check

@@ -3,7 +3,6 @@ import { ViewerComponent } from './components/viewer/viewer.component';
 
 @Component({
   selector: 'app-root',
-  standalone: true,
   imports: [ViewerComponent],
   template: '<app-viewer></app-viewer>',
   styles: [
@@ -11,7 +10,7 @@ import { ViewerComponent } from './components/viewer/viewer.component';
       :host {
         display: block;
         width: 100%;
-        height: 100vh;
+        height: 100dvh;
         overflow: hidden;
       }
     `,

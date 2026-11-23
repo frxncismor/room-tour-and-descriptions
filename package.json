@@ -6,54 +6,43 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test",
+    "test": "ng test --no-watch --no-progress",
+    "test:watch": "ng test --watch",
     "lint": "ng lint",
     "lint:fix": "ng lint --fix",
     "lint:check": "node scripts/lint-check.js",
     "format": "prettier --write \"src/**/*.{ts,html,scss}\"",
-    "prepare": "husky install",
-    "pre-commit": "lint-staged"
+    "prepare": "husky",
+    "pre-commit": "lint-staged",
+    "test:coverage": "ng test --no-watch --no-progress --coverage"
   },
   "private": true,
   "dependencies": {
-    "@angular/animations": "^17.3.0",
-    "@angular/common": "^17.3.0",
-    "@angular/compiler": "^17.3.0",
-    "@angular/core": "^17.3.0",
-    "@angular/forms": "^17.3.0",
-    "@angular/material": "^17.3.0",
-    "@angular/platform-browser": "^17.3.0",
-    "@angular/platform-browser-dynamic": "^17.3.0",
-    "@angular/router": "^17.3.0",
+    "@angular/common": "^21.2.26",
+    "@angular/compiler": "^21.2.26",
+    "@angular/core": "^21.2.26",
+    "@angular/platform-browser": "^21.2.26",
+    "@angular/platform-browser-dynamic": "^21.2.26",
     "rxjs": "~7.8.0",
-    "three": "^0.162.0",
-    "tslib": "^2.3.0",
-    "zone.js": "~0.14.3"
+    "three": "^0.187.0",
+    "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^17.3.13",
-    "@angular-eslint/builder": "20.3.0",
-    "@angular-eslint/eslint-plugin": "20.3.0",
-    "@angular-eslint/eslint-plugin-template": "20.3.0",
-    "@angular-eslint/schematics": "20.3.0",
-    "@angular-eslint/template-parser": "20.3.0",
-    "@angular/cli": "^17.3.13",
-    "@angular/compiler-cli": "^17.3.0",
-    "@types/jasmine": "~5.1.0",
-    "@types/three": "^0.162.0",
-    "@typescript-eslint/eslint-plugin": "7.11.0",
-    "@typescript-eslint/parser": "7.11.0",
-    "eslint": "8.57.1",
+    "@angular/build": "^21.2.30",
+    "@angular/cli": "^21.2.30",
+    "@angular/compiler-cli": "^21.2.26",
+    "@eslint/js": "^9.39.5",
+    "@types/three": "^0.187.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "angular-eslint": "^21.4.0",
+    "eslint": "^9.39.5",
     "husky": "^9.1.7",
-    "jasmine-core": "~5.1.0",
-    "karma": "~6.4.0",
-    "karma-chrome-launcher": "~3.2.0",
-    "karma-coverage": "~2.2.0",
-    "karma-jasmine": "~5.1.0",
-    "karma-jasmine-html-reporter": "~2.1.0",
+    "jsdom": "^28.1.0",
     "lint-staged": "^16.1.6",
     "prettier": "^3.6.2",
-    "typescript": "~5.4.2"
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^4.1.12"
   },
   "lint-staged": {
     "src/**/*.{ts,html}": [
@@ -66,5 +55,8 @@
     "*.{json,md}": [
       "prettier --write"
     ]
+  },
+  "engines": {
+    "node": ">=22.12"
   }
 }

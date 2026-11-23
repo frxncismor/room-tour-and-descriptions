@@ -1,8 +1,10 @@
-import { Euler, Vector3 } from 'three';
+import { Euler, Object3D, Vector3 } from 'three';
 
 export interface ObjectInfo {
   name: string;
   description: string;
+  /** Datos secundarios (autoría, origen). */
+  details?: string;
 }
 
 export interface SceneConfiguration {
@@ -58,6 +60,12 @@ export interface DirectionalLightConfig {
   intensity: number;
   position: Vector3;
   castShadow: boolean;
+  /** Semilado (m) del frustum de la cámara de sombra. */
+  shadowExtent?: number;
+  /** Resolución (px) del mapa de sombra. */
+  shadowMapSize?: number;
+  shadowBias?: number;
+  shadowNormalBias?: number;
 }
 
 export interface SpotlightConfig {
@@ -78,10 +86,35 @@ export interface ModelConfiguration {
   scale: number;
   rotation: Euler;
   metadata: ObjectInfo;
+  /** Sustituciones de material (p. ej. color del sofá, que no trae textura). */
+  materialOverride?: MaterialOverride;
+  /** Elevación extra sobre el suelo de la base del modelo (m). Por defecto 0. */
+  yOffset?: number;
 }
+
+/** Punto en coordenadas de cliente (px), p. ej. un `PointerEvent`. */
+export interface ScreenPoint {
+  pointerType?: string;
+  clientX: number;
+  clientY: number;
+}
+
+/** Progreso de carga de un modelo en unidades de recurso (gltf, .bin, texturas); `total` crece al descubrirlos. */
+export type LoadProgressCallback = (loaded: number, total: number) => void;
 
 export interface InteractionResult {
   objectInfo: ObjectInfo | null;
   success: boolean;
   error?: string;
+  /** Punto del suelo (validado y recortado) en clics de suelo. */
+  floorPoint?: Vector3;
+  /** Objeto 3D seleccionado en clics de mueble. */
+  object?: Object3D;
+}
+
+/** Valores que sustituyen a los del material importado del modelo. */
+export interface MaterialOverride {
+  color?: number;
+  roughness?: number;
+  metalness?: number;
 }

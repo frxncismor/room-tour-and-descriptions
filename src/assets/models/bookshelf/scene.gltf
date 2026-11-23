@@ -1,193 +1,234 @@
 {
-  "accessors": [
-    {
-      "bufferView": 2,
-      "componentType": 5126,
-      "count": 384,
-      "max": [
-        0.9143999814987183,
-        0.1968500018119812,
-        2.1335999965667725
-      ],
-      "min": [
-        -0.9143999814987183,
-        -0.1968500018119812,
-        0.0
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 2,
-      "byteOffset": 4608,
-      "componentType": 5126,
-      "count": 384,
-      "max": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "min": [
-        -1.0,
-        -1.0,
-        -1.0
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 3,
-      "componentType": 5126,
-      "count": 384,
-      "max": [
-        1.0,
-        1.0,
-        0.362114816904068,
-        1.0
-      ],
-      "min": [
-        -1.0,
-        -1.0,
-        -0.36211392283439636,
-        1.0
-      ],
-      "type": "VEC4"
-    },
-    {
-      "bufferView": 1,
-      "componentType": 5126,
-      "count": 384,
-      "max": [
-        0.9951171875,
-        0.9929887056350708
-      ],
-      "min": [
-        0.0048828125,
-        0.0048828125
-      ],
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 1,
-      "byteOffset": 3072,
-      "componentType": 5126,
-      "count": 384,
-      "max": [
-        0.9951171875,
-        0.9929887056350708
-      ],
-      "min": [
-        0.0048828125,
-        0.0048828125
-      ],
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 1,
-      "byteOffset": 6144,
-      "componentType": 5126,
-      "count": 384,
-      "max": [
-        0.9951171875,
-        0.9929887056350708
-      ],
-      "min": [
-        0.0048828125,
-        0.0048828125
-      ],
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 0,
-      "componentType": 5125,
-      "count": 672,
-      "type": "SCALAR"
-    }
-  ],
   "asset": {
+    "generator": "glTF-Transform v4.5.1",
+    "version": "2.0",
     "extras": {
       "author": "Twpic (https://sketchfab.com/TWPIC)",
       "license": "SKETCHFAB Standard (https://sketchfab.com/licenses)",
       "source": "https://sketchfab.com/3d-models/bookshelf-ed697dcb7e634c1e92ed0192364588e6",
       "title": "BookShelf"
-    },
-    "generator": "Sketchfab-16.16.0",
-    "version": "2.0"
+    }
   },
+  "accessors": [
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 576,
+      "normalized": false,
+      "byteOffset": 0,
+      "bufferView": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5120,
+      "count": 320,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 1
+    },
+    {
+      "type": "VEC4",
+      "componentType": 5120,
+      "count": 320,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 2
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5122,
+      "count": 320,
+      "max": [
+        28087,
+        6044,
+        32767
+      ],
+      "min": [
+        -28087,
+        -6044,
+        -32767
+      ],
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 3
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5123,
+      "count": 320,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 4
+    }
+  ],
   "bufferViews": [
     {
-      "buffer": 0,
-      "byteLength": 2688,
-      "name": "floatBufferViews",
-      "target": 34963
+      "buffer": 1,
+      "byteOffset": 0,
+      "byteLength": 1152,
+      "target": 34963,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 0,
+          "byteLength": 209,
+          "mode": "TRIANGLES",
+          "byteStride": 2,
+          "count": 576
+        }
+      }
     },
     {
-      "buffer": 0,
-      "byteLength": 9216,
-      "byteOffset": 2688,
+      "buffer": 1,
+      "byteOffset": 1152,
+      "byteLength": 1280,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 212,
+          "byteLength": 216,
+          "mode": "ATTRIBUTES",
+          "filter": "OCTAHEDRAL",
+          "byteStride": 4,
+          "count": 320
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 2432,
+      "byteLength": 1280,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 428,
+          "byteLength": 170,
+          "mode": "ATTRIBUTES",
+          "filter": "OCTAHEDRAL",
+          "byteStride": 4,
+          "count": 320
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 3712,
+      "byteLength": 2560,
+      "target": 34962,
       "byteStride": 8,
-      "name": "floatBufferViews",
-      "target": 34962
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 600,
+          "byteLength": 1312,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 320
+        }
+      }
     },
     {
-      "buffer": 0,
-      "byteLength": 9216,
-      "byteOffset": 11904,
-      "byteStride": 12,
-      "name": "floatBufferViews",
-      "target": 34962
+      "buffer": 1,
+      "byteOffset": 6272,
+      "byteLength": 1280,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 1912,
+          "byteLength": 1174,
+          "mode": "ATTRIBUTES",
+          "byteStride": 4,
+          "count": 320
+        }
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "extensions": {
+        "EXT_texture_webp": {
+          "source": 0
+        }
+      }
     },
     {
-      "buffer": 0,
-      "byteLength": 6144,
-      "byteOffset": 21120,
-      "byteStride": 16,
-      "name": "floatBufferViews",
-      "target": 34962
+      "sampler": 0,
+      "extensions": {
+        "EXT_texture_webp": {
+          "source": 2
+        }
+      }
+    },
+    {
+      "sampler": 0,
+      "extensions": {
+        "EXT_texture_webp": {
+          "source": 1
+        }
+      }
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/webp",
+      "uri": "textures/Cabinet04_baseColor.webp"
+    },
+    {
+      "mimeType": "image/webp",
+      "uri": "textures/Cabinet04_metallicRoughness.webp"
+    },
+    {
+      "mimeType": "image/webp",
+      "uri": "textures/Cabinet04_normal.webp"
     }
   ],
   "buffers": [
     {
-      "byteLength": 27264,
-      "uri": "scene.bin"
-    }
-  ],
-  "extensionsUsed": [
-    "KHR_materials_specular"
-  ],
-  "images": [
-    {
-      "uri": "textures/Cabinet04_baseColor.png"
+      "uri": "scene.bin",
+      "byteLength": 3088
     },
     {
-      "uri": "textures/Cabinet04_metallicRoughness.png"
-    },
-    {
-      "uri": "textures/Cabinet04_normal.png"
+      "byteLength": 7552,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "fallback": true
+        }
+      }
     }
   ],
   "materials": [
     {
-      "alphaMode": "BLEND",
-      "doubleSided": true,
-      "extensions": {
-        "KHR_materials_specular": {
-          "specularColorFactor": [
-            1.0,
-            1.0,
-            1.0
-          ],
-          "specularFactor": 0.12038131925735392
-        }
-      },
       "name": "Cabinet04",
-      "normalTexture": {
-        "index": 2
-      },
+      "doubleSided": true,
       "pbrMetallicRoughness": {
         "baseColorTexture": {
           "index": 0
         },
         "metallicRoughnessTexture": {
-          "index": 1
+          "index": 2
+        }
+      },
+      "normalTexture": {
+        "index": 1
+      },
+      "extensions": {
+        "KHR_materials_specular": {
+          "specularFactor": 0.12038131925735392
         }
       }
     }
@@ -199,112 +240,85 @@
         {
           "attributes": {
             "NORMAL": 1,
-            "POSITION": 0,
             "TANGENT": 2,
-            "TEXCOORD_0": 3,
-            "TEXCOORD_1": 4,
-            "TEXCOORD_2": 5
+            "POSITION": 3,
+            "TEXCOORD_0": 4
           },
-          "indices": 6,
+          "mode": 4,
           "material": 0,
-          "mode": 4
+          "indices": 0
         }
       ]
     }
   ],
   "nodes": [
     {
+      "name": "Sketchfab_model",
+      "rotation": [
+        -0.7071067811865475,
+        0,
+        0,
+        0.7071067811865476
+      ],
       "children": [
         1
-      ],
-      "matrix": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        2.220446049250313e-16,
-        -1.0,
-        0.0,
-        0.0,
-        1.0,
-        2.220446049250313e-16,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "name": "Sketchfab_model"
+      ]
     },
     {
+      "name": "Cabinet04.fbx",
+      "rotation": [
+        0.7071067811865475,
+        0,
+        0,
+        0.7071067811865476
+      ],
+      "scale": [
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582
+      ],
       "children": [
         2
-      ],
-      "matrix": [
-        0.009999999776482582,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.009999999776482582,
-        0.0,
-        0.0,
-        -0.009999999776482582,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "name": "Cabinet04.fbx"
+      ]
     },
     {
+      "name": "RootNode",
       "children": [
         3
-      ],
-      "name": "RootNode"
+      ]
     },
     {
+      "name": "Cabinet04",
+      "rotation": [
+        -0.7071068809345475,
+        0,
+        0,
+        0.7071066814385333
+      ],
+      "scale": [
+        100,
+        100.00000000000001,
+        100.00000000000001
+      ],
       "children": [
         4
-      ],
-      "matrix": [
-        100.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -2.8212996916465727e-05,
-        -99.99999999999602,
-        0.0,
-        0.0,
-        99.99999999999602,
-        -2.8212996916465727e-05,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "name": "Cabinet04"
+      ]
     },
     {
-      "mesh": 0,
-      "name": "Cabinet04_Cabinet04_0"
+      "name": "Cabinet04_Cabinet04_0",
+      "translation": [
+        0,
+        0,
+        1.0667999982833862
+      ],
+      "scale": [
+        1.0667999982833862,
+        1.0667999982833862,
+        1.0667999982833862
+      ],
+      "mesh": 0
     }
   ],
-  "samplers": [
-    {
-      "magFilter": 9729,
-      "minFilter": 9987,
-      "wrapS": 10497,
-      "wrapT": 10497
-    }
-  ],
-  "scene": 0,
   "scenes": [
     {
       "name": "Sketchfab_Scene",
@@ -313,18 +327,16 @@
       ]
     }
   ],
-  "textures": [
-    {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
-    }
+  "scene": 0,
+  "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_materials_specular",
+    "KHR_mesh_quantization"
+  ],
+  "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "EXT_texture_webp",
+    "KHR_mesh_quantization"
   ]
 }
