@@ -4,7 +4,7 @@
 
 ### Prerequisites
 
-- Node.js 22 or higher (LTS)
+- Node.js 22.12 or higher (LTS)
 - npm
 - A browser with WebGL to run the viewer (unit tests do not need one)
 

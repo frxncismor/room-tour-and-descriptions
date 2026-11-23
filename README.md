@@ -74,7 +74,7 @@ The **? Help** button in the corner reopens these instructions at any time.
 
 ## Getting started
 
-Requirements: Node.js 22 or newer and npm.
+Requirements: Node.js 22.12 or newer and npm.
 
 ```bash
 git clone https://github.com/frxncismor/room-tour-and-descriptions.git
