@@ -27,7 +27,7 @@ describe.each(LOCALES)('ErrorBannerComponent (%s)', locale => {
     root.querySelector('[role="alert"] .message')?.textContent?.trim();
 
   it('emits retry when the button is clicked', async () => {
-    const fixture = create({ code: 'model-load-failed', message: 'Boom' });
+    const fixture = create({ code: 'model-load-failed' });
     let retries = 0;
     fixture.componentInstance.retry.subscribe(() => retries++);
     await fixture.whenStable();
@@ -45,7 +45,7 @@ describe.each(LOCALES)('ErrorBannerComponent (%s)', locale => {
     'render-failed',
     'locale-load-failed',
   ] as const)('translates the code %s', async code => {
-    const fixture = create({ code, message: 'fallback' });
+    const fixture = create({ code });
     await fixture.whenStable();
     expect(messageOf(fixture.nativeElement)).toBe(
       messages.errors.messages[code]
@@ -56,19 +56,19 @@ describe.each(LOCALES)('ErrorBannerComponent (%s)', locale => {
     const fixture = create({
       code: 'model-load-failed',
       params: { names: ['rug', 'clock'] },
-      message: 'fallback',
     } as ViewerError);
     await fixture.whenStable();
     const text = messageOf(fixture.nativeElement);
     expect(text).toContain(messages.assets.rug);
     expect(text).toContain(messages.assets.clock);
-    expect(text).not.toContain('fallback');
   });
 
-  it('falls back to the message for an unknown code', async () => {
-    const fixture = create({ code: 'weird', message: 'Boom' });
+  it('falls back to the generic text for an unknown code', async () => {
+    const fixture = create({ code: 'weird' });
     await fixture.whenStable();
-    expect(messageOf(fixture.nativeElement)).toBe('Boom');
+    expect(messageOf(fixture.nativeElement)).toBe(
+      messages.errors.messages['render-failed']
+    );
   });
 });
 
@@ -79,7 +79,6 @@ describe('ErrorBannerComponent live language change', () => {
     const fixture = TestBed.createComponent(ErrorBannerComponent);
     fixture.componentRef.setInput('error', {
       code: 'render-failed',
-      message: 'x',
     });
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;

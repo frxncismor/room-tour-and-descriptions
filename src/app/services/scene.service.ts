@@ -7,7 +7,9 @@ import {
 } from '@angular/core';
 import {
   ACESFilmicToneMapping,
+  BoxGeometry,
   Group,
+  Mesh,
   NeutralToneMapping,
   NoToneMapping,
   Object3D,
@@ -22,9 +24,7 @@ import type { Decor3Config } from '../config/decor.config';
 import {
   DECOR_CONFIGURATIONS,
   DEFAULT_SCENE_CONFIG,
-  FLOOR_TEXTURES,
   MODEL_CONFIGURATIONS,
-  RUG_TEXTURES,
 } from '../config/scene.config';
 import {
   ModelConfiguration,
@@ -51,18 +51,9 @@ declare const ngDevMode: boolean | undefined;
 export type ModelId = keyof typeof MODEL_CONFIGURATIONS;
 type DecorId = keyof typeof DECOR_CONFIGURATIONS;
 
-/** Texturas de la sala que cuentan en el progreso (clave `tex:<set>`). */
-const TEXTURE_SETS: Record<RoomTextureSet, { label: string }> = {
-  floor: FLOOR_TEXTURES,
-  rug: RUG_TEXTURES,
-};
-
 /** Claves de carga de la decoración 3 (`art:*` láminas, `fabric:*` lino). */
 const isDecor3Key = (key: string): boolean =>
   key.startsWith('art:') || key.startsWith('fabric:');
-
-/** Nombre en inglés de los activos de la decoración 3 (se retira en F3). */
-const DECOR3_LABELS = { prints: 'Framed prints', fabric: 'Linen textiles' };
 
 /** Claves de carga de la decoración 3; coinciden con `DECOR3_LOAD_KEYS` (lo prueba el spec) y evitan importar su config en el bundle inicial. */
 export const DECOR3_KEYS: readonly string[] = [
@@ -184,7 +175,6 @@ export class SceneService {
     this.state.sceneReady.set(false);
     this.state.error.set({
       code: 'webgl-context-lost',
-      message: 'The 3D context was lost. It will recover automatically.',
     });
   };
   private readonly onContextRestored = () => {
@@ -210,7 +200,6 @@ export class SceneService {
       this.state.loadStatus.set('error');
       this.state.error.set({
         code: 'webgl-unavailable',
-        message: 'Your browser or device cannot run the 3D viewer (WebGL).',
       });
       return;
     }
@@ -343,7 +332,6 @@ export class SceneService {
     this.state.sceneReady.set(false);
     this.state.error.set({
       code: 'render-failed',
-      message: 'The 3D view stopped working. Try again.',
       retry: () => this.resumeAfterRenderFailure(),
     });
   }
@@ -424,7 +412,7 @@ export class SceneService {
   }
 
   private textureSets(): RoomTextureSet[] {
-    return Object.keys(TEXTURE_SETS) as RoomTextureSet[];
+    return ['floor', 'rug'];
   }
 
   /** Todas las piezas que cuentan en la carga: modelos, decoración y texturas. */
@@ -455,19 +443,6 @@ export class SceneService {
     if (key.startsWith('art:')) return 'prints';
     if (key.startsWith('fabric:')) return 'fabric';
     return key;
-  }
-
-  /** Nombre en inglés (compatibilidad: `message` se retira en F3). */
-  private label(key: string): string {
-    if (key.startsWith('decor:')) {
-      return DECOR_CONFIGURATIONS[key.slice(6) as DecorId].label;
-    }
-    if (key.startsWith('tex:')) {
-      return TEXTURE_SETS[key.slice(4) as RoomTextureSet].label;
-    }
-    if (key.startsWith('art:')) return DECOR3_LABELS.prints;
-    if (key.startsWith('fabric:')) return DECOR3_LABELS.fabric;
-    return MODEL_CONFIGURATIONS[key as ModelId].metadata.name;
   }
 
   /** Carga todo: modelos, decoración y texturas; los fallos van a `ViewerStateService.error`. */
@@ -536,14 +511,12 @@ export class SceneService {
     this.publishProgress();
     if (this.failed.size > 0) {
       const failedKeys = [...this.failed.keys()];
-      const names = [...new Set(failedKeys.map(key => this.label(key)))];
       this.state.loadStatus.set('error');
       this.state.error.set({
         code: 'model-load-failed',
         params: {
           names: [...new Set(failedKeys.map(key => this.assetId(key)))],
         },
-        message: `Could not load: ${names.join(', ')}.`,
         retry: () => void this.retryLoad(),
       });
     } else {
@@ -739,11 +712,8 @@ export class SceneService {
 
   // ── API para la UI ────────────────────────────────────────────────
 
-  getObjectList(): { id: string; name: string }[] {
-    return [...this.models.entries()].map(([id, entry]) => ({
-      id,
-      name: entry.info.name,
-    }));
+  getObjectList(): { id: string }[] {
+    return [...this.models.keys()].map(id => ({ id }));
   }
 
   /** Selecciona un mueble por id: abre su ficha y acerca la cámara (D-04). */
@@ -758,6 +728,8 @@ export class SceneService {
         .map(other => other.object),
       // La decoración (jarrón, reloj) también puede tapar el encuadre.
       ...(this.decorGroup?.children ?? []),
+      // Lámpara de pie, cortinas y apliques (decoración 3), solo para la oclusión.
+      ...this.decor3Obstacles(),
     ];
     // Frente de la pieza (+Z local en el mundo): el encuadre no depende de
     // dónde estaba la cámara.
@@ -766,6 +738,25 @@ export class SceneService {
       entry.object.matrixWorld
     );
     void this.cameraService.focusOn(entry.object, obstacles, front);
+  }
+
+  /**
+   * Obstáculos de la decoración 3 para el encuadre: una caja por pieza alta
+   * (lámpara, cortinas, apliques). Las mallas fusionadas abarcan toda la sala,
+   * así que no sirven; estas cajas no están en la escena (no hay raycast).
+   */
+  private decor3Obstacles(): Object3D[] {
+    const proxies: Object3D[] = [];
+    for (const { kind, box } of this.decor3?.pieces ?? []) {
+      if (!['lamp', 'curtain', 'sconce'].includes(kind) || box.isEmpty()) {
+        continue;
+      }
+      const size = box.getSize(new Vector3());
+      const proxy = new Mesh(new BoxGeometry(size.x, size.y, size.z));
+      box.getCenter(proxy.position);
+      proxies.push(proxy);
+    }
+    return proxies;
   }
 
   clearSelection(): void {

@@ -7,8 +7,6 @@ export interface ViewerError {
   code: string;
   /** Ids de los activos afectados (muebles o `AssetLabelId`), no etiquetas. */
   params?: { names?: string[] };
-  /** Texto EN de compatibilidad (se retira en F3). */
-  message: string;
   retry?: () => void;
 }
 

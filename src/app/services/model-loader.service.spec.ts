@@ -30,7 +30,7 @@ function config(
     position: new Vector3(3, 0.7, -2),
     scale: 1,
     rotation: new Euler(),
-    metadata: { id: 'sofa', name: 'X', description: 'y' },
+    metadata: { id: 'sofa' },
     ...overrides,
   };
 }

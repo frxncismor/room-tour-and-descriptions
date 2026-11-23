@@ -12,8 +12,6 @@ import {
 export interface TranslatableError {
   code: string;
   params?: { names?: readonly string[] };
-  /** Texto ya resuelto (compatibilidad hasta que `SceneService` emita solo códigos). */
-  message?: string;
 }
 
 /** Códigos que ya emite `SceneService` con otro nombre. */
@@ -48,7 +46,7 @@ function nameOf(messages: Messages, id: string): string {
 /**
  * Texto de un error en el idioma de `messages`.
  * Traduce por código; si falta el código o los `params` que exige,
- * usa `message` (y, sin él, el texto genérico de `render-failed`).
+ * usa el texto genérico de `render-failed`.
  */
 export function errorText(
   messages: Messages,
@@ -69,5 +67,5 @@ export function errorText(
       });
     }
   }
-  return error.message ?? messages.errors.messages['render-failed'];
+  return messages.errors.messages['render-failed'];
 }

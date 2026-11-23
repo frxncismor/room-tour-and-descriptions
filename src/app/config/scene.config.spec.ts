@@ -7,7 +7,6 @@ import {
   RUG_TEXTURES,
   TRIM,
 } from './scene.config';
-import { FURNITURE_TEXT } from './ui-text';
 
 describe('scene config (T-231)', () => {
   it('keeps decor and interactive pieces in separate maps', () => {
@@ -38,15 +37,10 @@ describe('scene config (T-231)', () => {
     expect(DECOR_CONFIGURATIONS.clock.castShadow).toBe(false);
   });
 
-  it('the two new interactive pieces use their FURNITURE_TEXT', () => {
-    expect(MODEL_CONFIGURATIONS.landscapePainting.metadata).toEqual({
-      id: 'landscapePainting',
-      ...FURNITURE_TEXT.landscapePainting,
-    });
-    expect(MODEL_CONFIGURATIONS.succulent.metadata).toEqual({
-      id: 'succulent',
-      ...FURNITURE_TEXT.succulent,
-    });
+  it('every interactive piece carries only its id', () => {
+    for (const [id, config] of Object.entries(MODEL_CONFIGURATIONS)) {
+      expect(config.metadata).toEqual({ id });
+    }
   });
 
   it('declares the texture sets and the trim', () => {

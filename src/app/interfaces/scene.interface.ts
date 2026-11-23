@@ -4,10 +4,6 @@ import type { FurnitureId } from '../i18n/messages';
 export interface ObjectInfo {
   /** Id del mueble (clave de `MODEL_CONFIGURATIONS`). */
   id: FurnitureId;
-  name: string;
-  description: string;
-  /** Datos secundarios (autoría, origen). */
-  details?: string;
 }
 
 export interface SceneConfiguration {
@@ -127,15 +123,12 @@ export interface ModelConfiguration {
 
 /**
  * Pieza decorativa real, no interactiva: sin ficha ni entrada en la lista, y
- * con el raycast anulado. `label` solo se usa en el aviso si no carga.
+ * con el raycast anulado.
  */
-export type DecorConfiguration = Omit<ModelConfiguration, 'metadata'> & {
-  label: string;
-};
+export type DecorConfiguration = Omit<ModelConfiguration, 'metadata'>;
 
 /** Rutas y parámetros del suelo de madera (T-233). */
 export interface FloorTextures {
-  label: string;
   diffuse: string;
   normal: string;
   /** Mapa ARM (oclusión, rugosidad, metal): se usa el canal G como rugosidad. */
@@ -146,7 +139,6 @@ export interface FloorTextures {
 
 /** Rutas, medidas y parámetros de la alfombra (T-233). */
 export interface RugTextures {
-  label: string;
   diffuse: string;
   normal: string;
   /** Tinte multiplicado por la textura. */

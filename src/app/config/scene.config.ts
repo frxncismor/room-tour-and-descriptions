@@ -6,7 +6,6 @@ import {
   SceneConfiguration,
   TrimConfiguration,
 } from '../interfaces/scene.interface';
-import { FURNITURE_TEXT } from './ui-text';
 
 export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
   camera: {
@@ -113,7 +112,7 @@ export const MODEL_CONFIGURATIONS = {
     rotation: new Euler(0, Math.PI / 4, 0),
     yOffset: 0,
     materialOverride: { color: 0xa65f3a, roughness: 0.9, metalness: 0 },
-    metadata: { id: 'sofa' as const, ...FURNITURE_TEXT.sofa },
+    metadata: { id: 'sofa' as const },
   },
   pokerTable: {
     path: 'assets/models/poker_table/scene.gltf',
@@ -121,7 +120,7 @@ export const MODEL_CONFIGURATIONS = {
     scale: 1,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: { id: 'pokerTable' as const, ...FURNITURE_TEXT.pokerTable },
+    metadata: { id: 'pokerTable' as const },
   },
   bookshelf: {
     path: 'assets/models/bookshelf/scene.gltf',
@@ -129,7 +128,7 @@ export const MODEL_CONFIGURATIONS = {
     scale: 1,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: { id: 'bookshelf' as const, ...FURNITURE_TEXT.bookshelf },
+    metadata: { id: 'bookshelf' as const },
   },
   landscapePainting: {
     path: 'assets/models/landscape_painting/scene.gltf',
@@ -139,10 +138,7 @@ export const MODEL_CONFIGURATIONS = {
     yOffset: 1.14,
     castShadow: false,
     mergeMeshes: true,
-    metadata: {
-      id: 'landscapePainting' as const,
-      ...FURNITURE_TEXT.landscapePainting,
-    },
+    metadata: { id: 'landscapePainting' as const },
   },
   succulent: {
     path: 'assets/models/succulent/scene.gltf',
@@ -152,14 +148,13 @@ export const MODEL_CONFIGURATIONS = {
     yOffset: 0,
     castShadow: false,
     mergeMeshes: true,
-    metadata: { id: 'succulent' as const, ...FURNITURE_TEXT.succulent },
+    metadata: { id: 'succulent' as const },
   },
 };
 
 /** Decoración real no interactiva: el clic y el hover la atraviesan. */
 export const DECOR_CONFIGURATIONS = {
   clock: {
-    label: 'Wall clock',
     path: 'assets/models/wall_clock/scene.gltf',
     position: new Vector3(4, 0, -7.95),
     scale: 2,
@@ -169,7 +164,6 @@ export const DECOR_CONFIGURATIONS = {
     mergeMeshes: true,
   },
   vase: {
-    label: 'Ceramic vase',
     path: 'assets/models/ceramic_vase/scene.gltf',
     position: new Vector3(-1.85, 0, -7.55),
     scale: 2.2,
@@ -181,7 +175,6 @@ export const DECOR_CONFIGURATIONS = {
 } satisfies Record<string, DecorConfiguration>;
 
 export const FLOOR_TEXTURES: FloorTextures = {
-  label: 'Floor texture',
   diffuse: 'assets/textures/floor/diff.webp',
   normal: 'assets/textures/floor/nor.webp',
   arm: 'assets/textures/floor/arm.webp',
@@ -190,7 +183,6 @@ export const FLOOR_TEXTURES: FloorTextures = {
 };
 
 export const RUG_TEXTURES: RugTextures = {
-  label: 'Rug texture',
   diffuse: 'assets/textures/rug/diff.webp',
   normal: 'assets/textures/rug/nor.webp',
   tint: 0xffd9b3,

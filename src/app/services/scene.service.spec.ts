@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Group,
@@ -20,7 +21,6 @@ import {
   DEFAULT_SCENE_CONFIG,
   MODEL_CONFIGURATIONS,
 } from '../config/scene.config';
-import { FURNITURE_TEXT } from '../config/ui-text';
 import {
   DecorConfiguration,
   ModelConfiguration,
@@ -314,7 +314,7 @@ describe('SceneService', () => {
 
     expect(state.loadStatus()).toBe('error');
     expect(state.error()?.code).toBe('model-load-failed');
-    expect(state.error()?.message).toContain(FURNITURE_TEXT.pokerTable.name);
+    expect(state.error()?.params?.names).toEqual(['pokerTable']);
     expect(service.getObjectList()).toHaveLength(MODEL_COUNT - 1);
     expect(state.sceneReady()).toBe(true);
 
@@ -375,7 +375,7 @@ describe('SceneService', () => {
     const id = service.getObjectList()[0].id;
 
     service.selectObject(id);
-    expect(state.selected()?.name).toBe(service.getObjectList()[0].name);
+    expect(state.selected()?.id).toBe(id);
 
     service.clearSelection();
     expect(state.selected()).toBeNull();
@@ -403,10 +403,49 @@ describe('SceneService', () => {
     expect(front!.z).toBeCloseTo(Math.SQRT1_2, 3);
   });
 
+  it('selectObject counts the floor lamp, curtains and sconces as occlusion obstacles', async () => {
+    service.initialize(canvas);
+    await service.loadAll();
+    const focus = vi
+      .spyOn(TestBed.inject(CameraService), 'focusOn')
+      .mockResolvedValue(true);
+    const { pieces } = (
+      service as unknown as {
+        decor3: { pieces: { id: string; kind: string; box: Box3 }[] };
+      }
+    ).decor3;
+    const same = (a: Box3, b: Box3) =>
+      a.min.distanceTo(b.min) < 1e-4 && a.max.distanceTo(b.max) < 1e-4;
+    const blockers = pieces.filter(p =>
+      ['lamp', 'curtain', 'sconce'].includes(p.kind)
+    );
+    expect(blockers.map(p => p.kind)).toEqual(
+      expect.arrayContaining(['lamp', 'curtain', 'sconce'])
+    );
+
+    for (const { id } of service.getObjectList()) {
+      focus.mockClear();
+      service.selectObject(id);
+      const boxes = (focus.mock.calls[0][1] ?? []).map(o =>
+        new Box3().setFromObject(o)
+      );
+      for (const piece of blockers) {
+        expect(
+          boxes.some(b => same(b, piece.box)),
+          `${id}: ${piece.id}`
+        ).toBe(true);
+      }
+      // Los marcos de pared y los halos no estorban: no son obstáculos.
+      const halo = pieces.find(p => p.kind === 'halo')!;
+      expect(boxes.some(b => same(b, halo.box))).toBe(false);
+    }
+  });
+
   it('selectObject still works while the decor has not loaded', async () => {
     service.initialize(canvas);
     await service.loadAll();
     (service as unknown as { decorGroup: Group | null }).decorGroup = null;
+    (service as unknown as { decor3: unknown }).decor3 = null;
     const focus = vi
       .spyOn(TestBed.inject(CameraService), 'focusOn')
       .mockResolvedValue(true);
@@ -508,7 +547,7 @@ describe('SceneService', () => {
     const object = service
       .getScene()
       .children.find(c => c.type === 'Group' && c.name === '');
-    const info = { name: 'x' } as ObjectInfo;
+    const info: ObjectInfo = { id: 'sofa' };
     const set = vi.spyOn(state.hovered, 'set');
     const notify = interaction.onHoverChange!;
     notify({ object: object as Object3D, info });
@@ -638,7 +677,7 @@ describe('SceneService', () => {
     expect(state.error()).toBeNull(); // un error de carga sí se limpia
 
     for (const code of ['render-failed', 'webgl-context-lost']) {
-      state.error.set({ code, message: 'x' });
+      state.error.set({ code });
       await service.loadAll();
       expect(state.error()?.code).toBe(code);
     }
@@ -772,7 +811,7 @@ describe('SceneService', () => {
       await service.loadAll();
       expect(state.loadStatus()).toBe('error');
       expect(state.error()?.code).toBe('model-load-failed');
-      expect(state.error()?.message).toContain('Floor texture');
+      expect(state.error()?.params?.names).toContain('floor');
       expect(state.sceneReady()).toBe(true);
       expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
 
@@ -786,9 +825,7 @@ describe('SceneService', () => {
       failing.add('clock');
       service.initialize(canvas);
       await service.loadAll();
-      expect(state.error()?.message).toContain(
-        DECOR_CONFIGURATIONS.clock.label
-      );
+      expect(state.error()?.params?.names).toEqual(['clock']);
       expect(
         service.getScene().getObjectByName('decor')!.children
       ).toHaveLength(Object.keys(DECOR_CONFIGURATIONS).length - 1);
@@ -960,7 +997,6 @@ describe('SceneService', () => {
         'floor',
         'pokerTable',
       ]);
-      expect(state.error()?.message).toContain('Wall clock');
     });
 
     it('selectObject publishes the ObjectInfo with its id', async () => {
@@ -968,10 +1004,7 @@ describe('SceneService', () => {
       await service.loadAll();
       service.selectObject('sofa');
       expect(state.selected()?.id).toBe('sofa');
-      expect(service.getObjectList()).toContainEqual({
-        id: 'sofa',
-        name: expect.any(String),
-      });
+      expect(service.getObjectList()).toContainEqual({ id: 'sofa' });
     });
   });
 });
