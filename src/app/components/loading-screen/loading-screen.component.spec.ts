@@ -1,9 +1,23 @@
 import { TestBed } from '@angular/core/testing';
-import { UI_TEXT } from '../../config/ui-text';
+import { EN } from '../../i18n/en';
+import ES from '../../i18n/es';
+import { LOCALES } from '../../i18n/messages';
+import { localeReady, provideLocale } from '../../i18n/testing';
 import { ViewerStateService } from '../../services/viewer-state.service';
 import { LoadingScreenComponent } from './loading-screen.component';
 
-describe('LoadingScreenComponent', () => {
+const DICTIONARY = { en: EN, es: ES };
+const NBSP = ' ';
+
+describe.each(LOCALES)('LoadingScreenComponent (%s)', locale => {
+  const messages = DICTIONARY[locale];
+  const space = locale === 'es' ? NBSP : '';
+
+  beforeEach(async () => {
+    TestBed.configureTestingModule({ providers: [provideLocale(locale)] });
+    await localeReady();
+  });
+
   it('exposes progress through a progressbar and hides when ready', async () => {
     const state = TestBed.inject(ViewerStateService);
     state.loadStatus.set('loading');
@@ -13,6 +27,8 @@ describe('LoadingScreenComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const bar = el.querySelector('[role="progressbar"]') as HTMLElement;
     expect(bar.getAttribute('aria-valuenow')).toBe('42');
+    expect(bar.getAttribute('aria-valuetext')).toBe(`42${space}%`);
+    expect(bar.getAttribute('aria-label')).toBe(messages.loading.status);
     expect(el.querySelector('.loading.done')).toBeNull();
 
     state.loadStatus.set('ready');
@@ -23,7 +39,7 @@ describe('LoadingScreenComponent', () => {
     );
   });
 
-  it('shows the status with a tabular percentage', async () => {
+  it('shows the status with a localised percentage', async () => {
     const state = TestBed.inject(ViewerStateService);
     state.loadStatus.set('loading');
     state.loadProgress.set(7);
@@ -32,8 +48,8 @@ describe('LoadingScreenComponent', () => {
     const status = (fixture.nativeElement as HTMLElement).querySelector(
       '.status'
     );
-    expect(status?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      `${UI_TEXT.loading.status} · 7%`
+    expect(status?.textContent?.trim()).toBe(
+      `${messages.loading.status} · 7${space}%`
     );
   });
 
@@ -42,8 +58,8 @@ describe('LoadingScreenComponent', () => {
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('h1')?.textContent).toContain(
-      UI_TEXT.loading.title
+      messages.loading.title
     );
-    expect(el.textContent).toContain(UI_TEXT.loading.byline);
+    expect(el.textContent).toContain(messages.loading.byline);
   });
 });

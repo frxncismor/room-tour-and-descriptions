@@ -1,10 +1,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
+  inject,
   input,
   output,
 } from '@angular/core';
-import { UI_TEXT } from '../../config/ui-text';
+import { errorText } from '../../i18n/error-messages';
+import { LocaleService } from '../../i18n/locale.service';
 import { ViewerError } from '../../services/viewer-state.service';
 
 /** Aviso no bloqueante (p. ej. un modelo no cargó) con «Try again». */
@@ -13,9 +16,9 @@ import { ViewerError } from '../../services/viewer-state.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="banner" role="alert">
-      <span class="message">{{ error().message }}</span>
+      <span class="message">{{ message() }}</span>
       <button type="button" class="action" (click)="retry.emit()">
-        {{ text.retry }}
+        {{ text().retry }}
       </button>
     </div>
   `,
@@ -69,5 +72,9 @@ import { ViewerError } from '../../services/viewer-state.service';
 export class ErrorBannerComponent {
   readonly error = input.required<ViewerError>();
   readonly retry = output<void>();
-  protected readonly text = UI_TEXT.errors;
+  private readonly i18n = inject(LocaleService);
+  protected readonly text = computed(() => this.i18n.messages().errors);
+  protected readonly message = computed(() =>
+    errorText(this.i18n.messages(), this.i18n.locale(), this.error())
+  );
 }
