@@ -178,9 +178,9 @@ describe('ObjectListComponent', () => {
 });
 
 describe('HelpPanelComponent', () => {
-  beforeEach(() => localStorage.removeItem(HELP_STORAGE_KEY));
+  beforeEach(() => localStorage.clear());
   afterEach(() => {
-    localStorage.removeItem(HELP_STORAGE_KEY);
+    localStorage.clear();
     vi.unstubAllGlobals();
   });
 

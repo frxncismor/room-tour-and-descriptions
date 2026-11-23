@@ -27,7 +27,8 @@ x values) and its material is `BLEND`, which read as a dark glass box. `optimize
 snaps the inner vertices to a single central line, closes the 5 cm gaps between the four tiers
 (each tier stretches half a gap up/down, so sides, back and boards meet and the unit reads as one
 closed carcass from any angle, not four loose slabs) and makes the material opaque. It works in
-place on a copy of the original export (it is skipped on already-optimized output and throws on an
+place on a copy of the original export (it is idempotent: it is skipped on already-optimized output and on a model already marked
+`asset.extras.repaired`, so re-running after a failed pipeline step is safe; it throws on an
 unexpected layout).
 
 Runtime: the viewer registers `MeshoptDecoder` in `ModelLoaderService`
