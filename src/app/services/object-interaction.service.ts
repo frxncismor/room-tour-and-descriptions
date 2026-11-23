@@ -213,6 +213,12 @@ export class ObjectInteractionService {
     this.removeOutline();
   }
 
+  /** Selecciona un objeto por código: sustituye el contorno anterior. */
+  selectObject(object: Object3D): void {
+    this.removeOutline();
+    this.select(object);
+  }
+
   addObject(object: Object3D, info: ObjectInfo): void {
     this.objects.set(object, info);
   }
