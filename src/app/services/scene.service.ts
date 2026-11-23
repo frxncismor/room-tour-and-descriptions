@@ -18,6 +18,9 @@ import {
 import { RoomBuilderService } from './room-builder.service';
 import { ViewerStateService } from './viewer-state.service';
 
+/** Global de Angular: el build de producción lo fija a false y elimina el bloque. */
+declare const ngDevMode: boolean | undefined;
+
 export type ModelId = keyof typeof MODEL_CONFIGURATIONS;
 
 /** Subconjunto de WebGLRenderer que usa SceneService (permite stubs en tests). */
@@ -53,6 +56,14 @@ export const RENDERER_FACTORY = new InjectionToken<
     return renderer;
   },
 });
+
+/** Coste de render del último frame y memoria GPU viva (diagnóstico). */
+export interface RenderStats {
+  calls: number;
+  triangles: number;
+  textures: number;
+  geometries: number;
+}
 
 const MAX_FRAME_DELTA_MS = 100;
 /** Fallos de frame seguidos tras los que se para el bucle y se avisa. */
@@ -161,6 +172,9 @@ export class SceneService {
     this.applySize();
     this.addListeners(canvas);
     this.isInitialized = true;
+    if (typeof ngDevMode !== 'undefined' && ngDevMode) {
+      Object.assign(window, { __rtad: { stats: () => this.getRenderStats() } });
+    }
     this.startLoop();
   }
 
@@ -169,6 +183,7 @@ export class SceneService {
 
     this.generation++;
     this.stopLoop();
+    Reflect.deleteProperty(window, '__rtad');
     this.removeListeners();
 
     this.cameraService.dispose();
@@ -512,6 +527,17 @@ export class SceneService {
       pointerType: point.pointerType,
       target: this.canvas,
     } as PointerLike;
+  }
+
+  /** Draw calls y triángulos del último frame (three.js resetea `info.render` al *empezar* cada render, así que fuera del bucle siempre es el frame completo anterior); texturas y geometrías vivas. */
+  getRenderStats(): RenderStats {
+    const info = this.renderer?.info;
+    return {
+      calls: info?.render.calls ?? 0,
+      triangles: info?.render.triangles ?? 0,
+      textures: info?.memory.textures ?? 0,
+      geometries: info?.memory.geometries ?? 0,
+    };
   }
 
   getScene(): Scene {

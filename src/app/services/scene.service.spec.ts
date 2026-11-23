@@ -32,7 +32,10 @@ function createStubRenderer(): SceneRenderer & {
   const memory = { geometries: 0, textures: 0 };
   const known = new WeakSet<BufferGeometry>();
   return {
-    info: { memory } as SceneRenderer['info'],
+    info: {
+      memory,
+      render: { calls: 0, triangles: 0 },
+    } as SceneRenderer['info'],
     shadowMap: { enabled: true } as SceneRenderer['shadowMap'],
     setSize: vi.fn(),
     setPixelRatio: vi.fn(),
@@ -150,6 +153,38 @@ describe('SceneService', () => {
     runFrame(32);
     expect(renderer.render).toHaveBeenCalledTimes(2);
     expect(rafCallbacks.size).toBe(1);
+  });
+
+  it('getRenderStats reads renderer.info after a frame (zeros before)', () => {
+    service.initialize(canvas);
+    expect(service.getRenderStats()).toEqual({
+      calls: 0,
+      triangles: 0,
+      textures: 0,
+      geometries: 0,
+    });
+    renderer.render.mockImplementationOnce(() => {
+      renderer.info.render.calls = 7;
+      renderer.info.render.triangles = 1200;
+      renderer.info.memory.textures = 3;
+      renderer.info.memory.geometries = 5;
+    });
+    runFrame(16);
+    expect(service.getRenderStats()).toEqual({
+      calls: 7,
+      triangles: 1200,
+      textures: 3,
+      geometries: 5,
+    });
+  });
+
+  it('exposes window.__rtad.stats in dev mode and removes it on dispose', () => {
+    service.initialize(canvas);
+    const rtad = (window as unknown as { __rtad?: { stats: () => unknown } })
+      .__rtad;
+    expect(rtad?.stats()).toEqual(service.getRenderStats());
+    service.dispose();
+    expect((window as unknown as { __rtad?: unknown }).__rtad).toBeUndefined();
   });
 
   it('dispose cancels the rAF, is idempotent and resets state', () => {
