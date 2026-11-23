@@ -1,10 +1,12 @@
 import {
   BoxGeometry,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  Vector3,
 } from 'three';
 import { ObjectInteractionService } from './object-interaction.service';
 
@@ -173,14 +175,34 @@ describe('ObjectInteractionService', () => {
     expect(service.getSelected()).toBeNull();
   });
 
-  it('pulses the outline opacity in update()', async () => {
+  it('pulses the outline colour in update() and keeps it opaque', async () => {
     await click(100, 100);
     const outlineMesh = furniture.children[0].children[0] as Mesh;
-    const material = outlineMesh.material as { opacity: number };
+    const material = outlineMesh.material as MeshBasicMaterial;
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
     service.update(0);
-    const a = material.opacity;
+    const a = material.color.getHex();
     service.update(Math.PI / 2 / 0.003);
-    expect(material.opacity).not.toBeCloseTo(a);
+    expect(material.color.getHex()).not.toBe(a);
+  });
+
+  it('grows each outline mesh around its own centre, not its local origin', async () => {
+    // Malla con la geometría desplazada 5 m del origen local.
+    furniture.geometry.translate(5, 0, 0);
+    furniture.geometry.computeBoundingBox();
+    service.selectObject(furniture);
+    const outlineMesh = furniture.children[0].children[0] as Mesh;
+    const box = furniture.geometry.boundingBox!;
+    const center = box.getCenter(new Vector3());
+    // El contorno es hijo del mueble: el centro de la caja no se desplaza al agrandar,
+    // pero un punto de la esquina sí se aleja de él.
+    const grown = center.clone().applyMatrix4(outlineMesh.matrix);
+    expect(grown.distanceTo(center)).toBeLessThan(1e-6);
+    const corner = box.max.clone();
+    expect(
+      corner.clone().applyMatrix4(outlineMesh.matrix).distanceTo(center)
+    ).toBeGreaterThan(corner.distanceTo(center));
   });
 
   it('does not select the outline itself when raycasting', async () => {

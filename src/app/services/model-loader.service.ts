@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import {
   Box3,
   Color,
+  LoadingManager,
   Material,
   Mesh,
   MeshStandardMaterial,
@@ -79,31 +80,56 @@ export function applyMaterialOverride(
   providedIn: 'root',
 })
 export class ModelLoaderService {
-  private loader: GLTFLoader;
-
-  constructor() {
-    this.loader = this.createLoader();
-  }
-
-  private createLoader(): GLTFLoader {
-    const loader = new GLTFLoader();
+  /** Cada carga usa su propio `LoadingManager` para contar .bin y texturas de ese modelo. */
+  private createLoader(manager: LoadingManager): GLTFLoader {
+    const loader = new GLTFLoader(manager);
     loader.setMeshoptDecoder(MeshoptDecoder);
     return loader;
   }
 
   /**
    * Carga un modelo y lo coloca por su base sobre el suelo.
-   * `onProgress` recibe bytes reales; `total` es 0 si el servidor no lo informa.
+   * `onProgress(loaded, total)` va en unidades de recurso: cada fichero que el
+   * manager descubre (gltf, .bin, texturas) cuenta 1, y el fichero principal
+   * aporta su fracción de bytes mientras descarga. Así el progreso incluye los
+   * ficheros secundarios y no salta al final. `total` crece al descubrirlos.
    */
   async loadModel(
     config: ModelConfiguration,
     onProgress?: LoadProgressCallback
   ): Promise<Object3D> {
     const cleanPath = config.path.replace(/^\/+/, '');
-    const gltf = await this.loader.loadAsync(cleanPath, event => {
-      const total = event.lengthComputable && event.total > 0 ? event.total : 0;
-      onProgress?.(event.loaded, total);
-    });
+    let itemsLoaded = 0;
+    let itemsTotal = 0;
+    let mainFraction = 0;
+    const report = () => {
+      const total = Math.max(itemsTotal, 1);
+      // Cuando el principal ya terminó, `itemsLoaded` ya lo cuenta.
+      const partial = itemsLoaded === 0 ? mainFraction : 0;
+      onProgress?.(Math.min(itemsLoaded + partial, total), total);
+    };
+    const manager = new LoadingManager();
+    manager.onStart = (_url, loaded, total) => {
+      itemsLoaded = loaded;
+      itemsTotal = total;
+      report();
+    };
+    manager.onProgress = (_url, loaded, total) => {
+      itemsLoaded = loaded;
+      itemsTotal = total;
+      report();
+    };
+
+    const gltf = await this.createLoader(manager).loadAsync(
+      cleanPath,
+      event => {
+        mainFraction =
+          event.lengthComputable && event.total > 0
+            ? Math.min(event.loaded / event.total, 1)
+            : 0;
+        report();
+      }
+    );
     const model = gltf.scene;
     applyMaterialOverride(model, config.materialOverride);
     this.applyTransformations(model, config);
@@ -147,7 +173,8 @@ export class ModelLoaderService {
     });
   }
 
+  /** Sin estado compartido que liberar: cada carga crea y descarta su loader. */
   dispose(): void {
-    this.loader = this.createLoader();
+    // intencionadamente vacío
   }
 }

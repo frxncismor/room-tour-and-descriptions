@@ -16,7 +16,13 @@ import {
 import { ModelConfiguration, ObjectInfo } from '../interfaces/scene.interface';
 import { ModelLoaderService } from './model-loader.service';
 import { ObjectInteractionService } from './object-interaction.service';
-import { RENDERER_FACTORY, SceneRenderer, SceneService } from './scene.service';
+import { RoomBuilderService } from './room-builder.service';
+import {
+  MAX_CONSECUTIVE_FRAME_FAILURES,
+  RENDERER_FACTORY,
+  SceneRenderer,
+  SceneService,
+} from './scene.service';
 import { ViewerStateService } from './viewer-state.service';
 
 /** Renderer falso que cuenta geometrías vivas como `renderer.info.memory`. */
@@ -408,5 +414,174 @@ describe('SceneService', () => {
     expect(set).toHaveBeenCalledTimes(1);
     notify(null);
     expect(state.hovered()).toBeNull();
+  });
+
+  // ── I4: robustez del frame ──────────────────────────────────────────
+
+  it('a single frame failure is tolerated and logged once', () => {
+    service.initialize(canvas);
+    renderer.render.mockImplementationOnce(() => {
+      throw new Error('gl');
+    });
+    runFrame(16);
+    expect(state.error()).toBeNull();
+    expect(rafCallbacks.size).toBe(1);
+    runFrame(32);
+    expect(renderer.render).toHaveBeenCalledTimes(2);
+    expect(console.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the loop after N consecutive failures, publishes render-failed and retry resumes', () => {
+    service.initialize(canvas);
+    renderer.render.mockImplementation(() => {
+      throw new Error('gl');
+    });
+    for (let i = 0; i < MAX_CONSECUTIVE_FRAME_FAILURES; i++) runFrame(16 * i);
+
+    expect(rafCallbacks.size).toBe(0);
+    expect(state.error()?.code).toBe('render-failed');
+    expect(state.sceneReady()).toBe(false);
+    expect(console.error).toHaveBeenCalledTimes(1);
+
+    renderer.render.mockReset();
+    state.error()?.retry?.();
+    expect(state.error()).toBeNull();
+    expect(rafCallbacks.size).toBe(1);
+    runFrame(500);
+    expect(renderer.render).toHaveBeenCalledTimes(1);
+  });
+
+  it('a successful frame resets the failure streak', () => {
+    service.initialize(canvas);
+    const fail = () =>
+      renderer.render.mockImplementationOnce(() => {
+        throw new Error('gl');
+      });
+    for (let i = 0; i < MAX_CONSECUTIVE_FRAME_FAILURES - 1; i++) {
+      fail();
+      runFrame(16 * i);
+    }
+    runFrame(100); // éxito
+    for (let i = 0; i < MAX_CONSECUTIVE_FRAME_FAILURES - 1; i++) {
+      fail();
+      runFrame(200 + 16 * i);
+    }
+    expect(state.error()).toBeNull();
+    expect(rafCallbacks.size).toBe(1);
+  });
+
+  // ── M5 / M6 ────────────────────────────────────────────────────────
+
+  it('handlePointerSelect clears the selection when the click fails', async () => {
+    service.initialize(canvas);
+    await service.loadAll();
+    service.selectObject(service.getObjectList()[0].id);
+    expect(state.selected()).not.toBeNull();
+    const interaction = TestBed.inject(ObjectInteractionService);
+    vi.spyOn(interaction, 'handleClick').mockResolvedValue({
+      objectInfo: null,
+      success: false,
+      error: 'boom',
+    });
+    await service.handlePointerSelect({ clientX: 1, clientY: 1 });
+    expect(state.selected()).toBeNull();
+  });
+
+  it('dispose releases the room built by RoomBuilderService', () => {
+    const room = TestBed.inject(RoomBuilderService);
+    const dispose = vi.spyOn(room, 'dispose');
+    service.initialize(canvas);
+    const scene = service.getScene();
+    service.dispose();
+    expect(dispose).toHaveBeenCalledWith(scene);
+  });
+
+  // ── M10: retryLoad, resize y listeners ──────────────────────────────
+
+  it('retryLoad(id) reloads only that model', async () => {
+    failing.add('sofa');
+    failing.add('pokerTable');
+    service.initialize(canvas);
+    await service.loadAll();
+    failing.clear();
+    loadModel.mockClear();
+
+    await service.retryLoad('sofa');
+    expect(loadModel).toHaveBeenCalledTimes(1);
+    expect(loadModel.mock.calls[0][0].path).toBe(
+      MODEL_CONFIGURATIONS.sofa.path
+    );
+    expect(service.getObjectList().map(o => o.id)).toContain('sofa');
+    expect(service.getObjectList()).toHaveLength(2);
+  });
+
+  it('retryLoad does nothing before initialize or when everything is loaded', async () => {
+    await service.retryLoad('sofa');
+    expect(loadModel).not.toHaveBeenCalled();
+    service.initialize(canvas);
+    await service.loadAll();
+    loadModel.mockClear();
+    await service.retryLoad();
+    expect(loadModel).not.toHaveBeenCalled();
+  });
+
+  describe('resize and pixel ratio', () => {
+    const setDpr = (value: number) =>
+      Object.defineProperty(window, 'devicePixelRatio', {
+        configurable: true,
+        value,
+      });
+
+    afterEach(() => {
+      setDpr(1);
+      vi.unstubAllGlobals();
+    });
+
+    it('caps the pixel ratio at 2 and passes smaller ratios through', () => {
+      setDpr(3);
+      service.initialize(canvas);
+      expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(2);
+      service.dispose();
+      renderer = createStubRenderer();
+      setDpr(1.5);
+      service.initialize(canvas);
+      expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1.5);
+    });
+
+    it('re-applies size and aspect when the container resizes, and disconnects on dispose', () => {
+      let notify: () => void = () => undefined;
+      const disconnect = vi.fn();
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(cb: () => void) {
+            notify = cb;
+          }
+          observe = vi.fn();
+          disconnect = disconnect;
+        }
+      );
+      service.initialize(canvas);
+      expect(renderer.setSize).toHaveBeenCalledTimes(1);
+      notify();
+      expect(renderer.setSize).toHaveBeenCalledTimes(2);
+
+      service.dispose();
+      expect(disconnect).toHaveBeenCalled();
+    });
+
+    it('removes the window resize listener on dispose (no ResizeObserver)', () => {
+      vi.stubGlobal('ResizeObserver', undefined);
+      service.initialize(canvas);
+      expect(renderer.setSize).toHaveBeenCalledTimes(1);
+      window.dispatchEvent(new Event('resize'));
+      expect(renderer.setSize).toHaveBeenCalledTimes(2);
+
+      const remove = vi.spyOn(window, 'removeEventListener');
+      service.dispose();
+      expect(remove).toHaveBeenCalledWith('resize', expect.any(Function));
+      window.dispatchEvent(new Event('resize'));
+      expect(renderer.setSize).toHaveBeenCalledTimes(2);
+    });
   });
 });

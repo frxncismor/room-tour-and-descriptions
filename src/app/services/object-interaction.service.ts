@@ -4,6 +4,7 @@ import {
   Color,
   Group,
   Material,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -59,11 +60,14 @@ interface EmissiveMaterial extends Material {
 }
 
 const OUTLINE_NAME = '__selection-outline';
-const OUTLINE_COLOR = 0x2c4a52;
-const OUTLINE_SCALE = 1.03;
-const OUTLINE_BASE_OPACITY = 0.45;
-const OUTLINE_PULSE_AMPLITUDE = 0.15;
+const OUTLINE_COLOR = 0x2f8fa8;
+const OUTLINE_PULSE_COLOR = 0x8fe3f5;
+const OUTLINE_PULSE_AMPLITUDE = 0.5;
 const OUTLINE_PULSE_SPEED = 0.003;
+/** Grosor deseado del contorno en metros (igual en sofá, mesa o estantería). */
+const OUTLINE_THICKNESS = 0.025;
+const OUTLINE_MIN_SCALE = 1.01;
+const OUTLINE_MAX_SCALE = 1.15;
 const HOVER_EMISSIVE_COLOR = 0x3a6a78;
 const HOVER_EMISSIVE_INTENSITY = 0.35;
 const TELEPORT_MARGIN = 1.5;
@@ -100,6 +104,7 @@ export class ObjectInteractionService {
   private pendingHover: Vector2 | null = null;
   private hoverDirty = false;
   private hovered: HoverTarget | null = null;
+  private readonly pulseColor = new Color(OUTLINE_PULSE_COLOR);
   private readonly emissiveBackup = new Map<Material, EmissiveBackup>();
 
   /** Notificación opcional de cambios de hover (F4b la conecta a señales). */
@@ -254,9 +259,11 @@ export class ObjectInteractionService {
   /** Llamar una vez por frame desde el bucle de F4b (sin rAF propio). */
   update(timeMs: number): void {
     if (this.outlineMaterial) {
-      this.outlineMaterial.opacity =
-        OUTLINE_BASE_OPACITY +
-        Math.sin(timeMs * OUTLINE_PULSE_SPEED) * OUTLINE_PULSE_AMPLITUDE;
+      // Pulso de color (el contorno es opaco: sin velo translúcido sobre el objeto).
+      const t =
+        ((Math.sin(timeMs * OUTLINE_PULSE_SPEED) + 1) / 2) *
+        OUTLINE_PULSE_AMPLITUDE;
+      this.outlineMaterial.color.setHex(OUTLINE_COLOR).lerp(this.pulseColor, t);
     }
     if (this.hoverDirty) {
       this.hoverDirty = false;
@@ -353,9 +360,6 @@ export class ObjectInteractionService {
     this.outlineMaterial = new MeshBasicMaterial({
       color: OUTLINE_COLOR,
       side: BackSide,
-      transparent: true,
-      opacity: OUTLINE_BASE_OPACITY,
-      depthWrite: false,
     });
     const outline = new Group();
     outline.name = OUTLINE_NAME;
@@ -376,13 +380,41 @@ export class ObjectInteractionService {
       clone.matrix
         .copy(rootInverse)
         .multiply(mesh.matrixWorld)
-        .scale(new Vector3(OUTLINE_SCALE, OUTLINE_SCALE, OUTLINE_SCALE));
+        .multiply(this.growAroundCenter(mesh));
       clone.matrixWorldNeedsUpdate = true;
       outline.add(clone);
     }
     outline.raycast = () => undefined;
     root.add(outline);
     this.outline = outline;
+  }
+
+  /**
+   * Matriz local que agranda la malla alrededor del centro de su caja (no de su
+   * origen local) lo justo para ~`OUTLINE_THICKNESS` m de borde en cualquier tamaño.
+   */
+  private growAroundCenter(mesh: Mesh): Matrix4 {
+    const geometry = mesh.geometry;
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    if (!box) return new Matrix4();
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
+    const worldScale = mesh.getWorldScale(new Vector3());
+    const half =
+      Math.max(
+        size.x * worldScale.x,
+        size.y * worldScale.y,
+        size.z * worldScale.z
+      ) / 2 || 1;
+    const factor = Math.min(
+      OUTLINE_MAX_SCALE,
+      Math.max(OUTLINE_MIN_SCALE, 1 + OUTLINE_THICKNESS / half)
+    );
+    return new Matrix4()
+      .makeTranslation(center.x, center.y, center.z)
+      .scale(new Vector3(factor, factor, factor))
+      .multiply(new Matrix4().makeTranslation(-center.x, -center.y, -center.z));
   }
 
   private resolveHover(): void {
