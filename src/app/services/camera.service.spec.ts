@@ -1,5 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { Box3, BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three';
+import {
+  Box3,
+  BoxGeometry,
+  Mesh,
+  MeshBasicMaterial,
+  Ray,
+  Vector3,
+} from 'three';
 import {
   DEFAULT_SCENE_CONFIG,
   MODEL_CONFIGURATIONS,
@@ -120,6 +127,83 @@ describe('CameraService', () => {
     expect(service.getCamera().position.distanceTo(mesh.position)).toBeLessThan(
       before
     );
+  });
+
+  describe('focusOn occlusion', () => {
+    const box = (x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => {
+      const mesh = new Mesh(
+        new BoxGeometry(sx, sy, sz),
+        new MeshBasicMaterial()
+      );
+      mesh.position.set(x, y, z);
+      mesh.updateMatrixWorld(true);
+      return mesh;
+    };
+
+    const blocked = (blocker: Mesh, from: Vector3, to: Vector3): boolean => {
+      const dir = to.clone().sub(from);
+      const length = dir.length();
+      const hit = new Ray(from.clone(), dir.normalize()).intersectBox(
+        new Box3().setFromObject(blocker),
+        new Vector3()
+      );
+      return hit !== null && hit.distanceTo(from) < length;
+    };
+
+    it('picks an unoccluded candidate when the default one is blocked', async () => {
+      const target = box(0, 0.5, -3);
+      service.getCamera().position.set(0, 1.7, 3);
+      // Pared baja delante del objetivo: tapa el candidato por defecto.
+      const blocker = box(0, 0.9, 0.2, 4, 2.2, 0.4);
+
+      const done = service.focusOn(target, [blocker]);
+      service.update(5000);
+      await expect(done).resolves.toBe(true);
+
+      const from = service.getCamera().position.clone();
+      expect(blocked(blocker, from, new Vector3(0, 0.5, -3))).toBe(false);
+      expect(service.getTarget().z).toBeCloseTo(-3, 0);
+    });
+
+    it('fits the focused object inside the visible area in portrait', async () => {
+      service.setAspect(390 / 844);
+      // Estantería ancha, como la del salón, a un lado de la sala.
+      const target = box(3, 1, -2, 2.2, 2, 0.5);
+      const done = service.focusOn(target);
+      service.update(5000);
+      await expect(done).resolves.toBe(true);
+
+      const camera = service.getCamera();
+      camera.updateMatrixWorld(true);
+      const bounds = new Box3().setFromObject(target);
+      for (const x of [bounds.min.x, bounds.max.x])
+        for (const y of [bounds.min.y, bounds.max.y])
+          for (const z of [bounds.min.z, bounds.max.z]) {
+            const ndc = new Vector3(x, y, z).project(camera);
+            expect(Math.abs(ndc.x)).toBeLessThanOrEqual(0.9);
+            expect(ndc.y).toBeLessThanOrEqual(0.9);
+            // La ficha inferior ocupa ~30 % del alto.
+            expect(ndc.y).toBeGreaterThanOrEqual(-0.4);
+          }
+    });
+
+    it('keeps the default candidate when nothing blocks it', async () => {
+      const target = box(0, 0.5, -3);
+      const faraway = box(4, 0.5, 0, 1, 1, 1);
+
+      service.getCamera().position.set(0, 1.7, 3);
+      void service.focusOn(target, [faraway]);
+      service.update(5000);
+      const withObstacle = service.getCamera().position.clone();
+
+      service.getCamera().position.set(0, 1.7, 3);
+      void service.focusOn(target);
+      service.update(5000);
+
+      expect(withObstacle.x).toBeCloseTo(service.getCamera().position.x, 5);
+      expect(withObstacle.z).toBeCloseTo(service.getCamera().position.z, 5);
+      expect(withObstacle.x).toBeCloseTo(0, 3);
+    });
   });
 
   it('reset returns to the initial position', async () => {
