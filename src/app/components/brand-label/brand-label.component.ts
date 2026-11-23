@@ -1,25 +1,27 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { UI_TEXT } from '../../config/ui-text';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+} from '@angular/core';
+import { LocaleService } from '../../i18n/locale.service';
 
-/** Rótulo discreto con el título del proyecto y su autor (no interactivo). */
+/** Rótulo discreto con el título del proyecto y su autor (no interactivo).
+ * Lo coloca el contenedor `.corner` del visor. */
 @Component({
   selector: 'app-brand-label',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <p class="brand">
-      <span class="title">{{ text.title }}</span>
-      <span class="byline">{{ text.byline }}</span>
+      <span class="title">{{ text().title }}</span>
+      <span class="byline">{{ text().byline }}</span>
     </p>
   `,
   styles: `
     :host {
-      display: contents;
+      display: block;
     }
     .brand {
-      position: absolute;
-      bottom: var(--space-4);
-      left: var(--space-4);
-      z-index: 10;
       display: grid;
       margin: 0;
       padding: var(--space-2) var(--space-3);
@@ -43,14 +45,9 @@ import { UI_TEXT } from '../../config/ui-text';
       text-transform: uppercase;
       color: var(--ink-muted);
     }
-    @media (max-width: 600px), (max-height: 500px) {
-      .brand {
-        bottom: var(--space-3);
-        left: var(--space-3);
-      }
-    }
   `,
 })
 export class BrandLabelComponent {
-  protected readonly text = UI_TEXT.brand;
+  private readonly i18n = inject(LocaleService);
+  protected readonly text = computed(() => this.i18n.messages().brand);
 }

@@ -1,10 +1,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
+  inject,
   input,
   output,
 } from '@angular/core';
-import { FurnitureText, UI_TEXT } from '../../config/ui-text';
+import { LocaleService } from '../../i18n/locale.service';
+import { FurnitureId } from '../../i18n/messages';
 
 /** Ficha de un mueble: no modal; Esc y clic en vacío los gestiona el visor. */
 @Component({
@@ -14,11 +17,11 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
     <!-- Persistent live region: screen readers only announce changes in a
          region that already exists, so it lives outside the @if. -->
     <div class="sr-only" aria-live="polite" aria-atomic="true">
-      @if (info(); as announced) {
+      @if (content(); as announced) {
         {{ announced.name }}. {{ announced.description }}
       }
     </div>
-    @if (info(); as item) {
+    @if (content(); as item) {
       <section
         class="panel"
         role="dialog"
@@ -28,7 +31,7 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
         <button
           type="button"
           class="close"
-          [attr.aria-label]="text.close"
+          [attr.aria-label]="i18n.messages().panel.close"
           (click)="closed.emit()"
         >
           <svg
@@ -82,6 +85,7 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
       border: 1px solid var(--rule);
       border-radius: var(--radius-2);
       box-shadow: var(--shadow-panel);
+      overflow-wrap: anywhere;
       animation: panel-in var(--dur-2) var(--ease);
     }
     h2 {
@@ -157,7 +161,13 @@ import { FurnitureText, UI_TEXT } from '../../config/ui-text';
   `,
 })
 export class DescriptionPanelComponent {
-  readonly info = input<FurnitureText | null>(null);
+  /** Pieza abierta: solo importa su `id`; el texto sale del diccionario activo. */
+  readonly info = input<{ id: FurnitureId } | null>(null);
   readonly closed = output<void>();
-  protected readonly text = UI_TEXT.panel;
+  protected readonly i18n = inject(LocaleService);
+  /** Texto de la ficha en el idioma activo (se actualiza al cambiar de idioma). */
+  protected readonly content = computed(() => {
+    const info = this.info();
+    return info ? this.i18n.messages().furniture[info.id] : null;
+  });
 }

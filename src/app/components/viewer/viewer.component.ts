@@ -9,7 +9,9 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { UI_TEXT } from '../../config/ui-text';
+import { collator } from '../../i18n/format';
+import { LocaleService } from '../../i18n/locale.service';
+import { FurnitureId } from '../../i18n/messages';
 import { SceneService } from '../../services/scene.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
 import { BrandLabelComponent } from '../brand-label/brand-label.component';
@@ -17,6 +19,7 @@ import { DescriptionPanelComponent } from '../description-panel/description-pane
 import { ErrorBannerComponent } from '../error-banner/error-banner.component';
 import { ErrorOverlayComponent } from '../error-overlay/error-overlay.component';
 import { HelpPanelComponent } from '../help-panel/help-panel.component';
+import { LanguageSwitcherComponent } from '../language-switcher/language-switcher.component';
 import { LoadingScreenComponent } from '../loading-screen/loading-screen.component';
 import { ObjectListComponent } from '../object-list/object-list.component';
 
@@ -34,6 +37,7 @@ const BLOCKING_ERRORS = ['webgl-unavailable', 'webgl-context-lost'];
     ErrorBannerComponent,
     ErrorOverlayComponent,
     HelpPanelComponent,
+    LanguageSwitcherComponent,
     LoadingScreenComponent,
     ObjectListComponent,
   ],
@@ -49,7 +53,10 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
 
   private readonly sceneService = inject(SceneService);
   protected readonly state = inject(ViewerStateService);
-  protected readonly canvasLabel = UI_TEXT.canvasLabel;
+  private readonly i18n = inject(LocaleService);
+  protected readonly canvasLabel = computed(
+    () => this.i18n.messages().canvasLabel
+  );
 
   protected readonly dragging = signal(false);
   /** Primer gesto de navegación: la ayuda se da por vista (H3). */
@@ -78,9 +85,12 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
     // El listado del servicio no es una señal: se recalcula con el estado.
     this.state.sceneReady();
     this.state.loadStatus();
+    const { furniture } = this.i18n.messages();
+    const compare = collator(this.i18n.locale()).compare;
     return this.sceneService
       .getObjectList()
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map(({ id }) => ({ id, name: furniture[id as FurnitureId].name }))
+      .sort((a, b) => compare(a.name, b.name));
   });
 
   private readonly pointers = new Map<number, { x: number; y: number }>();

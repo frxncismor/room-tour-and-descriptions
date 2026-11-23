@@ -2,12 +2,13 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  computed,
   effect,
   inject,
   input,
   output,
 } from '@angular/core';
-import { UI_TEXT } from '../../config/ui-text';
+import { LocaleService } from '../../i18n/locale.service';
 
 export interface ObjectListItem {
   id: string;
@@ -19,15 +20,16 @@ export interface ObjectListItem {
   selector: 'app-object-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <nav class="list" [attr.aria-label]="text.title">
-      <h2 class="head">{{ text.title }}</h2>
+    <nav class="list" [attr.aria-label]="text().title">
+      <h2 class="head">{{ text().title }}</h2>
       <ul>
         @for (item of items(); track item.id) {
           <li>
             <button
               type="button"
               class="chip"
-              [attr.aria-pressed]="item.name === selectedName()"
+              [attr.data-id]="item.id"
+              [attr.aria-pressed]="item.id === selectedId()"
               (click)="selectItem.emit(item.id)"
             >
               {{ item.name }}
@@ -38,7 +40,7 @@ export interface ObjectListItem {
           <button
             type="button"
             class="chip reset"
-            [attr.aria-label]="text.resetViewLabel"
+            [attr.aria-label]="text().resetViewLabel"
             (click)="resetView.emit()"
           >
             <svg
@@ -54,7 +56,7 @@ export interface ObjectListItem {
             >
               <path d="M5 2 1.5 5.5 5 9M1.5 5.5H9.5a3 3 0 0 1 3 3V12" />
             </svg>
-            <span class="reset-text">{{ text.resetView }}</span>
+            <span class="reset-text">{{ text().resetView }}</span>
           </button>
         </li>
       </ul>
@@ -97,6 +99,7 @@ export interface ObjectListItem {
       padding: 0 var(--space-4);
       color: var(--ink);
       text-align: left;
+      overflow-wrap: anywhere;
       cursor: pointer;
       background: none;
       border: 0;
@@ -205,19 +208,40 @@ export interface ObjectListItem {
 })
 export class ObjectListComponent {
   readonly items = input<ObjectListItem[]>([]);
-  readonly selectedName = input<string | null>(null);
+  readonly selectedId = input<string | null>(null);
   readonly selectItem = output<string>();
   readonly resetView = output<void>();
-  protected readonly text = UI_TEXT.list;
+  private readonly i18n = inject(LocaleService);
+  protected readonly text = computed(() => this.i18n.messages().list);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   constructor() {
     // En la tira móvil la pieza activa puede quedar fuera de la vista: la traemos.
     effect(() => {
-      this.selectedName();
+      this.selectedId();
       this.items();
-      queueMicrotask(() => this.revealActive());
+      // Reordenar (cambio de idioma) puede soltar el foco del chip: se devuelve.
+      const focusedId = this.focusedChipId();
+      queueMicrotask(() => {
+        this.restoreFocus(focusedId);
+        this.revealActive();
+      });
     });
+  }
+
+  private focusedChipId(): string | null {
+    const active = this.host.nativeElement.ownerDocument.activeElement;
+    if (!active || !this.host.nativeElement.contains(active)) return null;
+    return active.getAttribute('data-id');
+  }
+
+  private restoreFocus(id: string | null): void {
+    if (id === null) return;
+    const host = this.host.nativeElement;
+    if (host.contains(host.ownerDocument.activeElement)) return;
+    Array.from(host.querySelectorAll<HTMLElement>('.chip[data-id]'))
+      .find(chip => chip.getAttribute('data-id') === id)
+      ?.focus({ preventScroll: true });
   }
 
   private revealActive(): void {
