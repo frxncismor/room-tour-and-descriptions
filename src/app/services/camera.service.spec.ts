@@ -185,6 +185,31 @@ describe('CameraService', () => {
       );
     });
 
+    it('keyboard panning during a teleport cancels the tween', async () => {
+      const done = service.teleportTo(new Vector3(3, 0, 3));
+      service.update(300);
+      expect(service.isAnimating()).toBe(true);
+      press('ArrowLeft');
+      service.update(16);
+      await expect(done).resolves.toBe(false);
+      expect(service.isAnimating()).toBe(false);
+    });
+
+    it('reset does not mark the framed pose when panning cancelled it', async () => {
+      service.teleportTo(new Vector3(3, 0, 3));
+      service.update(2000);
+      const done = service.reset();
+      service.update(300);
+      press('ArrowLeft');
+      service.update(16);
+      await expect(done).resolves.toBe(false);
+      const panned = service.getCamera().position.clone();
+      service.setAspect(390 / 844);
+      expect(service.getCamera().position.distanceTo(panned)).toBeLessThan(
+        0.01
+      );
+    });
+
     it('dragging during a teleport cancels it and hands control back', async () => {
       const done = service.teleportTo(new Vector3(3, 0, 3));
       service.update(300);

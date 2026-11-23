@@ -48,10 +48,15 @@ function gt(...args) {
  * The Sketchfab "BookShelf" ships with broken source geometry: the central divider is
  * sheared into a diagonal "crack" (32 triangles with diagonal normals, inner vertices at
  * 16 different x values) and the material is BLEND, so it reads as a dark glass box.
- * This repairs the ORIGINAL export in place (the file in `dir`, which must be a work copy):
+ * The four tiers are also separate boxes with a 5 cm air gap between them, so from an oblique
+ * angle the unit reads as four loose slabs instead of one piece of furniture.
+ * This repairs the ORIGINAL export in place (the files in `dir`, which must be a copy of the
+ * original: the script works in place, it does not make its own copy):
  *   1. drops the diagonal triangles (normal has both x and z components),
- *   2. snaps the inner vertices (|x| < 0.87) to a thin central divider (x = -0.105 / -0.095),
- *   3. makes the material opaque (no alphaMode).
+ *   2. snaps the inner vertices (|x| < 0.87) to a single central divider line (x = -0.1),
+ *   3. closes the gaps between tiers (each tier grows half a gap up/down, so sides, back and
+ *      boards of neighbouring tiers meet and the carcass reads as one closed box),
+ *   4. makes the material opaque (no alphaMode).
  * Skipped when the model is already compressed (nothing to repair on optimized output).
  */
 function repairBookshelf(dir) {
@@ -77,7 +82,7 @@ function repairBookshelf(dir) {
     const view = gltf.bufferViews[acc.bufferView];
     return new Float32Array(
       bin.buffer,
-      bin.byteOffset + view.byteOffset + (acc.byteOffset ?? 0),
+      bin.byteOffset + (view.byteOffset ?? 0) + (acc.byteOffset ?? 0),
       acc.count * 3
     );
   };
@@ -86,7 +91,7 @@ function repairBookshelf(dir) {
   const indexView = gltf.bufferViews[indices.bufferView];
   const idx = new Uint32Array(
     bin.buffer,
-    bin.byteOffset + indexView.byteOffset + (indices.byteOffset ?? 0),
+    bin.byteOffset + (indexView.byteOffset ?? 0) + (indices.byteOffset ?? 0),
     indices.count
   );
   const kept = [];
@@ -98,14 +103,31 @@ function repairBookshelf(dir) {
   }
   new Uint32Array(
     bin.buffer,
-    bin.byteOffset + indexView.byteOffset,
+    bin.byteOffset + (indexView.byteOffset ?? 0),
     kept.length
   ).set(kept);
   indices.count = kept.length;
   indexView.byteLength = kept.length * 4;
   for (let i = 0; i < positions.count; i++) {
     const x = pos[i * 3];
-    if (Math.abs(x) < 0.87) pos[i * 3] = x < -0.1 ? -0.105 : -0.095;
+    if (Math.abs(x) < 0.87) pos[i * 3] = -0.1;
+  }
+  // Tiers (z, source units): the vertices of each one stretch to the middle of the gap
+  // above/below, so neighbouring tiers touch.
+  const TIERS = [
+    [0, 0.508],
+    [0.559, 1.041],
+    [1.092, 1.575],
+    [1.626, 2.1336],
+  ];
+  for (let i = 0; i < positions.count; i++) {
+    const z = pos[i * 3 + 2];
+    const k = TIERS.findIndex(([lo, hi]) => z >= lo - 1e-3 && z <= hi + 1e-3);
+    if (k < 0) continue;
+    const [lo, hi] = TIERS[k];
+    const newLo = k === 0 ? lo : (TIERS[k - 1][1] + lo) / 2;
+    const newHi = k === TIERS.length - 1 ? hi : (hi + TIERS[k + 1][0]) / 2;
+    pos[i * 3 + 2] = newLo + ((z - lo) / (hi - lo)) * (newHi - newLo);
   }
   delete gltf.materials[0].alphaMode;
   writeFileSync(binPath, bin);

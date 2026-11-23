@@ -62,7 +62,9 @@ export class CameraService {
    * con flechas, que emite change pero no start) cuenta como vista tocada.
    */
   private readonly onControlsChange = () => {
-    if (!this.selfUpdating) this.atFramedPose = false;
+    if (this.selfUpdating) return;
+    this.atFramedPose = false;
+    this.cancelAnimation();
   };
 
   initialize(config: CameraConfiguration, aspect = 1): void {
@@ -260,7 +262,8 @@ export class CameraService {
       this.framedTarget(),
       MOVE_DURATION_MS
     ).then(completed => {
-      if (completed) this.atFramedPose = true;
+      // Si algo (arrastre, flechas) cortó el tween, la vista ya no es la inicial.
+      if (completed && !this.tween) this.atFramedPose = true;
       return completed;
     });
   }

@@ -124,7 +124,7 @@
         "EXT_meshopt_compression": {
           "buffer": 0,
           "byteOffset": 600,
-          "byteLength": 1349,
+          "byteLength": 1312,
           "mode": "ATTRIBUTES",
           "byteStride": 8,
           "count": 320
@@ -140,7 +140,7 @@
       "extensions": {
         "EXT_meshopt_compression": {
           "buffer": 0,
-          "byteOffset": 1952,
+          "byteOffset": 1912,
           "byteLength": 1174,
           "mode": "ATTRIBUTES",
           "byteStride": 4,
@@ -200,7 +200,7 @@
   "buffers": [
     {
       "uri": "scene.bin",
-      "byteLength": 3128
+      "byteLength": 3088
     },
     {
       "byteLength": 7552,
