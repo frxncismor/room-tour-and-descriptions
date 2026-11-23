@@ -1,37 +1,35 @@
 <div class="viewer-container">
-  <canvas #canvas class="scene-canvas"></canvas>
+  <canvas
+    #canvas
+    class="scene-canvas"
+    role="img"
+    tabindex="0"
+    [attr.aria-label]="canvasLabel"
+    [style.cursor]="cursor()"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp($event)"
+    (pointercancel)="onPointerCancel($event)"
+    (pointerleave)="onPointerLeave($event)"
+    (keydown.home)="onHome($event)"
+  ></canvas>
 
-  @if (selectedObject) {
-    <div class="object-info">
-      <h3>{{ selectedObject.name }}</h3>
-      <p>{{ selectedObject.description }}</p>
-    </div>
-  }
+  @if (blockingError(); as error) {
+    <app-error-overlay [error]="error" />
+  } @else {
+    <app-loading-screen />
 
-  @if (!hideInstructions) {
-    <div class="controls-info">
-      <div class="controls-content">
-        <h2>{{ uiText.navigation.title }}</h2>
-        <div class="control-item">
-          <span class="icon">🖱️</span>
-          <p>{{ uiText.navigation.rotateView }}</p>
-        </div>
-        <div class="control-item">
-          <span class="icon">👆</span>
-          <p>{{ uiText.navigation.moveAround }}</p>
-        </div>
-        <div class="control-item">
-          <span class="icon">🔍</span>
-          <p>{{ uiText.navigation.viewDetails }}</p>
-        </div>
-        <button
-          type="button"
-          class="close-button"
-          (click)="onCloseInstructions()"
-        >
-          {{ uiText.navigation.gotIt }}
-        </button>
-      </div>
-    </div>
+    @if (bannerError(); as error) {
+      <app-error-banner [error]="error" (retry)="retry()" />
+    }
+
+    <app-object-list
+      [items]="objects()"
+      [selectedName]="state.selected()?.name ?? null"
+      (selectItem)="selectObject($event)"
+      (resetView)="resetView()"
+    />
+    <app-description-panel [info]="panelInfo()" (closed)="closePanel()" />
+    <app-help-panel [suppressed]="!!state.selected()" />
   }
 </div>
