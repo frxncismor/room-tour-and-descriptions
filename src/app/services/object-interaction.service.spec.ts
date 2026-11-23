@@ -1,0 +1,167 @@
+import {
+  BoxGeometry,
+  Mesh,
+  MeshStandardMaterial,
+  PerspectiveCamera,
+  PlaneGeometry,
+  Scene,
+} from 'three';
+import { ObjectInteractionService } from './object-interaction.service';
+
+function makeCanvas(): HTMLElement {
+  const el = document.createElement('div');
+  el.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, width: 200, height: 200 }) as DOMRect;
+  return el;
+}
+
+describe('ObjectInteractionService', () => {
+  let service: ObjectInteractionService;
+  let scene: Scene;
+  let camera: PerspectiveCamera;
+  let furniture: Mesh;
+  let floor: Mesh;
+  let canvas: HTMLElement;
+
+  const click = (x: number, y: number) =>
+    service.handleClick({ clientX: x, clientY: y }, camera, scene);
+
+  beforeEach(() => {
+    service = new ObjectInteractionService();
+    canvas = makeCanvas();
+    service.setCanvas(canvas);
+    scene = new Scene();
+    camera = new PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.set(0, 5, 5);
+    camera.lookAt(0, 0, 0);
+
+    floor = new Mesh(new PlaneGeometry(40, 40), new MeshStandardMaterial());
+    floor.name = 'floor';
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    furniture = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial());
+    furniture.position.set(0, 0.5, 0);
+    scene.add(furniture);
+    service.addObject(furniture, { name: 'Box', description: 'A box' });
+  });
+
+  afterEach(() => service.dispose());
+
+  it('returns the object on a furniture click', async () => {
+    const result = await click(100, 100);
+    expect(result.success).toBe(true);
+    expect(result.objectInfo?.name).toBe('Box');
+    expect(result.object).toBe(furniture);
+    expect(result.floorPoint).toBeUndefined();
+  });
+
+  it('returns a validated floorPoint on a floor click', async () => {
+    const result = await click(100, 190);
+    expect(result.success).toBe(true);
+    expect(result.objectInfo).toBeNull();
+    expect(result.floorPoint).toBeDefined();
+  });
+
+  it('clamps the floor point and rejects far-out clicks', async () => {
+    service.setRoomLimits({ minX: -3, maxX: 3, minZ: -3, maxZ: 3 });
+    // Límite útil: ±1.5. Cerca del borde se recorta.
+    camera.position.set(0, 10, 0.01);
+    camera.lookAt(0, 0, 0);
+    const clamped = await click(100 + 20, 100);
+    expect(clamped.floorPoint).toBeDefined();
+    expect(Math.abs(clamped.floorPoint!.x)).toBeLessThanOrEqual(1.5);
+    // Muy fuera de límites: se descarta.
+    service.setRoomLimits({ minX: -1, maxX: 1, minZ: -1, maxZ: 1 });
+    const far = await click(100 + 90, 100 - 90);
+    expect(far.floorPoint).toBeUndefined();
+  });
+
+  it('uses the canvas rect, not event.target', async () => {
+    const other = document.createElement('div');
+    other.getBoundingClientRect = () =>
+      ({ left: 500, top: 500, width: 10, height: 10 }) as DOMRect;
+    const result = await service.handleClick(
+      { clientX: 100, clientY: 100, target: other },
+      camera,
+      scene
+    );
+    expect(result.object).toBe(furniture);
+  });
+
+  it('reports failure when no element is available', async () => {
+    service.setCanvas(null);
+    const result = await click(100, 100);
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+  });
+
+  it('keeps a single outline as child, with no pending rAF after 10 clicks', async () => {
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame');
+    for (let i = 0; i < 10; i++) await click(100, 100);
+    const outlines = () =>
+      scene.children
+        .flatMap(c => [c, ...c.children])
+        .filter(c => c.name === '__selection-outline');
+    expect(outlines().length).toBe(1);
+    expect(furniture.children.length).toBe(1);
+    expect(raf).not.toHaveBeenCalled();
+    raf.mockRestore();
+  });
+
+  it('removes the outline on deselect and when clicking elsewhere', async () => {
+    await click(100, 100);
+    expect(furniture.children.length).toBe(1);
+    await click(100, 190);
+    expect(furniture.children.length).toBe(0);
+    expect(service.getSelected()).toBeNull();
+  });
+
+  it('pulses the outline opacity in update()', async () => {
+    await click(100, 100);
+    const outlineMesh = furniture.children[0].children[0] as Mesh;
+    const material = outlineMesh.material as { opacity: number };
+    service.update(0);
+    const a = material.opacity;
+    service.update(Math.PI / 2 / 0.003);
+    expect(material.opacity).not.toBeCloseTo(a);
+  });
+
+  it('does not select the outline itself when raycasting', async () => {
+    await click(100, 100);
+    const result = await click(100, 100);
+    expect(result.object).toBe(furniture);
+  });
+
+  it('applies and restores the hover highlight', () => {
+    const material = furniture.material as MeshStandardMaterial;
+    const original = material.emissive.getHex();
+    const changes: (string | null)[] = [];
+    service.onHoverChange = t => changes.push(t?.info.name ?? null);
+    service.setContext(camera, scene);
+
+    service.setHover({ x: 0, y: 0 });
+    expect(material.emissive.getHex()).toBe(original); // throttle: aún no
+    service.update(16);
+    expect(service.getHovered()?.info.name).toBe('Box');
+    expect(material.emissive.getHex()).not.toBe(original);
+
+    service.setHover(null);
+    service.update(32);
+    expect(service.getHovered()).toBeNull();
+    expect(material.emissive.getHex()).toBe(original);
+    expect(changes).toEqual(['Box', null]);
+  });
+
+  it('dispose clears outline, hover and objects', async () => {
+    const material = furniture.material as MeshStandardMaterial;
+    const original = material.emissive.getHex();
+    await click(100, 100);
+    service.setHover({ x: 0, y: 0 });
+    service.update(16);
+    service.dispose();
+    expect(furniture.children.length).toBe(0);
+    expect(material.emissive.getHex()).toBe(original);
+    expect(service.getObjectInfo(furniture)).toBeUndefined();
+  });
+});
