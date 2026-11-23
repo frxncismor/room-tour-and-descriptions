@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { FURNITURE_TEXT } from '../../config/ui-text';
 import { SceneService } from '../../services/scene.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
 import { ViewerComponent } from './viewer.component';
@@ -8,7 +9,9 @@ describe('ViewerComponent', () => {
     initialize: vi.fn(),
     loadAll: vi.fn(() => Promise.resolve()),
     dispose: vi.fn(),
-    getObjectList: vi.fn(() => [{ id: 'sofa', name: 'Modern Sofa' }]),
+    getObjectList: vi.fn(() => [
+      { id: 'sofa', name: FURNITURE_TEXT.sofa.name },
+    ]),
     handlePointerSelect: vi.fn(() => Promise.resolve()),
     handlePointerMove: vi.fn(),
     clearSelection: vi.fn(),
@@ -95,7 +98,7 @@ describe('ViewerComponent', () => {
   it('closes the panel with Escape and shows it for a selection', async () => {
     const state = TestBed.inject(ViewerStateService);
     const fixture = TestBed.createComponent(ViewerComponent);
-    state.selected.set({ name: 'Modern Sofa', description: 'x' });
+    state.selected.set({ name: FURNITURE_TEXT.sofa.name, description: 'x' });
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[role="dialog"]')).not.toBeNull();
