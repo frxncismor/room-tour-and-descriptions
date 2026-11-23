@@ -1,0 +1,7 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Mobile frame (390x844)</title>
+<!-- Wraps index.html in a real 390x844 viewport (headless browsers enforce a minimum window width). Use ?s=loading|overview|help|detail -->
+<style>html,body{margin:0;background:#222}iframe{display:block;width:390px;height:844px;border:0}</style>
+<iframe id="f" title="mobile mockup"></iframe>
+<script>document.getElementById("f").src="index.html#"+(new URLSearchParams(location.search).get("s")||"overview");</script>

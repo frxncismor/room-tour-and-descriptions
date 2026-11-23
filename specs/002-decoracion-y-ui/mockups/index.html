@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Room Tour — UI mockup (spec 002)</title>
+    <!--
+      Static mockup of the proposed UI. Not the app: the 3D scene is a flat schematic.
+      Screens are selected with the URL hash: #overview (default) #loading #help #detail.
+      Layout switches by viewport: desktop >600px wide, mobile <=600px wide.
+      Tokens below are the exact values proposed in spec.md (FR-230..FR-236).
+    -->
+    <style>
+      @font-face {
+        font-family: 'Fraunces';
+        font-style: normal;
+        font-weight: 300 700;
+        font-display: swap;
+        src: url('fonts/fraunces-var-latin.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Hanken Grotesk';
+        font-style: normal;
+        font-weight: 400 600;
+        font-display: swap;
+        src: url('fonts/hanken-grotesk-var-latin.woff2') format('woff2');
+      }
+
+      :root {
+        /* color */
+        --paper: #f6efe4;
+        --paper-sunk: #ece2d1;
+        --ink: #2a2420;
+        --ink-muted: #5c5046;
+        --rule: #d8cab6;
+        --rule-strong: #8c7d6e;
+        --clay: #8a4426;
+        --clay-hover: #733820;
+        --teal: #35544f;
+        --danger: #7a2a1c;
+        --focus: var(--teal);
+        /* type */
+        --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+        --font-text: 'Hanken Grotesk', system-ui, 'Segoe UI', Roboto, sans-serif;
+        --fs-label: 0.75rem;
+        --fs-small: 0.8125rem;
+        --fs-body: 0.9375rem;
+        --fs-title: 1.375rem;
+        --fs-display: 2.25rem;
+        --lh-tight: 1.2;
+        --lh-body: 1.5;
+        /* space (4px base) */
+        --space-1: 0.25rem;
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
+        --space-5: 1.5rem;
+        --space-6: 2rem;
+        /* shape */
+        --radius-1: 2px;
+        --radius-2: 4px;
+        --shadow-panel:
+          0 1px 2px rgb(42 36 32 / 0.08), 0 12px 28px -14px rgb(42 36 32 / 0.35);
+        /* motion */
+        --dur-1: 120ms;
+        --dur-2: 200ms;
+        --dur-3: 400ms;
+        --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+        --hit: 44px;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        font-family: var(--font-text);
+        font-size: var(--fs-body);
+        line-height: var(--lh-body);
+        color: var(--ink);
+        background: var(--paper);
+        -webkit-font-smoothing: antialiased;
+      }
+      h1,
+      h2 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-weight: 500;
+        line-height: var(--lh-tight);
+        letter-spacing: -0.01em;
+      }
+      p {
+        margin: 0;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      /* ---------- schematic 3D backdrop (stand-in for the canvas) ---------- */
+      .scene {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        background: #9a7d5c;
+      }
+      .scene .back {
+        position: absolute;
+        left: 18%;
+        right: 0;
+        top: 0;
+        height: 47%;
+        background:
+          radial-gradient(
+            ellipse 18% 60% at 30% 0,
+            rgb(255 244 230 / 0.28),
+            transparent 70%
+          ),
+          radial-gradient(
+            ellipse 18% 60% at 78% 0,
+            rgb(255 244 230 / 0.28),
+            transparent 70%
+          ),
+          #6f8f8c;
+      }
+      .scene .side {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 22%;
+        height: 61%;
+        background: #d9c4ae;
+        clip-path: polygon(0 0, 100% 12%, 100% 78%, 0 100%);
+      }
+      .scene .floor {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 47%;
+        bottom: 0;
+        background:
+          repeating-linear-gradient(
+            90deg,
+            transparent 0 78px,
+            rgb(60 40 20 / 0.08) 78px 79px
+          ),
+          linear-gradient(#a58760, #8c6f4f);
+      }
+      .scene .rug {
+        position: absolute;
+        left: 22%;
+        top: 62%;
+        width: 36%;
+        height: 24%;
+        background: #7d746a;
+        transform: skewX(-24deg);
+        box-shadow: inset 0 0 0 6px rgb(255 255 255 / 0.05);
+      }
+      .scene .sofa {
+        position: absolute;
+        left: 24%;
+        top: 49%;
+        width: 26%;
+        height: 20%;
+        background: #a65f3a;
+        border-radius: 6px 6px 2px 2px;
+        box-shadow: inset 0 -14px 0 rgb(0 0 0 / 0.12);
+      }
+      .scene .ottoman {
+        position: absolute;
+        left: 33%;
+        top: 70%;
+        width: 9%;
+        height: 7%;
+        background: #a65f3a;
+        border-radius: 4px;
+      }
+      .scene .shelf {
+        position: absolute;
+        left: 61%;
+        top: 14%;
+        width: 8%;
+        height: 36%;
+        background: repeating-linear-gradient(#3b2a20 0 14px, #5a4333 14px 17px);
+      }
+      .scene .painting {
+        position: absolute;
+        left: 38%;
+        top: 12%;
+        width: 9%;
+        height: 14%;
+        background: linear-gradient(#b7a27a, #6d7d55);
+        outline: 5px solid #b8944f;
+        outline-offset: -1px;
+      }
+      .scene .clock {
+        position: absolute;
+        left: 78%;
+        top: 14%;
+        width: 5.4%;
+        aspect-ratio: 1;
+        background: #f1ede6;
+        border: 4px solid #4b5256;
+        border-radius: 50%;
+      }
+      .scene .plant {
+        position: absolute;
+        left: 70.5%;
+        top: 40%;
+        width: 3%;
+        height: 10%;
+        background: radial-gradient(ellipse at 50% 25%, #4d7048 0 55%, transparent 56%),
+          linear-gradient(transparent 55%, #d8d2c8 55%);
+      }
+      .scene .vase {
+        position: absolute;
+        left: 56%;
+        top: 38%;
+        width: 3.4%;
+        height: 12%;
+        background: #dcd6cb;
+        border-radius: 40% 40% 30% 30%;
+      }
+      .caption {
+        position: fixed;
+        right: 8px;
+        bottom: 4px;
+        font-size: 10px;
+        color: rgb(255 255 255 / 0.55);
+        pointer-events: none;
+      }
+
+      /* ---------- screens ---------- */
+      .screen {
+        display: none;
+      }
+      .screen:target,
+      body:not(:has(:target)) #overview {
+        display: block;
+      }
+
+      /* brand plate (no interactive content) */
+      .brand {
+        position: fixed;
+        left: var(--space-4);
+        bottom: var(--space-4);
+        padding: var(--space-2) var(--space-3);
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-2);
+        box-shadow: var(--shadow-panel);
+      }
+      .brand strong {
+        display: block;
+        font-family: var(--font-display);
+        font-size: 1.125rem;
+        font-weight: 500;
+        line-height: var(--lh-tight);
+      }
+      .brand span {
+        font-size: var(--fs-label);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+
+      /* object list: an index, not chips */
+      .list {
+        position: fixed;
+        left: var(--space-4);
+        top: var(--space-4);
+        width: 232px;
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-2);
+        box-shadow: var(--shadow-panel);
+      }
+      .list h2 {
+        padding: var(--space-3) var(--space-4) var(--space-2);
+        font-family: var(--font-text);
+        font-size: var(--fs-label);
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+      .list ul {
+        margin: 0;
+        padding: 0 0 var(--space-1);
+        list-style: none;
+      }
+      .chip {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        min-height: 36px;
+        padding: 0 var(--space-4);
+        background: none;
+        border: 0;
+        border-left: 3px solid transparent;
+        text-align: left;
+        cursor: pointer;
+        transition: background var(--dur-1) var(--ease);
+      }
+      .chip:hover {
+        background: var(--paper-sunk);
+      }
+      .chip[aria-pressed='true'] {
+        border-left-color: var(--clay);
+        background: var(--paper-sunk);
+        font-weight: 600;
+      }
+      .chip.reset {
+        gap: var(--space-2);
+        min-height: 40px;
+        border-top: 1px solid var(--rule);
+        color: var(--clay);
+        font-weight: 500;
+      }
+      .chip.reset svg {
+        flex: none;
+      }
+      @media (pointer: coarse) {
+        .chip {
+          min-height: var(--hit);
+        }
+      }
+
+      /* description panel */
+      .panel {
+        position: fixed;
+        top: var(--space-4);
+        right: var(--space-4);
+        width: 360px;
+        padding: var(--space-5);
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-2);
+        box-shadow: var(--shadow-panel);
+      }
+      .panel h2 {
+        padding-right: var(--space-6);
+        font-size: var(--fs-title);
+      }
+      .panel .body {
+        margin-top: var(--space-3);
+      }
+      .panel .credit {
+        margin-top: var(--space-4);
+        padding-top: var(--space-3);
+        border-top: 1px solid var(--rule);
+        font-size: var(--fs-small);
+        color: var(--ink-muted);
+      }
+      .close {
+        position: absolute;
+        top: var(--space-2);
+        right: var(--space-2);
+        display: grid;
+        place-items: center;
+        width: var(--hit);
+        height: var(--hit);
+        background: none;
+        border: 0;
+        border-radius: var(--radius-1);
+        cursor: pointer;
+      }
+      .close:hover {
+        background: var(--paper-sunk);
+      }
+
+      /* help sheet + reopen */
+      .sheet {
+        position: fixed;
+        right: var(--space-4);
+        bottom: var(--space-4);
+        width: 380px;
+        padding: var(--space-5);
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-2);
+        box-shadow: var(--shadow-panel);
+      }
+      .sheet h2 {
+        font-size: var(--fs-title);
+      }
+      .sheet dl {
+        margin: var(--space-4) 0 var(--space-5);
+        display: grid;
+        gap: var(--space-3);
+        font-size: var(--fs-body);
+      }
+      .sheet dl > div {
+        display: grid;
+        grid-template-columns: 5rem 1fr;
+        gap: var(--space-4);
+      }
+      .sheet dt {
+        font-weight: 600;
+      }
+      .sheet dd {
+        margin: 0;
+        color: var(--ink-muted);
+      }
+      .primary {
+        min-height: var(--hit);
+        padding: 0 var(--space-5);
+        background: var(--clay);
+        color: var(--paper);
+        border: 0;
+        border-radius: var(--radius-1);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background var(--dur-1) var(--ease);
+      }
+      .primary:hover {
+        background: var(--clay-hover);
+      }
+      .reopen {
+        position: fixed;
+        right: var(--space-4);
+        bottom: var(--space-4);
+        min-height: var(--hit);
+        padding: 0 var(--space-4);
+        background: var(--paper);
+        border: 1px solid var(--rule-strong);
+        border-radius: var(--radius-1);
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      /* loading */
+      .loading {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: var(--space-4);
+        background: var(--paper);
+        text-align: center;
+      }
+      .loading .by {
+        margin-top: calc(var(--space-2) * -1);
+        font-size: var(--fs-label);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+      .loading h1 {
+        font-size: var(--fs-display);
+        font-weight: 400;
+      }
+      .bar {
+        width: 240px;
+        height: 2px;
+        margin-top: var(--space-3);
+        background: var(--rule);
+      }
+      .bar i {
+        display: block;
+        width: 42%;
+        height: 100%;
+        background: var(--clay);
+      }
+      .loading .status {
+        font-size: var(--fs-small);
+        color: var(--ink-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---------- mobile (<= 600px) ---------- */
+      @media (max-width: 600px), (max-height: 500px) {
+        .list {
+          left: 0;
+          right: 0;
+          top: 0;
+          width: auto;
+          border-width: 0 0 1px;
+          border-radius: 0;
+          box-shadow: none;
+        }
+        .list h2 {
+          display: none;
+        }
+        .list ul {
+          display: flex;
+          overflow-x: auto;
+          padding: 0;
+          scrollbar-width: none;
+        }
+        .list li {
+          flex: none;
+        }
+        .chip {
+          width: auto;
+          min-height: var(--hit);
+          padding: 0 var(--space-4);
+          border-left: 0;
+          border-bottom: 3px solid transparent;
+          white-space: nowrap;
+        }
+        .chip[aria-pressed='true'] {
+          border-bottom-color: var(--clay);
+          background: none;
+        }
+        .chip.reset {
+          border-top: 0;
+          border-left: 1px solid var(--rule);
+        }
+        .chip.reset .label {
+          display: none;
+        }
+        .brand {
+          left: var(--space-3);
+          bottom: var(--space-3);
+        }
+        .panel {
+          top: auto;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: auto;
+          max-height: 34dvh;
+          padding: var(--space-4) var(--space-4) var(--space-5);
+          border-width: 1px 0 0;
+          border-radius: var(--radius-2) var(--radius-2) 0 0;
+          overflow: auto;
+        }
+        .panel .credit {
+          margin-top: var(--space-3);
+        }
+        .sheet {
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: auto;
+          padding: var(--space-4) var(--space-4) var(--space-5);
+          border-width: 1px 0 0;
+          border-radius: var(--radius-2) var(--radius-2) 0 0;
+        }
+        .sheet dl {
+          gap: var(--space-2);
+          margin: var(--space-3) 0 var(--space-4);
+        }
+        .sheet dl > div {
+          grid-template-columns: 4.5rem 1fr;
+          gap: var(--space-3);
+        }
+        .sheet .primary {
+          width: 100%;
+        }
+        .reopen {
+          right: var(--space-3);
+          bottom: var(--space-3);
+        }
+        .loading h1 {
+          font-size: 2rem;
+        }
+        .caption {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="scene" aria-hidden="true">
+      <div class="back"></div>
+      <div class="side"></div>
+      <div class="floor"></div>
+      <div class="rug"></div>
+      <div class="sofa"></div>
+      <div class="ottoman"></div>
+      <div class="shelf"></div>
+      <div class="painting"></div>
+      <div class="clock"></div>
+      <div class="plant"></div>
+      <div class="vase"></div>
+    </div>
+    <div class="caption">Schematic backdrop, not the real render</div>
+
+    <!-- shared: list + brand (hidden on #loading) -->
+    <div class="screen" id="overview">
+      <nav class="list" aria-label="Pieces in the room">
+        <h2>Pieces</h2>
+        <ul>
+          <li><button class="chip" aria-pressed="false">Bookshelf</button></li>
+          <li><button class="chip" aria-pressed="false">Landscape painting</button></li>
+          <li><button class="chip" aria-pressed="false">Poker table</button></li>
+          <li><button class="chip" aria-pressed="false">Potted succulent</button></li>
+          <li><button class="chip" aria-pressed="false">Sectional sofa</button></li>
+          <li>
+            <button class="chip reset" aria-label="Return to the initial view">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="butt" stroke-linejoin="miter" aria-hidden="true"><path d="M5 2 1.5 5.5 5 9M1.5 5.5H9.5a3 3 0 0 1 3 3V12"/></svg>
+              <span class="label">Reset view</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+      <div class="brand"><strong>Room Tour</strong><span>by Francisco Moreno</span></div>
+      <button class="reopen" aria-label="Show the controls">Controls</button>
+    </div>
+
+    <div class="screen" id="help">
+      <nav class="list" aria-label="Pieces in the room">
+        <h2>Pieces</h2>
+        <ul>
+          <li><button class="chip" aria-pressed="false">Bookshelf</button></li>
+          <li><button class="chip" aria-pressed="false">Landscape painting</button></li>
+          <li><button class="chip" aria-pressed="false">Poker table</button></li>
+          <li><button class="chip" aria-pressed="false">Potted succulent</button></li>
+          <li><button class="chip" aria-pressed="false">Sectional sofa</button></li>
+          <li>
+            <button class="chip reset" aria-label="Return to the initial view">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 2 1.5 5.5 5 9M1.5 5.5H9.5a3 3 0 0 1 3 3V12"/></svg>
+              <span class="label">Reset view</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+      <div class="brand"><strong>Room Tour</strong><span>by Francisco Moreno</span></div>
+      <section class="sheet" role="dialog" aria-modal="false" aria-labelledby="help-title">
+        <h2 id="help-title">Controls</h2>
+        <dl>
+          <div><dt>Orbit</dt><dd>Drag with the left mouse button</dd></div>
+          <div><dt>Pan</dt><dd>Drag with the right button, or use the arrow keys</dd></div>
+          <div><dt>Zoom</dt><dd>Scroll the wheel</dd></div>
+          <div><dt>Move</dt><dd>Click the floor to go there</dd></div>
+          <div><dt>Inspect</dt><dd>Click a piece to read about it</dd></div>
+          <div><dt>Keys</dt><dd>Esc closes details. Home resets the view.</dd></div>
+        </dl>
+        <button class="primary">Close</button>
+      </section>
+    </div>
+
+    <div class="screen" id="detail">
+      <nav class="list" aria-label="Pieces in the room">
+        <h2>Pieces</h2>
+        <ul>
+          <li><button class="chip" aria-pressed="false">Bookshelf</button></li>
+          <li><button class="chip" aria-pressed="false">Landscape painting</button></li>
+          <li><button class="chip" aria-pressed="false">Poker table</button></li>
+          <li><button class="chip" aria-pressed="false">Potted succulent</button></li>
+          <li><button class="chip" aria-pressed="true">Sectional sofa</button></li>
+          <li>
+            <button class="chip reset" aria-label="Return to the initial view">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 2 1.5 5.5 5 9M1.5 5.5H9.5a3 3 0 0 1 3 3V12"/></svg>
+              <span class="label">Reset view</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+      <div class="brand"><strong>Room Tour</strong><span>by Francisco Moreno</span></div>
+      <section class="panel" role="dialog" aria-labelledby="furniture-title">
+        <h2 id="furniture-title">Sectional sofa</h2>
+        <p class="body">
+          Corner sectional with loose back cushions and a separate ottoman, in a
+          terracotta tone. It anchors the seating area on the left.
+        </p>
+        <p class="credit">Model: “Sofa Set” by FREEDomplant, via Sketchfab.</p>
+        <button class="close" aria-label="Close details">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="butt" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>
+        </button>
+      </section>
+    </div>
+
+    <div class="screen" id="loading">
+      <div class="loading" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" aria-valuetext="Loading the room, 42%">
+        <h1>Room Tour</h1>
+        <span class="by">by Francisco Moreno</span>
+        <div class="bar"><i></i></div>
+        <span class="status">Loading the room · 42%</span>
+      </div>
+    </div>
+  </body>
+</html>
