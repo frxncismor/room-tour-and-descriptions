@@ -147,7 +147,7 @@ refactor(services): apply SOLID principles
 - Use standalone components and signals; the app is zoneless, so do not rely on Zone.js
 - Run per-frame work from the single render loop in `SceneService`, never from extra `requestAnimationFrame` callbacks
 - Dispose of Three.js geometries, materials and textures you create
-- Keep user-facing text in `src/app/config/ui-text.ts` (English)
+- Keep user-facing text in `src/app/i18n/` (EN in `en.ts`, ES in `es.ts`; `config/ui-text.ts` is a temporary facade over `en.ts`)
 - Follow Angular style guide
 - Add or update a Vitest spec next to the code you change
 - Use dependency injection
