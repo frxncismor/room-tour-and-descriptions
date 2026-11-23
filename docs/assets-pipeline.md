@@ -65,6 +65,73 @@ Room textures (`src/assets/textures/`) are plain WebP q85 made with ImageMagick
 
 Total `src/assets` after this step: 3 631 139 B (without the fonts). Licenses of these assets: CC0 (no attribution required, credited in the README anyway).
 
+## Wall prints and fabric (spec 003)
+
+Four public-domain botanical prints (`src/assets/textures/art/`) and a grey linen set
+(`src/assets/textures/fabric/`). Originals are downloaded to a temporary folder **outside the repo**
+and never committed. Use a generic `User-Agent` and pause a few seconds between requests (Commons
+rate-limits bursts).
+
+### Sources and licenses
+
+| File                    | Work and author                                                               | Source file (Wikimedia Commons)                                           | License (file page)              |
+| ----------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------- |
+| `art/spiraea.webp`      | _Spiraea aruncus (Tyrol)_, Anna Atkins, 1851–54, cyanotype                    | `File:Spiraea aruncus (Tyrol) MET DT5664.jpg` (Met 285421)                | CC0 (Met Open Access)            |
+| `art/felce.webp`        | _Felce_, William Henry Fox Talbot, 1839, salted paper print                   | `File:Felce MET DP202191.jpg` (Met 289193)                                | CC0 (Met Open Access)            |
+| `art/osmunda.webp`      | _Osmunda regalis (Australia)_, Anna Atkins, c. 1850                           | `File:Anna Atkins - Osmunda Rigalis (Australia) - Google Art Project.jpg` | Public domain (author died 1871) |
+| `art/pteris.webp`       | _Pteris aquilina_, Anna Atkins, c. 1850, cyanotype                            | `File:Anna Atkins - Pteris aquilina - Google Art Project.jpg`             | Public domain (author died 1871) |
+| `fabric/linen.webp`     | `rough_linen`, Poly Haven (photography: colormass; processing: Rico Cilliers) | `https://api.polyhaven.com/files/rough_linen` (`Diffuse`, 1k, jpg)        | CC0                              |
+| `fabric/linen-nor.webp` | same                                                                          | same (`nor_gl`, 1k, jpg)                                                  | CC0                              |
+
+### Reproduce
+
+```bash
+T=$(mktemp -d)   # outside the repo; delete it when done
+UA="room-tour-asset-fetch/1.0 (generic client)"
+
+# Commons: ask the API for the 1280 px thumbnail URL of each file (iiurlwidth=1280), then download it
+thumb() { curl -s -G -A "$UA" https://commons.wikimedia.org/w/api.php \
+  --data-urlencode action=query --data-urlencode "titles=File:$1" --data-urlencode prop=imageinfo \
+  --data-urlencode iiprop=url --data-urlencode iiurlwidth=1280 --data-urlencode format=json \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(Object.values(JSON.parse(s).query.pages)[0].imageinfo[0].thumburl))'; }
+get() { curl -s -A "$UA" -o "$T/$2.jpg" "$(thumb "$1")"; sleep 4; }
+get "Spiraea aruncus (Tyrol) MET DT5664.jpg" spiraea
+get "Felce MET DP202191.jpg" felce
+get "Anna Atkins - Osmunda Rigalis (Australia) - Google Art Project.jpg" osmunda
+get "Anna Atkins - Pteris aquilina - Google Art Project.jpg" pteris
+
+# Poly Haven: 1k diffuse and nor_gl (URLs from https://api.polyhaven.com/files/rough_linen)
+PH=https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rough_linen
+curl -s -A "$UA" -o "$T/linen_diff.jpg" $PH/rough_linen_diff_1k.jpg; sleep 4
+curl -s -A "$UA" -o "$T/linen_nor.jpg"  $PH/rough_linen_nor_gl_1k.jpg
+
+# Prints: crop to the printed area, force 5:7, WebP q85 (ImageMagick 7)
+mkdir -p src/assets/textures/art src/assets/textures/fabric
+mk() { magick "$T/$1.jpg" -crop "$2" +repage -resize 512x717! -quality 85 -define webp:method=4 "src/assets/textures/art/$1.webp"; }
+mk spiraea 1190x1666+45+72
+mk felce   922x1291+190+60
+mk osmunda 1230x1722+25+80
+mk pteris  1150x1610+65+60
+
+# Linen: grey diffuse with levels, plain normal, 512x512, WebP q85
+magick "$T/linen_diff.jpg" -resize 512x512! -colorspace Gray -level 20%,95% -quality 85 -define webp:method=4 src/assets/textures/fabric/linen.webp
+magick "$T/linen_nor.jpg"  -resize 512x512! -quality 85 -define webp:method=4 src/assets/textures/fabric/linen-nor.webp
+```
+
+### Measured sizes
+
+| File                    | Source (bytes)          | Result            | Budget (spec D.1 + 25 %) |
+| ----------------------- | ----------------------- | ----------------- | ------------------------ |
+| `art/spiraea.webp`      | 528 565 (1280×1811 JPG) | 512×717, 65 052 B | ≤ 81 KB                  |
+| `art/felce.webp`        | 340 982 (1280×1656 JPG) | 512×717, 21 640 B | ≤ 27 KB                  |
+| `art/osmunda.webp`      | 535 647 (1280×1884 JPG) | 512×717, 40 414 B | ≤ 51 KB                  |
+| `art/pteris.webp`       | 613 973 (1280×1739 JPG) | 512×717, 99 304 B | ≤ 124 KB                 |
+| `fabric/linen.webp`     | 835 801 (1024×1026 JPG) | 512×512, 33 904 B | ≤ 44 KB                  |
+| `fabric/linen-nor.webp` | 916 843 (1024×1026 JPG) | 512×512, 26 212 B | ≤ 34 KB                  |
+
+Total added: 287 026 B. `du -sb src/assets` goes from 3 717 013 B to 4 003 539 B (limit 4 194 304 B).
+All six are CC0 or public domain: no attribution is legally required (they are credited in the README anyway).
+
 ## Sizes (before → after)
 
 | Model       | Before     | After       |
