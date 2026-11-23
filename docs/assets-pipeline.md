@@ -24,8 +24,11 @@ so node names used for picking stay intact.
 sheared into a diagonal "crack" (32 triangles with diagonal normals, inner vertices at 16 different
 x values) and its material is `BLEND`, which read as a dark glass box. `optimize-models.mjs` runs
 `repairBookshelf()` on the original before the pipeline: it drops the diagonal triangles,
-snaps the inner vertices to a thin central divider and makes the material opaque. It only works on
-the original export (it is skipped on already-optimized output and throws on an unexpected layout).
+snaps the inner vertices to a single central line, closes the 5 cm gaps between the four tiers
+(each tier stretches half a gap up/down, so sides, back and boards meet and the unit reads as one
+closed carcass from any angle, not four loose slabs) and makes the material opaque. It works in
+place on a copy of the original export (it is skipped on already-optimized output and throws on an
+unexpected layout).
 
 Runtime: the viewer registers `MeshoptDecoder` in `ModelLoaderService`
 (`three/examples/jsm/libs/meshopt_decoder.module.js`, bundled by the build). No KTX2 (decision D-05).
