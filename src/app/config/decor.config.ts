@@ -134,6 +134,10 @@ export interface DecorThrowConfig {
   depth: number;
   foldAmplitude: number;
   foldPeriod: number;
+  /** Grosor de la tela (dos capas). */
+  thickness: number;
+  /** Altura de la cresta del doblez a lo largo. */
+  creaseHeight: number;
   /** Caída de los bordes largos (como sobre el brazo o el puf). */
   drape: number;
 }
@@ -142,9 +146,13 @@ export interface DecorTextilesConfig {
   roughness: number;
   tileSize: number;
   normalScale: number;
+  /** Factor sobre el tinte de cojines y manta (compensa el lino oscuro). */
+  brightness: number;
   cushionSize: number;
   cushionThickness: number;
   cushionPuff: number;
+  /** Radio de esquinas y aristas del cojín (≤ cushionThickness / 2). */
+  cushionCorner: number;
   cushions: DecorCushionConfig[];
   throw: DecorThrowConfig;
 }
@@ -273,9 +281,11 @@ export const DECOR3: Decor3Config = {
     roughness: 1,
     tileSize: 0.5,
     normalScale: 0.8,
+    brightness: 1.45,
     cushionSize: 0.45,
     cushionThickness: 0.12,
     cushionPuff: 0.03,
+    cushionCorner: 0.055,
     // Colocación fina (T-343) con la AABB REAL del sofá cargado (ver SOFA_REAL
     // en decor-builder.service.spec.ts). Medidas en el marco del sofá (x ancho,
     // z fondo, +z hacia la sala; el sofá gira π/4 en (-3, -3)): asiento a
@@ -286,26 +296,28 @@ export const DECOR3: Decor3Config = {
     cushions: [
       {
         id: 'cushion-cream',
-        color: 0xfff0d2,
+        color: 0xfff4e0,
         position: new Vector3(-3.933, 0.8, -3.156),
         rotation: new Euler(-0.72, Math.PI / 4 + 0.06, 0, 'YXZ'),
       },
       {
         id: 'cushion-sage',
-        color: 0xb4c3a2,
+        color: 0x9fbab2,
         position: new Vector3(-2.66, 0.8, -4.64),
         rotation: new Euler(-0.72, Math.PI / 4 - 0.08, 0, 'YXZ'),
       },
     ],
     throw: {
       id: 'throw',
-      color: 0xeb9f45,
+      color: 0xe6d2ab,
       position: new Vector3(-2.894, 0.6, -3.601),
       rotationY: Math.PI / 4 + 0.06,
       width: 0.95,
       depth: 0.75,
       foldAmplitude: 0.012,
-      foldPeriod: 0.2,
+      foldPeriod: 0.38,
+      thickness: 0.035,
+      creaseHeight: 0.015,
       drape: 0.1,
     },
   },

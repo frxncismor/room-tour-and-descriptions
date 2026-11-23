@@ -11,6 +11,8 @@ import {
 } from 'three';
 import { DECOR3, DECOR3_LOAD_KEYS } from '../config/decor.config';
 import {
+  createCushionGeometry,
+  createThrowGeometry,
   DecorBuild,
   DecorBuilderService,
   DecorTextures,
@@ -378,6 +380,79 @@ describe('DecorBuilderService', () => {
         const gap = Math.abs(position.x) - FURNITURE['bookshelf'].max.x;
         expect(gap).toBeGreaterThanOrEqual(0.9);
       }
+    });
+  });
+  describe('textiles (pulido de cojines y manta)', () => {
+    const { cushionSize, cushionThickness, cushionPuff } = DECOR3.textiles;
+    const half = cushionSize / 2;
+
+    it('el cojín tiene esquinas y bordes redondeados (sin vértices en la esquina de la caja)', () => {
+      const geometry = createCushionGeometry(DECOR3.textiles);
+      const position = geometry.getAttribute('position');
+      let maxRadial = 0;
+      let maxZ = 0;
+      for (let i = 0; i < position.count; i++) {
+        maxRadial = Math.max(
+          maxRadial,
+          Math.hypot(position.getX(i), position.getY(i))
+        );
+        maxZ = Math.max(maxZ, Math.abs(position.getZ(i)));
+      }
+      // Esquina viva de la caja: half·√2 ≈ 0,318 m.
+      expect(maxRadial).toBeLessThan(half * Math.SQRT2 - 0.02);
+      expect(maxRadial).toBeGreaterThanOrEqual(half - 1e-6);
+      // Abombado: sobresale del grosor nominal pero no más que el hinchado.
+      expect(maxZ).toBeLessThanOrEqual(
+        cushionThickness / 2 + cushionPuff + 1e-6
+      );
+      expect(maxZ).toBeGreaterThan(cushionThickness / 2);
+    });
+
+    it('el cojín lleva normales unitarias suaves (sin costuras en las aristas)', () => {
+      const geometry = createCushionGeometry(DECOR3.textiles);
+      const normal = geometry.getAttribute('normal');
+      for (let i = 0; i < normal.count; i++) {
+        const length = Math.hypot(
+          normal.getX(i),
+          normal.getY(i),
+          normal.getZ(i)
+        );
+        expect(length).toBeCloseTo(1, 3);
+      }
+    });
+
+    it('la manta tiene grosor real (dos capas de tela con borde) y cae por el borde', () => {
+      const blanket = DECOR3.textiles.throw;
+      const geometry = createThrowGeometry(blanket, DECOR3.textiles.tileSize);
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox!;
+      // Altura local (z): grosor + caída; la caída del borde largo es ≥ 0,08 m.
+      expect(box.max.z - box.min.z).toBeGreaterThanOrEqual(
+        blanket.thickness + blanket.drape * 0.8
+      );
+      const position = geometry.getAttribute('position');
+      let top = -Infinity;
+      let bottomAtCentre = Infinity;
+      for (let i = 0; i < position.count; i++) {
+        if (
+          Math.abs(position.getX(i)) < 0.05 &&
+          Math.abs(position.getY(i)) < 0.05
+        ) {
+          top = Math.max(top, position.getZ(i));
+          bottomAtCentre = Math.min(bottomAtCentre, position.getZ(i));
+        }
+      }
+      expect(top - bottomAtCentre).toBeGreaterThanOrEqual(
+        blanket.thickness * 0.9
+      );
+    });
+
+    it('los textiles caben en el presupuesto: ≤ 2 100 triángulos entre cojines y manta', () => {
+      const textiles = meshes(build.group).filter(m =>
+        m.name.startsWith('textile:')
+      );
+      const total = textiles.reduce((sum, mesh) => sum + triangles(mesh), 0);
+      expect(total).toBeLessThanOrEqual(2100);
     });
   });
 });
