@@ -11,7 +11,10 @@ import {
 } from '../interfaces/scene.interface';
 import { CameraService } from './camera.service';
 import { ModelLoaderService, disposeObject3D } from './model-loader.service';
-import { ObjectInteractionService } from './object-interaction.service';
+import {
+  ObjectInteractionService,
+  PointerLike,
+} from './object-interaction.service';
 import { RoomBuilderService } from './room-builder.service';
 import { ViewerStateService } from './viewer-state.service';
 
@@ -48,6 +51,8 @@ export const RENDERER_FACTORY = new InjectionToken<
 });
 
 const MAX_FRAME_DELTA_MS = 100;
+/** Fallos de frame seguidos tras los que se para el bucle y se avisa. */
+export const MAX_CONSECUTIVE_FRAME_FAILURES = 3;
 
 @Injectable({
   providedIn: 'root',
@@ -60,6 +65,8 @@ export class SceneService {
 
   private rafId: number | null = null;
   private lastFrameTime = -1;
+  private frameFailures = 0;
+  private frameErrorLogged = false;
   private resizeObserver: ResizeObserver | null = null;
   private generation = 0;
 
@@ -168,6 +175,7 @@ export class SceneService {
     this.modelLoaderService.dispose();
 
     if (this.scene) {
+      this.roomBuilderService.dispose(this.scene);
       disposeObject3D(this.scene);
       this.scene.clear();
     }
@@ -176,6 +184,8 @@ export class SceneService {
     this.modelProgress.clear();
     this.failed.clear();
     this.pending.clear();
+    this.frameFailures = 0;
+    this.frameErrorLogged = false;
 
     this.renderer?.dispose();
     this.renderer?.forceContextLoss();
@@ -205,16 +215,49 @@ export class SceneService {
 
   private readonly frame = (time: number): void => {
     this.rafId = requestAnimationFrame(this.frame);
-    const delta =
-      this.lastFrameTime < 0
-        ? 0
-        : Math.min(time - this.lastFrameTime, MAX_FRAME_DELTA_MS);
-    this.lastFrameTime = time;
+    try {
+      const delta =
+        this.lastFrameTime < 0
+          ? 0
+          : Math.min(time - this.lastFrameTime, MAX_FRAME_DELTA_MS);
+      this.lastFrameTime = time;
 
-    this.cameraService.update(delta);
-    this.objectInteractionService.update(time);
-    this.renderer?.render(this.scene, this.cameraService.getCamera());
+      this.cameraService.update(delta);
+      this.objectInteractionService.update(time);
+      this.renderer?.render(this.scene, this.cameraService.getCamera());
+      this.frameFailures = 0;
+    } catch (error) {
+      this.onFrameError(error);
+    }
   };
+
+  /** Tolera fallos puntuales; tras N seguidos para el bucle y ofrece reintentar. */
+  private onFrameError(error: unknown): void {
+    this.frameFailures++;
+    if (!this.frameErrorLogged) {
+      this.frameErrorLogged = true;
+      console.error('Render frame failed:', error);
+    }
+    if (this.frameFailures < MAX_CONSECUTIVE_FRAME_FAILURES) return;
+
+    this.stopLoop();
+    this.state.sceneReady.set(false);
+    this.state.error.set({
+      code: 'render-failed',
+      message: 'The 3D view stopped working. Try again.',
+      retry: () => this.resumeAfterRenderFailure(),
+    });
+  }
+
+  private resumeAfterRenderFailure(): void {
+    if (!this.isInitialized) return;
+    this.frameFailures = 0;
+    this.frameErrorLogged = false;
+    if (this.state.error()?.code === 'render-failed')
+      this.state.error.set(null);
+    this.state.sceneReady.set(this.state.loadStatus() !== 'loading');
+    this.startLoop();
+  }
 
   // ── Tamaño y listeners ────────────────────────────────────────────
 
@@ -414,7 +457,7 @@ export class SceneService {
     const generation = this.generation;
 
     const result = await this.objectInteractionService.handleClick(
-      this.asMouseEvent(point),
+      this.asPointerEvent(point),
       this.cameraService.getCamera(),
       this.scene
     );
@@ -424,11 +467,9 @@ export class SceneService {
       this.state.selected.set(null);
       void this.cameraService.teleportTo(result.floorPoint);
     } else if (result.object && this.objectIds.has(result.object)) {
-      this.selectObject(this.objectIds.get(result.object) as string);
-    } else if (result.success && result.objectInfo) {
-      // Compatibilidad con la versión previa de F4a (solo `objectInfo`).
-      this.state.selected.set(result.objectInfo);
-    } else if (result.success) {
+      this.selectObject(this.objectIds.get(result.object) as ModelId);
+    } else {
+      // Sin acierto (o fallo del raycast) no debe quedar una ficha abierta.
       this.state.selected.set(null);
     }
   }
@@ -450,13 +491,13 @@ export class SceneService {
     this.objectInteractionService.setHover(ndc);
   }
 
-  private asMouseEvent(point: ScreenPoint): MouseEvent {
+  private asPointerEvent(point: ScreenPoint): PointerLike {
     return {
       clientX: point.clientX,
       clientY: point.clientY,
       pointerType: point.pointerType,
       target: this.canvas,
-    } as unknown as MouseEvent;
+    } as PointerLike;
   }
 
   getScene(): Scene {

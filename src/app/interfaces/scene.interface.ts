@@ -99,7 +99,7 @@ export interface ScreenPoint {
   clientY: number;
 }
 
-/** Progreso de descarga de un modelo (bytes). `total` es 0 si se desconoce. */
+/** Progreso de carga de un modelo en unidades de recurso (gltf, .bin, texturas); `total` crece al descubrirlos. */
 export type LoadProgressCallback = (loaded: number, total: number) => void;
 
 export interface InteractionResult {

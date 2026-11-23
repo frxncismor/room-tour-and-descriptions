@@ -69,16 +69,35 @@ describe('ModelLoaderService', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('reports real byte progress and 0 total when unknown (no Infinity)', async () => {
+  it('reports finite resource-unit progress and never exceeds the total', async () => {
     const calls: [number, number][] = [];
     await service.loadModel(config(), (l, t) => calls.push([l, t]));
+    // 50/200 bytes del principal = 0.25 de 1 recurso; sin longitud conocida = 0.
     expect(calls).toEqual([
-      [50, 200],
-      [70, 0],
+      [0.25, 1],
+      [0, 1],
     ]);
-    expect(
-      calls.every(([l, t]) => Number.isFinite(l) && Number.isFinite(t))
-    ).toBe(true);
+    expect(calls.every(([l, t]) => Number.isFinite(l) && l <= t)).toBe(true);
+  });
+
+  it('counts secondary files (.bin, textures) through the loading manager', async () => {
+    loadAsync.mockImplementationOnce(function (this: GLTFLoader) {
+      const m = this.manager;
+      m.itemStart('scene.gltf');
+      m.itemStart('scene.bin');
+      m.itemStart('tex.webp');
+      m.itemEnd('scene.gltf');
+      m.itemEnd('scene.bin');
+      m.itemEnd('tex.webp');
+      return Promise.resolve({ scene: fakeScene() });
+    } as never);
+    const calls: [number, number][] = [];
+    await service.loadModel(config(), (l, t) => calls.push([l, t]));
+    expect(calls.at(-1)).toEqual([3, 3]);
+    const fractions = calls.map(([l, t]) => l / t);
+    expect(fractions).toEqual([...fractions].sort((a, b) => a - b));
+    // El primer recurso terminado no es el 100 %.
+    expect(calls.find(([l]) => l === 1)?.[1]).toBe(3);
   });
 
   it('strips the leading slash from the path', async () => {
