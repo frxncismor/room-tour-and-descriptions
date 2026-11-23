@@ -450,7 +450,10 @@ export class SceneService {
     if (!entry) return;
     this.objectInteractionService.selectObject(entry.object);
     this.state.selected.set(entry.info);
-    void this.cameraService.focusOn(entry.object);
+    const obstacles = [...this.models.values()]
+      .filter(other => other !== entry)
+      .map(other => other.object);
+    void this.cameraService.focusOn(entry.object, obstacles);
   }
 
   clearSelection(): void {

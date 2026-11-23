@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Box3, Object3D, PerspectiveCamera, Sphere, Vector3 } from 'three';
+import { Box3, Object3D, PerspectiveCamera, Ray, Sphere, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { DEFAULT_SCENE_CONFIG } from '../config/scene.config';
 import { CameraConfiguration, RoomLimits } from '../interfaces/scene.interface';
@@ -20,9 +20,21 @@ const MAX_VERTICAL_FOV = 90;
 const PORTRAIT_FULL_ASPECT = 0.5;
 const PORTRAIT_POSITION = new Vector3(7, 3.8, -1.5);
 const PORTRAIT_TARGET = new Vector3(0, 0.5, -4.5);
+const AXIS_Y = new Vector3(0, 1, 0);
 const MIN_CAMERA_HEIGHT = 0.3;
 const MOVE_DURATION_MS = 1200;
 const FOCUS_DURATION_MS = 900;
+/** Giros (rad) alrededor del mueble probados al enfocar, por orden de prioridad. */
+const FOCUS_YAW_OFFSETS = [0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9, Math.PI];
+/** Altura extra (m) sobre la de ojos para ver por encima de lo que tapa. */
+const FOCUS_RAISED_EXTRA = 1;
+/** Holgura (m) con la que se encoge la caja del mueble al muestrear su oclusión. */
+const OCCLUSION_INSET = 0.05;
+/** Margen (fracción de NDC) alrededor del mueble enfocado. */
+const FOCUS_MARGIN = 0.12;
+/** En retrato: borde superior de la ficha inferior (~30 % del alto) y bajo la barra de botones (NDC). */
+const SHEET_BOTTOM_NDC = -0.32;
+const TOP_BAR_NDC = 0.78;
 
 interface Tween {
   fromPosition: Vector3;
@@ -227,8 +239,16 @@ export class CameraService {
     return this.startTween(toPosition, toTarget, MOVE_DURATION_MS);
   }
 
-  /** Acerca la cámara a `object` para verlo entero (D-04). */
-  focusOn(object: Object3D): Promise<boolean> {
+  /**
+   * Acerca la cámara a `object` para verlo entero (D-04). Entre varios ángulos
+   * elige el primero (el actual tiene prioridad) que quede dentro de la sala y
+   * sin otro mueble de `obstacles` entre la cámara y el objetivo; si todos
+   * tapan, el de menor oclusión.
+   */
+  focusOn(
+    object: Object3D,
+    obstacles: readonly Object3D[] = []
+  ): Promise<boolean> {
     if (!this.camera) return Promise.resolve(false);
     const box = new Box3().setFromObject(object);
     if (box.isEmpty()) return Promise.resolve(false);
@@ -237,7 +257,7 @@ export class CameraService {
     const halfFov = (this.camera.fov * Math.PI) / 360;
     const minDistance = this.controls?.minDistance ?? 1;
     const maxDistance = this.controls?.maxDistance ?? 8;
-    const distance = this.clamp(
+    const baseDistance = this.clamp(
       (sphere.radius / Math.sin(halfFov)) * 1.15,
       minDistance,
       maxDistance
@@ -248,12 +268,209 @@ export class CameraService {
     if (away.lengthSq() < 1e-6) away.set(0, 0, 1);
     away.normalize();
 
-    const toPosition = sphere.center.clone().addScaledVector(away, distance);
-    toPosition.y = this.initialHeight;
-    this.clampPoint(toPosition);
-    const toTarget = sphere.center.clone();
-    toTarget.y = Math.max(toTarget.y, MIN_CAMERA_HEIGHT);
-    return this.startTween(toPosition, toTarget, FOCUS_DURATION_MS);
+    const pose = this.pickFocusPose(
+      box,
+      sphere.center,
+      away,
+      { baseDistance, minDistance, maxDistance },
+      obstacles
+    );
+    return this.startTween(pose.position, pose.target, FOCUS_DURATION_MS);
+  }
+
+  /** Zona de pantalla (NDC) libre de ficha y botones; en retrato deja sitio abajo a la ficha. */
+  private visibleBand(): { bottom: number; top: number } {
+    const blend = this.clamp((1 - this.aspect) / 0.3, 0, 1);
+    return {
+      bottom: -(1 - FOCUS_MARGIN) * (1 - blend) + SHEET_BOTTOM_NDC * blend,
+      top: (1 - FOCUS_MARGIN) * (1 - blend) + TOP_BAR_NDC * blend,
+    };
+  }
+
+  /**
+   * Cámara y objetivo para un candidato a distancia dada: el target se acerca
+   * a la cámara (en el suelo, dentro de los límites de OrbitControls) hasta que
+   * el centro del mueble queda en medio de la zona visible.
+   */
+  private focusPoseAt(
+    camera: PerspectiveCamera,
+    center: Vector3,
+    dir: Vector3,
+    height: number,
+    distance: number,
+    desiredY: number,
+    corners: readonly Vector3[]
+  ): { position: Vector3; target: Vector3; overflow: number } {
+    const position = center.clone().addScaledVector(dir, distance);
+    position.y = height;
+    const lookAt = center.clone();
+    lookAt.y = Math.max(lookAt.y, MIN_CAMERA_HEIGHT);
+    const horizontal = Math.hypot(position.x - center.x, position.z - center.z);
+    const project = (target: Vector3, point: Vector3): Vector3 => {
+      camera.position.copy(position);
+      camera.lookAt(target);
+      camera.updateMatrixWorld(true);
+      return point.clone().project(camera);
+    };
+    const targetFor = (k: number): Vector3 =>
+      lookAt.clone().addScaledVector(dir, k);
+
+    let target = lookAt;
+    if (desiredY !== 0) {
+      let lo = 0;
+      let hi = horizontal * 0.75;
+      for (let i = 0; i < 16; i++) {
+        const mid = (lo + hi) / 2;
+        if (project(targetFor(mid), center).y < desiredY) lo = mid;
+        else hi = mid;
+      }
+      target = targetFor(lo);
+    }
+    const band = this.visibleBand();
+    const limitX = 1 - FOCUS_MARGIN;
+    let overflow = 0;
+    for (const corner of corners) {
+      const ndc = project(target, corner);
+      overflow = Math.max(
+        overflow,
+        Math.abs(ndc.x) - limitX,
+        ndc.y - band.top,
+        band.bottom - ndc.y
+      );
+    }
+    return { position, target, overflow };
+  }
+
+  /** Distancia mínima (≥ base) con la que el mueble cabe en la zona visible. */
+  private fitDistance(
+    fit: (distance: number) => number,
+    base: number,
+    max: number
+  ): number {
+    if (fit(base) <= 0) return base;
+    if (fit(max) > 0) return max;
+    let lo = base;
+    let hi = max;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (fit(mid) > 0) lo = mid;
+      else hi = mid;
+    }
+    return hi;
+  }
+
+  /** Elige la pose de cámara con menos oclusión (empates: el orden de prioridad). */
+  private pickFocusPose(
+    box: Box3,
+    center: Vector3,
+    away: Vector3,
+    range: { baseDistance: number; minDistance: number; maxDistance: number },
+    obstacles: readonly Object3D[]
+  ): { position: Vector3; target: Vector3 } {
+    const obstacleBoxes = obstacles
+      .map(o => new Box3().setFromObject(o))
+      .filter(b => !b.isEmpty());
+    const samples = this.occlusionSamples(box, center);
+    const corners = this.boxCorners(box);
+    const band = this.visibleBand();
+    const desiredY = (band.bottom + band.top) / 2;
+    const probe = this.camera.clone();
+    const heights = [
+      this.initialHeight,
+      this.initialHeight + FOCUS_RAISED_EXTRA,
+    ];
+
+    let best: { position: Vector3; target: Vector3 } | null = null;
+    let bestScore = Infinity;
+    for (const yaw of FOCUS_YAW_OFFSETS) {
+      const dir = away.clone().applyAxisAngle(AXIS_Y, yaw);
+      for (const height of heights) {
+        const isDefault = yaw === 0 && height === heights[0];
+        const at = (distance: number) =>
+          this.focusPoseAt(
+            probe,
+            center,
+            dir,
+            height,
+            distance,
+            desiredY,
+            corners
+          );
+        const distance = this.fitDistance(
+          d => at(d).overflow,
+          range.baseDistance,
+          range.maxDistance
+        );
+        const pose = at(distance);
+        const raw = pose.position.clone();
+        this.clampPoint(pose.position);
+        // El candidato por defecto conserva su clamp de siempre; el resto
+        // se descarta si la sala los obliga a moverse.
+        if (!isDefault && pose.position.distanceToSquared(raw) > 1e-4) continue;
+
+        const score = this.occlusionScore(
+          pose.position,
+          samples,
+          obstacleBoxes
+        );
+        if (score < bestScore) {
+          best = pose;
+          bestScore = score;
+        }
+        if (score === 0) return pose;
+      }
+    }
+    return (
+      best ?? {
+        position: center.clone().addScaledVector(away, range.baseDistance),
+        target: center.clone(),
+      }
+    );
+  }
+
+  private boxCorners(box: Box3): Vector3[] {
+    const { min, max } = box;
+    const points: Vector3[] = [];
+    for (const x of [min.x, max.x])
+      for (const y of [min.y, max.y])
+        for (const z of [min.z, max.z]) points.push(new Vector3(x, y, z));
+    return points;
+  }
+
+  /** Centro y esquinas (algo encogidas) de la caja del mueble. */
+  private occlusionSamples(box: Box3, center: Vector3): Vector3[] {
+    const inner = box.clone().expandByScalar(-OCCLUSION_INSET);
+    if (inner.isEmpty()) return [center.clone()];
+    const { min, max } = inner;
+    const points = [center.clone()];
+    for (const x of [min.x, max.x])
+      for (const y of [min.y, max.y])
+        for (const z of [min.z, max.z]) points.push(new Vector3(x, y, z));
+    return points;
+  }
+
+  /** Nº de puntos del mueble tapados por algún obstáculo desde `from`. */
+  private occlusionScore(
+    from: Vector3,
+    samples: readonly Vector3[],
+    obstacleBoxes: readonly Box3[]
+  ): number {
+    if (obstacleBoxes.length === 0) return 0;
+    let hidden = 0;
+    const ray = new Ray();
+    const hit = new Vector3();
+    for (const sample of samples) {
+      ray.origin.copy(from);
+      ray.direction.copy(sample).sub(from);
+      const length = ray.direction.length();
+      if (length < 1e-6) continue;
+      ray.direction.divideScalar(length);
+      const blocked = obstacleBoxes.some(
+        b => ray.intersectBox(b, hit) !== null && hit.distanceTo(from) < length
+      );
+      if (blocked) hidden++;
+    }
+    return hidden;
   }
 
   /** Vuelve a la posición y mirada iniciales. */
