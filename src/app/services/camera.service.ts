@@ -2,7 +2,11 @@ import { Injectable } from '@angular/core';
 import { Box3, Object3D, PerspectiveCamera, Ray, Sphere, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { DEFAULT_SCENE_CONFIG } from '../config/scene.config';
-import { CameraConfiguration, RoomLimits } from '../interfaces/scene.interface';
+import {
+  CameraConfiguration,
+  RoomLimits,
+  SurfaceId,
+} from '../interfaces/scene.interface';
 
 /** Margen (m) entre la cámara y las paredes. */
 const WALL_MARGIN = 0.5;
@@ -49,6 +53,69 @@ const FOCUS_MAX_PITCH_DEG = 30;
 const CAMERA_CLEARANCE = 0.4;
 /** Ancho (px) que se asume si el canvas aún no tiene medida (p. ej. en tests). */
 const FALLBACK_VIEWPORT_WIDTH = 1280;
+/** Zoom libre (spec C.3): distancia mínima y máxima de la órbita (m). */
+const DEFAULT_MAX_POLAR = Math.PI / 2.1;
+const MIN_ORBIT_DISTANCE = 0.8;
+const MAX_ORBIT_DISTANCE = 12;
+/** Altura máxima (m) de cámara y objetivo: la sala mide 4 m, nunca se atraviesa el techo. */
+const MAX_CAMERA_HEIGHT = 3.9;
+/** Pared: alto (m) a encuadrar con holgura (4 + 0,4), margen lateral por lado y tope de distancia (m). */
+const SURFACE_FIT_HEIGHT = 4.4;
+const SURFACE_SIDE_MARGIN = 0.4;
+const SURFACE_MAX_DISTANCE = 9;
+/** Margen (×) sobre el ancho de la pared al repartirla en tramos. */
+const SURFACE_SPAN_FACTOR = 1.04;
+/** El objetivo se coloca delante de la pared para que el límite de sala no lo desplace (m). */
+const SURFACE_TARGET_OFFSET = 0.5;
+/** Pose fija del techo: pitch (grados) y distancia (m) al objetivo. */
+const CEILING_PITCH_DEG = 23;
+const CEILING_TARGET_DISTANCE = 5;
+/** Grados sobre la horizontal que se permiten al mirar paredes y techo. */
+const RELAXED_POLAR_EXTRA_DEG = 30;
+
+/** Pared (sala 16 × 16 × 4): centro, normal hacia dentro y eje a lo largo de ella. */
+interface WallSpec {
+  center: Vector3;
+  normal: Vector3;
+  along: Vector3;
+}
+
+const WALL_LENGTH = 16;
+const WALL_HEIGHT = 4;
+const WALL_SPECS: Readonly<Record<Exclude<SurfaceId, 'ceiling'>, WallSpec>> = {
+  wallGreen: {
+    center: new Vector3(0, 0, -8),
+    normal: new Vector3(0, 0, 1),
+    along: new Vector3(1, 0, 0),
+  },
+  wallWindow: {
+    center: new Vector3(-8, 0, 0),
+    normal: new Vector3(1, 0, 0),
+    along: new Vector3(0, 0, -1),
+  },
+  wallTv: {
+    center: new Vector3(0, 0, 8),
+    normal: new Vector3(0, 0, -1),
+    along: new Vector3(-1, 0, 0),
+  },
+  wallDesk: {
+    center: new Vector3(8, 0, 0),
+    normal: new Vector3(-1, 0, 0),
+    along: new Vector3(0, 0, 1),
+  },
+};
+
+/** Pose (cámara y objetivo) de una superficie y reparto de la pared en tramos. */
+export interface SurfacePose {
+  position: Vector3;
+  target: Vector3;
+  /** Nº de tramos de la pared (1 en el techo). */
+  tramos: number;
+  /** Tramo (1…tramos) al que corresponde la pose. */
+  tramo: number;
+  /** Ancho (m) de un tramo. */
+  tramoWidth: number;
+}
 
 interface Tween {
   fromPosition: Vector3;
@@ -57,6 +124,8 @@ interface Tween {
   toTarget: Vector3;
   duration: number;
   elapsed: number;
+  /** Límite polar abierto (paredes y techo) al terminar; si no, el de siempre. */
+  relaxPolar: boolean;
   resolve: (completed: boolean) => void;
 }
 
@@ -175,9 +244,11 @@ export class CameraService {
     const controls = new OrbitControls(this.camera, domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
-    controls.minDistance = 1;
+    controls.minDistance = MIN_ORBIT_DISTANCE;
     controls.minPolarAngle = 0.1;
-    controls.maxPolarAngle = Math.PI / 2.1;
+    controls.maxPolarAngle = DEFAULT_MAX_POLAR;
+    // Zoom libre (spec C.3): rueda y pellizco acercan al punto señalado.
+    controls.zoomToCursor = true;
     controls.rotateSpeed = 0.7;
     // El paneo (botón derecho, dos dedos, flechas) queda en el plano horizontal.
     controls.enablePan = true;
@@ -194,18 +265,18 @@ export class CameraService {
     this.applyDistanceLimit();
   }
 
-  /** `maxDistance` derivado de la sala: nunca más lejos que su semi-lado menor. */
+  /**
+   * `maxDistance` 12 m (spec C.3), sin quedar nunca por debajo de lo que pide
+   * la vista inicial en retrato (algo más lejos que el semi-lado de la sala).
+   */
   private applyDistanceLimit(): void {
     if (!this.controls) return;
-    const halfWidth = (this.limits.maxX - this.limits.minX) / 2;
-    const halfDepth = (this.limits.maxZ - this.limits.minZ) / 2;
-    // La vista inicial (retrato) puede quedar algo más lejos que el semi-lado.
     const framed = this.camera
       ? this.framedPosition().distanceTo(this.framedTarget()) + 0.1
       : 0;
     this.controls.maxDistance = Math.max(
       this.controls.minDistance + 1,
-      Math.min(halfWidth, halfDepth),
+      MAX_ORBIT_DISTANCE,
       framed
     );
   }
@@ -214,8 +285,16 @@ export class CameraService {
   clampToRoom(): void {
     if (!this.camera) return;
     this.clampPoint(this.camera.position);
+    this.camera.position.y = Math.min(
+      this.camera.position.y,
+      MAX_CAMERA_HEIGHT
+    );
     if (this.controls) {
       this.clampPoint(this.controls.target);
+      this.controls.target.y = Math.min(
+        this.controls.target.y,
+        MAX_CAMERA_HEIGHT
+      );
     }
   }
 
@@ -310,6 +389,89 @@ export class CameraService {
       obstacles
     );
     return this.startTween(pose.position, pose.target, FOCUS_DURATION_MS);
+  }
+
+  /** Nº de tramos en que se reparte una pared con ese aspecto (spec C.2). */
+  surfaceTramos(aspect: number): number {
+    const reach = 2 * SURFACE_MAX_DISTANCE * this.tanHalfHorizontalFov(aspect);
+    return Math.max(
+      1,
+      Math.ceil((WALL_LENGTH * SURFACE_SPAN_FACTOR) / reach - 1e-9)
+    );
+  }
+
+  /** Tramo (1…n) de la pared más cercano al punto pulsado. */
+  surfaceTramoAt(surface: SurfaceId, point: Vector3, aspect: number): number {
+    if (surface === 'ceiling') return 1;
+    const n = this.surfaceTramos(aspect);
+    const wall = WALL_SPECS[surface];
+    const offset = point.clone().sub(wall.center).dot(wall.along);
+    const index = Math.floor((offset + WALL_LENGTH / 2) / (WALL_LENGTH / n));
+    return this.clamp(index + 1, 1, n);
+  }
+
+  /**
+   * Pose de cámara y objetivo para ver una pared de frente (≤ 9 m) o el techo
+   * (pose fija). `tramo` va de 1 a `surfaceTramos(aspect)`.
+   */
+  surfacePose(surface: SurfaceId, tramo: number, aspect: number): SurfacePose {
+    if (surface === 'ceiling') return this.ceilingPose();
+    const wall = WALL_SPECS[surface];
+    const n = this.surfaceTramos(aspect);
+    const index = this.clamp(Math.round(tramo), 1, n);
+    const width = WALL_LENGTH / n;
+    const along = -WALL_LENGTH / 2 + width * (index - 0.5);
+    const tanV = Math.tan((this.fovFor(aspect) * Math.PI) / 360);
+    const distance = Math.min(
+      SURFACE_MAX_DISTANCE,
+      Math.max(
+        SURFACE_FIT_HEIGHT / (2 * tanV),
+        (width + 2 * SURFACE_SIDE_MARGIN) /
+          (2 * this.tanHalfHorizontalFov(aspect))
+      )
+    );
+    const middle = wall.center.clone().addScaledVector(wall.along, along);
+    const target = middle
+      .clone()
+      .addScaledVector(wall.normal, SURFACE_TARGET_OFFSET);
+    target.y = WALL_HEIGHT / 2;
+    const position = middle.clone().addScaledVector(wall.normal, distance);
+    position.y = WALL_HEIGHT / 2;
+    return { position, target, tramos: n, tramo: index, tramoWidth: width };
+  }
+
+  /** Techo: desde el centro, 23° hacia arriba y hacia la zona de la TV (cornisa y colgante). */
+  private ceilingPose(): SurfacePose {
+    const pitch = (CEILING_PITCH_DEG * Math.PI) / 180;
+    const position = new Vector3(0, this.initialHeight, 0);
+    const target = position
+      .clone()
+      .add(
+        new Vector3(
+          0,
+          Math.sin(pitch) * CEILING_TARGET_DISTANCE,
+          Math.cos(pitch) * CEILING_TARGET_DISTANCE
+        )
+      );
+    return { position, target, tramos: 1, tramo: 1, tramoWidth: WALL_LENGTH };
+  }
+
+  private tanHalfHorizontalFov(aspect: number): number {
+    return Math.tan((this.fovFor(aspect) * Math.PI) / 360) * aspect;
+  }
+
+  /**
+   * Encuadra una pared (tramo `tramo`) o el techo. Resuelve `false` si algo
+   * corta el movimiento; con `prefers-reduced-motion` salta sin transición.
+   */
+  focusSurface(
+    surface: SurfaceId,
+    tramo = 1,
+    aspect = this.aspect
+  ): Promise<boolean> {
+    if (!this.camera) return Promise.resolve(false);
+    const pose = this.surfacePose(surface, tramo, aspect);
+    return this.startTween(pose.position, pose.target, FOCUS_DURATION_MS, true);
   }
 
   /** Zona de pantalla (NDC) libre de ficha y botones; en retrato deja sitio abajo a la ficha. */
@@ -586,15 +748,19 @@ export class CameraService {
   private startTween(
     toPosition: Vector3,
     toTarget: Vector3,
-    duration: number
+    duration: number,
+    relaxPolar = false
   ): Promise<boolean> {
     this.cancelAnimation();
     this.atFramedPose = false;
     const target = this.controls?.target ?? new Vector3();
+    // Mirar una pared de frente o el techo pide un polo más abierto que el normal.
+    if (relaxPolar) this.setMaxPolar(true);
 
     if (this.prefersReducedMotion()) {
       this.camera.position.copy(toPosition);
       target.copy(toTarget);
+      this.setMaxPolar(relaxPolar);
       this.updateControls();
       return Promise.resolve(true);
     }
@@ -607,10 +773,19 @@ export class CameraService {
         toTarget,
         duration,
         elapsed: 0,
+        relaxPolar,
         resolve,
       };
       // Los controles siguen activos: un arrastre dispara start y cancela el tween.
     });
+  }
+
+  /** Límite polar de OrbitControls: el de siempre o el abierto de paredes y techo. */
+  private setMaxPolar(relaxed: boolean): void {
+    if (!this.controls) return;
+    this.controls.maxPolarAngle = relaxed
+      ? Math.PI / 2 + (RELAXED_POLAR_EXTRA_DEG * Math.PI) / 180
+      : DEFAULT_MAX_POLAR;
   }
 
   private currentHeading(): Vector3 {
@@ -653,6 +828,7 @@ export class CameraService {
       );
       if (progress >= 1) {
         this.tween = null;
+        this.setMaxPolar(tween.relaxPolar);
         tween.resolve(true);
       }
     }
