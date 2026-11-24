@@ -4,6 +4,7 @@ import {
   BufferGeometry,
   Material,
   Mesh,
+  MeshStandardMaterial,
   Object3D,
   ReplaceStencilOp,
   Texture,
@@ -164,18 +165,59 @@ describe('DecorBuilderService', () => {
       other.dispose();
     });
 
-    it('los materiales de cojines y manta escriben stencil = 1 (cuentan como silueta del sofá) y los demás no', () => {
+    it('al construir, solo cojines, manta y libros escriben stencil = 1 (silueta de su mueble)', () => {
       const textureSet = service.build(DECOR3, fakeTextures());
       for (const mesh of meshes(textureSet.group)) {
         const m = mesh.material as Material;
-        const isTextile = mesh.name.startsWith('textile:');
-        expect(m.stencilWrite, mesh.name).toBe(isTextile);
-        if (isTextile) {
+        const hosted =
+          mesh.name.startsWith('textile:') || mesh.name === 'books';
+        expect(m.stencilWrite, mesh.name).toBe(hosted);
+        if (hosted) {
           expect(m.stencilRef, mesh.name).toBe(1);
           expect(m.stencilFunc, mesh.name).toBe(AlwaysStencilFunc);
           expect(m.stencilZPass, mesh.name).toBe(ReplaceStencilOp);
         }
       }
+      textureSet.dispose();
+    });
+
+    it('R8-M3: setSilhouette("sofa", false) quita el stencil de cojines y manta (no recortan el contorno de otros muebles) y (true) lo devuelve', () => {
+      const textureSet = service.build(DECOR3, fakeTextures());
+      const textiles = meshes(textureSet.group).filter(m =>
+        m.name.startsWith('textile:')
+      );
+      const books = meshes(textureSet.group).find(m => m.name === 'books')!;
+      expect(textiles.length).toBe(3);
+      textureSet.setSilhouette('sofa', false);
+      for (const mesh of textiles) {
+        expect((mesh.material as Material).stencilWrite, mesh.name).toBe(false);
+      }
+      // El otro host no cambia.
+      expect((books.material as Material).stencilWrite).toBe(true);
+      textureSet.setSilhouette('sofa', true);
+      for (const mesh of textiles) {
+        const m = mesh.material as Material;
+        expect(m.stencilWrite, mesh.name).toBe(true);
+        expect(m.stencilRef, mesh.name).toBe(1);
+      }
+      textureSet.dispose();
+    });
+
+    it('R8-M3: setSilhouette("bookshelf", false) apaga solo los libros y no los textiles', () => {
+      const textureSet = service.build(DECOR3, fakeTextures());
+      textureSet.setSilhouette('bookshelf', false);
+      for (const mesh of meshes(textureSet.group)) {
+        expect((mesh.material as Material).stencilWrite, mesh.name).toBe(
+          mesh.name.startsWith('textile:')
+        );
+      }
+      textureSet.setSilhouette('bookshelf', true);
+      expect(
+        (
+          meshes(textureSet.group).find(m => m.name === 'books')!
+            .material as Material
+        ).stencilWrite
+      ).toBe(true);
       textureSet.dispose();
     });
 
@@ -447,12 +489,142 @@ describe('DecorBuilderService', () => {
       );
     });
 
-    it('los textiles caben en el presupuesto: ≤ 2 100 triángulos entre cojines y manta', () => {
+    it('los textiles caben en el presupuesto: ≤ 3 200 triángulos entre cojines y manta (≤ 3 000 extra sobre la ronda 3)', () => {
       const textiles = meshes(build.group).filter(m =>
         m.name.startsWith('textile:')
       );
       const total = textiles.reduce((sum, mesh) => sum + triangles(mesh), 0);
-      expect(total).toBeLessThanOrEqual(2100);
+      expect(total).toBeLessThanOrEqual(3200);
+    });
+
+    it('el cojín lleva color por vértice: más oscuro en las costuras que en el centro (volumen)', () => {
+      const geometry = createCushionGeometry(DECOR3.textiles);
+      const color = geometry.getAttribute('color');
+      const position = geometry.getAttribute('position');
+      expect(color).toBeDefined();
+      let centre = 0;
+      let edge = 1;
+      for (let i = 0; i < color.count; i++) {
+        const r = Math.hypot(position.getX(i), position.getY(i));
+        if (r < 0.05 && position.getZ(i) > 0) {
+          centre = Math.max(centre, color.getX(i));
+        }
+        if (r > half * 1.2) {
+          edge = Math.min(edge, color.getX(i));
+        }
+      }
+      expect(centre).toBeGreaterThan(0.95);
+      expect(edge).toBeLessThan(0.85);
+    });
+
+    it('la manta tiene franjas de borde (color por vértice) y flecos en los extremos', () => {
+      const blanket = DECOR3.textiles.throw;
+      const geometry = createThrowGeometry(blanket, DECOR3.textiles.tileSize);
+      const color = geometry.getAttribute('color');
+      expect(color).toBeDefined();
+      let min = 1;
+      let max = 0;
+      for (let i = 0; i < color.count; i++) {
+        min = Math.min(min, color.getX(i));
+        max = Math.max(max, color.getX(i));
+      }
+      expect(max).toBeGreaterThan(0.95);
+      expect(min).toBeLessThan(0.8);
+      geometry.computeBoundingBox();
+      expect(geometry.boundingBox!.max.x).toBeGreaterThan(
+        blanket.width / 2 + blanket.fringe * 0.8
+      );
+      expect(geometry.boundingBox!.min.x).toBeLessThan(
+        -(blanket.width / 2 + blanket.fringe * 0.8)
+      );
+    });
+
+    it('los materiales de cojines y manta usan color por vértice', () => {
+      for (const mesh of meshes(build.group).filter(m =>
+        m.name.startsWith('textile:')
+      )) {
+        expect((mesh.material as Material).vertexColors, mesh.name).toBe(true);
+      }
+    });
+  });
+
+  describe('lámparas y apliques con volumen (R8-M4)', () => {
+    const named = (name: string) =>
+      meshes(build.group).filter(m => m.name === name);
+
+    it('la pantalla de la lámpara de pie es la malla propia `floorLamp:shade` con material emisivo no compartido', () => {
+      const [shade, ...others] = named('floorLamp:shade');
+      expect(shade).toBeDefined();
+      expect(others).toHaveLength(0);
+      const material = shade.material as MeshStandardMaterial;
+      expect(material.isMeshStandardMaterial).toBe(true);
+      expect(material.emissiveIntensity).toBeGreaterThan(0);
+      const sharing = meshes(build.group).filter(
+        m => m !== shade && m.material === material
+      );
+      expect(sharing).toHaveLength(0);
+      expect(shade.parent?.name).toBe('fixtures');
+    });
+
+    it('apagar `floorLamp:shade` no apaga los apliques (material distinto)', () => {
+      const lamp = named('floorLamp:shade')[0].material as MeshStandardMaterial;
+      const sconce = named('sconce-shade')[0].material as MeshStandardMaterial;
+      expect(sconce).not.toBe(lamp);
+      lamp.emissiveIntensity = 0;
+      expect(sconce.emissiveIntensity).toBeGreaterThan(0);
+    });
+
+    it('la pantalla de la lámpara es un volumen: cono con tapa y bombilla (no un plano)', () => {
+      const shade = named('floorLamp:shade')[0];
+      shade.geometry.computeBoundingBox();
+      const box = shade.geometry.boundingBox!;
+      const lamp = DECOR3.floorLamp;
+      expect(box.max.y - box.min.y).toBeGreaterThanOrEqual(lamp.shade.height);
+      expect(triangles(shade)).toBeGreaterThan(150);
+      expect(lamp.shade.radiusTop).toBeLessThan(lamp.shade.radius);
+    });
+
+    it('los apliques tienen tapa y bombilla (más de 250 triángulos de pantalla por aplique)', () => {
+      const shade = named('sconce-shade')[0];
+      expect(
+        triangles(shade) / DECOR3.sconces.positions.length
+      ).toBeGreaterThan(250);
+    });
+  });
+
+  describe('estantería con libros (R8-M4)', () => {
+    const books = () => meshes(build.group).find(m => m.name === 'books')!;
+
+    it('hay una malla `books` con color por vértice', () => {
+      expect(books()).toBeDefined();
+      expect((books().material as Material).vertexColors).toBe(true);
+      expect(books().geometry.getAttribute('color')).toBeDefined();
+      expect(triangles(books())).toBeGreaterThan(100);
+      expect(triangles(books())).toBeLessThanOrEqual(1200);
+    });
+
+    it('los libros caben dentro de la estantería y quedan sobre una balda', () => {
+      const geometry = books().geometry;
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox!;
+      const shelf = FURNITURE['bookshelf'];
+      expect(box.min.x).toBeGreaterThanOrEqual(shelf.min.x + 0.04);
+      expect(box.max.x).toBeLessThanOrEqual(shelf.max.x - 0.04);
+      expect(box.min.z).toBeGreaterThanOrEqual(shelf.min.z + 0.04);
+      expect(box.max.z).toBeLessThanOrEqual(shelf.max.z - 0.01);
+      expect(box.max.y).toBeLessThanOrEqual(shelf.max.y - 0.03);
+      const tops = DECOR3.books.tiers.map(t => t.top);
+      expect(box.min.y).toBeGreaterThanOrEqual(Math.min(...tops) - 1e-6);
+    });
+
+    it('es determinista (misma entrada, misma geometría)', () => {
+      const other = service.build(DECOR3, {});
+      const a = books().geometry.getAttribute('position').array;
+      const b = meshes(other.group)
+        .find(m => m.name === 'books')!
+        .geometry.getAttribute('position').array;
+      expect(Array.from(a)).toEqual(Array.from(b));
+      other.dispose();
     });
   });
 });

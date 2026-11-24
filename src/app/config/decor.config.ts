@@ -109,7 +109,10 @@ export interface DecorFloorLampConfig {
   rodRadius: number;
   rodTop: number;
   shade: {
+    /** Radio inferior (boca) de la pantalla. */
     radius: number;
+    /** Radio superior (la pantalla es un tronco de cono). */
+    radiusTop: number;
     bottom: number;
     height: number;
     color: number;
@@ -140,12 +143,18 @@ export interface DecorThrowConfig {
   creaseHeight: number;
   /** Caída de los bordes largos (como sobre el brazo o el puf). */
   drape: number;
+  /** Largo de los flecos de los extremos (m). */
+  fringe: number;
+  /** Tono (0-1) de las franjas de borde frente al fondo de la manta. */
+  stripeTone: number;
 }
 
 export interface DecorTextilesConfig {
   roughness: number;
   tileSize: number;
   normalScale: number;
+  /** Relieve del lino en la manta (más marcado que en cortinas y cojines). */
+  throwNormalScale: number;
   /** Factor sobre el tinte de cojines y manta (compensa el lino oscuro). */
   brightness: number;
   cushionSize: number;
@@ -157,6 +166,29 @@ export interface DecorTextilesConfig {
   throw: DecorThrowConfig;
 }
 
+/** Una balda con sus tramos de libros (de x a x, en el marco de la estantería) y un jarrón opcional. */
+export interface DecorBookTierConfig {
+  /** Cara superior de la balda (m, en la escena). */
+  top: number;
+  /** Alto máximo útil sobre la balda. */
+  maxHeight: number;
+  runs: { from: number; to: number; lean?: number }[];
+  /** Posición X de un jarrón/bote, o ausente. */
+  jar?: number;
+  /** Libros tumbados (pila) a partir de esta X. */
+  stack?: { x: number; count: number };
+}
+
+export interface DecorBooksConfig {
+  /** Centro de la estantería en Z y fondo útil de las baldas. */
+  zCenter: number;
+  depth: number;
+  /** Paleta apagada (sRGB) de los lomos. */
+  palette: number[];
+  jarColor: number;
+  tiers: DecorBookTierConfig[];
+}
+
 export interface Decor3Config {
   frame: DecorFrameConfig;
   artworks: DecorArtworkConfig[];
@@ -166,6 +198,8 @@ export interface Decor3Config {
   curtains: DecorCurtainsConfig;
   floorLamp: DecorFloorLampConfig;
   textiles: DecorTextilesConfig;
+  /** Libros y bote sobre las baldas de la estantería (R8-M4). */
+  books: DecorBooksConfig;
   /** Ruta de cada textura por clave de carga (`art:<id>` / `fabric:<id>`). */
   textures: Record<string, string>;
 }
@@ -223,7 +257,7 @@ export const DECOR3: Decor3Config = {
       height: 0.22,
       color: 0xffe2b0,
       emissive: 0xffe2b0,
-      emissiveIntensity: 0.9,
+      emissiveIntensity: 0.6,
     },
     halo: {
       offset: new Vector3(0, 0, -0.055),
@@ -270,6 +304,7 @@ export const DECOR3: Decor3Config = {
     rodTop: 1.3,
     shade: {
       radius: 0.21,
+      radiusTop: 0.15,
       bottom: 1.3,
       height: 0.3,
       color: 0xf3e1c0,
@@ -281,10 +316,11 @@ export const DECOR3: Decor3Config = {
     roughness: 1,
     tileSize: 0.5,
     normalScale: 0.8,
+    throwNormalScale: 1.6,
     brightness: 1.45,
     cushionSize: 0.45,
     cushionThickness: 0.12,
-    cushionPuff: 0.03,
+    cushionPuff: 0.045,
     cushionCorner: 0.055,
     // Colocación fina (T-343) con la AABB REAL del sofá cargado (ver SOFA_REAL
     // en decor-builder.service.spec.ts). Medidas en el marco del sofá (x ancho,
@@ -319,7 +355,41 @@ export const DECOR3: Decor3Config = {
       thickness: 0.035,
       creaseHeight: 0.015,
       drape: 0.1,
+      fringe: 0.045,
+      stripeTone: 0.62,
     },
+  },
+  // Baldas del bookshelf medidas en el glTF: caras superiores a 0,05 / 0,59 /
+  // 1,12 / 1,65 m; interior de x -0,87 a 0,87 y de z -7,746 a -7,403.
+  books: {
+    zCenter: -7.575,
+    depth: 0.22,
+    palette: [
+      0x7a4a36, 0x9a7b4b, 0x4f6552, 0x35505f, 0xa65f49, 0xc2a67a, 0x6d5a7a,
+    ],
+    jarColor: 0xa9b8a0,
+    tiers: [
+      {
+        top: 0.59,
+        maxHeight: 0.4,
+        runs: [{ from: -0.8, to: -0.3, lean: 0.18 }],
+        stack: { x: 0.35, count: 4 },
+      },
+      {
+        top: 1.12,
+        maxHeight: 0.4,
+        runs: [{ from: 0.1, to: 0.78 }],
+        jar: -0.55,
+      },
+      {
+        top: 1.65,
+        maxHeight: 0.4,
+        runs: [
+          { from: -0.8, to: -0.15, lean: 0.14 },
+          { from: 0.45, to: 0.78 },
+        ],
+      },
+    ],
   },
   textures: {
     'art:spiraea': 'assets/textures/art/spiraea.webp',
