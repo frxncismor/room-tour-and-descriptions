@@ -12,61 +12,61 @@ const PIECES_ES = {
       name: 'Sofá rinconera',
       description:
         'Sofá rinconera con cojines sueltos en el respaldo y un puf independiente, en tono terracota. Define la zona de estar a la izquierda.',
-      details: 'Modelo: "Sofa Set", de FREEDomplant, vía Sketchfab.',
+      details: 'Modelo: «Sofa Set», de FREEDomplant, vía Sketchfab.',
     },
     pokerTable: {
       name: 'Mesa de póker',
       description:
-        'Mesa de cartas con superficie de juego de fieltro, borde acolchado y estructura de madera. Está a la derecha, frente al sofá.',
+        'Mesa de cartas con tapete de fieltro, borde acolchado y estructura de madera. Está a la derecha, frente al sofá.',
       details:
-        'Modelo: "Poker Board Game Table", de Lília Mara, vía Sketchfab.',
+        'Modelo: «Poker Board Game Table», de Lília Mara, vía Sketchfab.',
     },
     bookshelf: {
       name: 'Estantería',
       description:
         'Estantería abierta de cuatro baldas, en madera oscura. Está contra la pared del fondo, centrada entre el cuadro y el reloj.',
-      details: 'Modelo: "BookShelf", de Twpic, vía Sketchfab.',
+      details: 'Modelo: «BookShelf», de Twpic, vía Sketchfab.',
     },
     landscapePainting: {
       name: 'Cuadro de paisaje',
       description:
         'Paisaje al óleo con un molino y un río, en marco dorado con moldura de perlas. Cuelga en la pared del fondo, iluminado por un foco.',
       details:
-        'Modelo: "Fancy Picture Frame 01", de Rob Tuytel y Rico Cilliers, Poly Haven (CC0).',
+        'Modelo: «Fancy Picture Frame 01», de Rob Tuytel y Rico Cilliers, Poly Haven (CC0).',
     },
     succulent: {
       name: 'Suculenta en maceta',
       description:
         'Haworthia cebra en una maceta de cerámica desgastada, junto a la estantería.',
       details:
-        'Modelo: "Potted Plant 04", de James Ray Cock, Poly Haven (CC0).',
+        'Modelo: «Potted Plant 04», de James Ray Cock, Poly Haven (CC0).',
     },
     clock: {
       name: 'Reloj de pared',
       description:
         'Un reloj de pared redondo en la pared verde, a la derecha de la estantería.',
-      details: 'Modelo: "Wall Clock", de PierreB3D, Poly Haven (CC0).',
+      details: 'Modelo: «Wall Clock», de PierreB3D, Poly Haven (CC0).',
     },
     vase: {
       name: 'Jarrón de cerámica',
       description:
         'Un jarrón de cerámica en el suelo, a la izquierda de la estantería.',
       details:
-        'Modelo: "Ceramic Vase 02", de James Ray Cock, Poly Haven (CC0).',
+        'Modelo: «Ceramic Vase 02», de James Ray Cock, Poly Haven (CC0).',
     },
     printSpiraea: {
       name: 'Cianotipo: Spiraea',
       description:
         'Una lámina en cianotipo de barba de cabra, blanca sobre azul de Prusia. Una de las dos láminas botánicas que flanquean la estantería.',
       details:
-        '"Spiraea aruncus (Tyrol)", Anna Atkins, 1851–54. Cianotipo, The Met (CC0).',
+        '«Spiraea aruncus (Tyrol)», Anna Atkins, 1851–54. Cianotipo, The Met (CC0).',
     },
     printFelce: {
       name: 'Papel salado: Felce',
       description:
         'Una copia en papel salado de una fronda de helecho en sepia cálido. Equilibra el cianotipo del otro lado de la estantería.',
       details:
-        '"Felce", William Henry Fox Talbot, 1839. Papel salado, The Met (CC0).',
+        '«Felce», William Henry Fox Talbot, 1839. Papel salado, The Met (CC0).',
     },
     sconcesBack: {
       name: 'Apliques de latón',
@@ -97,7 +97,7 @@ const PIECES_ES = {
       description:
         'Un sillón de lectura de estilo mid-century en el rincón, con una mesita al alcance de la mano.',
       details:
-        'Modelos: "Mid Century Lounge Chair", de K. Siitonen, y "Side Table 01", de James Ray Cock, Poly Haven (CC0).',
+        'Modelos: «Mid Century Lounge Chair», de K. Siitonen, y «Side Table 01», de James Ray Cock, Poly Haven (CC0).',
     },
     readingLamp: {
       name: 'Lámpara de lectura',
@@ -117,7 +117,7 @@ const PIECES_ES = {
       description:
         'Una cómoda baja de madera con una hilera de discos de vinilo. Sostiene el tocadiscos.',
       details:
-        'Modelo: "Vintage Wooden Drawer 01", de James Ray Cock, Poly Haven (CC0). Discos: procedurales.',
+        'Modelo: «Vintage Wooden Drawer 01», de James Ray Cock, Poly Haven (CC0). Discos: procedurales.',
     },
     turntable: {
       name: 'Tocadiscos',
@@ -147,7 +147,7 @@ const PIECES_ES = {
       name: 'Librería del rincón',
       description:
         'Gemela de la estantería del fondo, junto a la pared de la ventana para cerrar el rincón de lectura.',
-      details: 'Modelo: "BookShelf", de Twpic, vía Sketchfab.',
+      details: 'Modelo: «BookShelf», de Twpic, vía Sketchfab.',
     },
     printNook: {
       name: 'Lámina botánica (rincón)',
@@ -208,14 +208,14 @@ const PIECES_ES = {
       description:
         'Dos láminas en cianotipo, una junto a otra y con marcos iguales, en la pared del escritorio.',
       details:
-        '"Osmunda regalis (Australia)" y "Pteris aquilina", Anna Atkins, h. 1850. Dominio público.',
+        '«Osmunda regalis (Australia)» y «Pteris aquilina», Anna Atkins, h. 1850. Dominio público.',
     },
     tallCabinet: {
       name: 'Armario pintado',
       description:
         'Un armario alto de dos puertas con paneles, pintado en crema. Está entre el díptico y el escritorio.',
       details:
-        'Modelo: "Painted Wooden Cabinet 02", de K. Sannikov, Poly Haven (CC0).',
+        'Modelo: «Painted Wooden Cabinet 02», de K. Sannikov, Poly Haven (CC0).',
     },
     printRight: {
       name: 'Lámina botánica (escritorio)',
@@ -228,7 +228,7 @@ const PIECES_ES = {
       description:
         'Un escritorio sencillo de roble con un estante en la pared y una silla de madera pintada. El monitor y el flexo son piezas aparte.',
       details:
-        'Escritorio y estante: procedurales. Silla: "Painted Wooden Chair 02", de K. Sannikov, Poly Haven (CC0).',
+        'Escritorio y estante: procedurales. Silla: «Painted Wooden Chair 02», de K. Sannikov, Poly Haven (CC0).',
     },
     monitor: {
       name: 'Monitor',
@@ -261,7 +261,7 @@ const PIECES_ES = {
       description:
         'Una estantería de cubos de madera con libros y algunos objetos pequeños.',
       details:
-        'Modelo: "Wooden Display Shelves 01", de James Ray Cock, Poly Haven (CC0). Objetos: procedurales.',
+        'Modelo: «Wooden Display Shelves 01», de James Ray Cock, Poly Haven (CC0). Objetos: procedurales.',
     },
     // Suelo y asientos
     cushionsThrow: {
@@ -273,13 +273,13 @@ const PIECES_ES = {
       description:
         'Un sillón de cuero en el salón de la tele, girado hacia la mesa de centro.',
       details:
-        'Modelo: "Modern Arm Chair 01", de Vibrant Nordic, Poly Haven (CC0).',
+        'Modelo: «Modern Arm Chair 01», de Vibrant Nordic, Poly Haven (CC0).',
     },
     coffeeTable: {
       name: 'Mesa de centro',
       description:
         'Una mesa de centro baja de madera que ancla el salón de la tele, junto al sillón.',
-      details: 'Modelo: "Modern Coffee Table 01", de Amin, Poly Haven (CC0).',
+      details: 'Modelo: «Modern Coffee Table 01», de Amin, Poly Haven (CC0).',
     },
     // Techo
     pendant: {
@@ -287,7 +287,7 @@ const PIECES_ES = {
       description:
         'Una lámpara colgante de cristal que cuelga del techo sobre el salón de la tele.',
       details:
-        'Modelo: "Modern Ceiling Lamp 01", de James Ray Cock, Poly Haven (CC0).',
+        'Modelo: «Modern Ceiling Lamp 01», de James Ray Cock, Poly Haven (CC0).',
     },
   },
   surfaces: {

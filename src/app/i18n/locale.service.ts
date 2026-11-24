@@ -20,6 +20,9 @@ import {
 /** Clave de `localStorage` con el idioma elegido por el usuario. */
 export const LOCALE_STORAGE_KEY = 'room-tour.locale';
 
+/** Tope de espera del arranque por el diccionario del idioma inicial (ms). */
+const INIT_TIMEOUT_MS = 4000;
+
 /**
  * Carga del diccionario español. Es una importación dinámica para que el ES
  * viaje en un chunk aparte; los tests la sustituyen.
@@ -100,6 +103,8 @@ export class LocaleService {
   private readonly pieces = signal<PieceMessages | null>(null);
   private readonly pieceCache: Partial<Record<Locale, PieceMessages>> = {};
   private piecesEnabled = false;
+  /** Contador de peticiones: solo la última puede aplicar su idioma. */
+  private request = 0;
 
   readonly locale = this.active.asReadonly();
   readonly messages = computed(() => this.dictionary());
@@ -123,7 +128,17 @@ export class LocaleService {
       ? languages
       : [this.doc.defaultView?.navigator?.language ?? ''];
     const initial = readStored() ?? detectLocale(navigatorLanguages);
-    await this.use(initial, { persist: false, announce: false });
+    let timer = 0;
+    const late = new Promise<boolean>(resolve => {
+      timer = setTimeout(resolve, INIT_TIMEOUT_MS, true) as unknown as number;
+    });
+    const loaded = this.use(initial, { persist: false, announce: false });
+    // El chunk no llega: se arranca en EN y, si llega tarde, no se aplica.
+    if (await Promise.race([loaded, late])) {
+      this.request++;
+      this.notifyLoadFailure();
+    }
+    clearTimeout(timer);
   }
 
   /** Cambio elegido por el usuario: se recuerda y se anuncia. */
@@ -137,7 +152,9 @@ export class LocaleService {
     options: { persist: boolean; announce: boolean }
   ): Promise<void> {
     if (!isLocale(locale)) return;
+    const id = ++this.request;
     const dictionary = await this.dictionaryFor(locale);
+    if (id !== this.request) return;
     if (!dictionary) {
       this.notifyLoadFailure();
       return;
@@ -147,6 +164,7 @@ export class LocaleService {
     let pieces: PieceMessages | null = null;
     if (this.piecesEnabled) {
       pieces = await this.piecesFor(locale);
+      if (id !== this.request) return;
       if (!pieces) {
         this.notifyPiecesFailure(() => void this.use(locale, options));
         return;

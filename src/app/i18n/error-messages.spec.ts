@@ -45,7 +45,7 @@ describe('errorText', () => {
       'Could not load: Poker table and Wall prints.'
     );
     expect(errorText(ES, 'es', error)).toBe(
-      'No se pudo cargar: Mesa de póker y Láminas.'
+      'No se pudo cargar lo siguiente: Mesa de póker y Láminas.'
     );
   });
 
