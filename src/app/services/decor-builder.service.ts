@@ -5,11 +5,13 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
+  CircleGeometry,
   Color,
   CylinderGeometry,
   DoubleSide,
   DataTexture,
   Euler,
+  Float32BufferAttribute,
   Group,
   LinearFilter,
   Material,
@@ -24,6 +26,7 @@ import {
   RepeatWrapping,
   RGBAFormat,
   ReplaceStencilOp,
+  SphereGeometry,
   SRGBColorSpace,
   Texture,
   UnsignedByteType,
@@ -33,6 +36,7 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   Decor3Config,
+  DecorBooksConfig,
   DecorTextilesConfig,
   DecorThrowConfig,
 } from '../config/decor.config';
@@ -68,9 +72,21 @@ export interface DecorBuild {
   /** Grupo `decor3` con `wall-art`, `fixtures` y `textiles`. */
   group: Group;
   pieces: DecorPieceBounds[];
+  /**
+   * Los textiles (host `sofa`) y los libros (host `bookshelf`) escriben stencil
+   * = 1 (la ref. del contorno) para contar como parte de la silueta de su
+   * mueble: el casco del contorno no los rellena. Con otro mueble seleccionado
+   * recortan su anillo (R8-M3), así que quien gestiona selección y hover debe
+   * dejar activo solo el host seleccionado o con hover (`false` en el resto).
+   * Al construir quedan activos (comportamiento previo, seguro sin cableado).
+   */
+  setSilhouette: (host: DecorSilhouetteHost, active: boolean) => void;
   /** Libera geometrías, materiales y texturas y vacía el grupo. */
   dispose: () => void;
 }
+
+/** Muebles del glTF que «poseen» piezas de la decoración procedural. */
+export type DecorSilhouetteHost = 'sofa' | 'bookshelf';
 
 type GroupName = 'wall-art' | 'fixtures' | 'textiles';
 
@@ -159,6 +175,7 @@ export function createCushionGeometry(
   const geometry = new BoxGeometry(size, size, thick, 8, 8, 4);
   const position = geometry.getAttribute('position');
   const normal = geometry.getAttribute('normal');
+  const shade = new Float32Array(position.count * 3);
   const point = new Vector3();
   const clamped = new Vector3();
   const direction = new Vector3();
@@ -187,8 +204,45 @@ export function createCushionGeometry(
       clamped.z + direction.z * radius + sign * cushionPuff * bulge
     );
     normal.setXYZ(i, nx / length, ny / length, direction.z / length);
+    // Costuras: oscurece hacia el borde (volumen sin más textura).
+    const seam = Math.min(
+      1,
+      Math.max(0, (Math.max(Math.abs(xn), Math.abs(yn)) - 0.7) / 0.3)
+    );
+    const tone = 1 - 0.3 * seam * seam;
+    shade[i * 3] = shade[i * 3 + 1] = shade[i * 3 + 2] = tone;
   }
+  geometry.setAttribute('color', new Float32BufferAttribute(shade, 3));
   return geometry;
+}
+
+/** Color por vértice uniforme sobre una geometría (para fusionarla con otras que lo llevan). */
+function paint(
+  geometry: BufferGeometry,
+  color: Color,
+  tone = 1
+): BufferGeometry {
+  const count = geometry.getAttribute('position').count;
+  const data = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    data[i * 3] = color.r * tone;
+    data[i * 3 + 1] = color.g * tone;
+    data[i * 3 + 2] = color.b * tone;
+  }
+  geometry.setAttribute('color', new Float32BufferAttribute(data, 3));
+  return geometry;
+}
+
+/** Generador pseudoaleatorio determinista (mulberry32): la misma sala siempre. */
+function seeded(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 /**
@@ -204,31 +258,158 @@ export function createThrowGeometry(
     blanket.width,
     blanket.depth,
     blanket.thickness,
-    16,
+    24,
     14,
     1
   );
   const position = geometry.getAttribute('position');
   const halfW = blanket.width / 2;
   const halfD = blanket.depth / 2;
+  // Doblez a lo largo y caída de los bordes largos (y = ±depth/2), como sobre
+  // el brazo o el puf: no dependen de x.
+  const along = (y: number): number => {
+    const crease = blanket.creaseHeight * Math.exp(-(((y + 0.12) / 0.07) ** 2));
+    const edge = Math.max(0, Math.abs(y) / halfD - 0.55) / 0.45;
+    return crease - blanket.drape * edge * edge;
+  };
+  const tone = new Float32Array(position.count * 3);
   for (let i = 0; i < position.count; i++) {
     const x = position.getX(i);
     const y = position.getY(i);
     const wave =
       blanket.foldAmplitude *
       Math.sin((2 * Math.PI * (x + halfW)) / blanket.foldPeriod);
-    // Doblez a lo largo: una cresta suave donde la tela se dobla sobre sí misma.
-    const crease = blanket.creaseHeight * Math.exp(-(((y + 0.12) / 0.07) ** 2));
-    // Los bordes largos (y = ±depth/2) caen como sobre el brazo o el puf.
-    const edge = Math.max(0, Math.abs(y) / halfD - 0.55) / 0.45;
-    position.setZ(
-      i,
-      position.getZ(i) + wave + crease - blanket.drape * edge * edge
+    // Arrugas suaves y deterministas: rompen la losa lisa sin más texturas.
+    const wrinkle =
+      0.003 * Math.sin(x * 31 + y * 17) * Math.sin(y * 23 - x * 11);
+    position.setZ(i, position.getZ(i) + wave + wrinkle + along(y));
+    // Dos franjas tejidas junto a cada extremo (color por vértice).
+    const end = halfW - Math.abs(x);
+    const stripe = Math.max(
+      Math.exp(-(((end - 0.04) / 0.012) ** 2)),
+      Math.exp(-(((end - 0.12) / 0.012) ** 2))
     );
+    tone[i * 3] =
+      tone[i * 3 + 1] =
+      tone[i * 3 + 2] =
+        1 - (1 - blanket.stripeTone) * stripe;
   }
+  geometry.setAttribute('color', new Float32BufferAttribute(tone, 3));
   geometry.computeVertexNormals();
   scaleUv(geometry, blanket.width / tileSize, blanket.depth / tileSize);
-  return geometry;
+
+  // Flecos: tiras finas que cuelgan de los dos extremos cortos.
+  const pieces: BufferGeometry[] = [geometry];
+  const spacing = 0.036;
+  const strands = Math.floor((blanket.depth - 0.04) / spacing);
+  const fringeTone = new Color(1, 1, 1);
+  for (const sign of [-1, 1]) {
+    for (let k = 0; k <= strands; k++) {
+      const y = -halfD + 0.02 + k * spacing;
+      const strand = new BoxGeometry(blanket.fringe, 0.014, 0.004);
+      strand.translate(sign * (blanket.fringe / 2 - 0.002), 0, 0);
+      strand.rotateY(sign * 0.25);
+      strand.translate(sign * halfW, y, along(y));
+      pieces.push(paint(strand, fringeTone, 0.88));
+    }
+  }
+  const merged = mergeGeometries(pieces, false);
+  pieces.forEach(piece => piece.dispose());
+  return merged;
+}
+
+/**
+ * Libros y un bote sobre las baldas de la estantería, ya colocados en la escena
+ * y con color por vértice (lomo al frente, cortes claros). Determinista.
+ */
+export function createBooks(config: DecorBooksConfig): BufferGeometry[] {
+  const random = seeded(2024);
+  const result: BufferGeometry[] = [];
+  const spine = new Color();
+  const pages = new Color(0xe8dcc0);
+  /** Pinta lomo (cara +Z), cortes (cara superior) y tapas (resto). */
+  const book = (
+    width: number,
+    height: number,
+    depth: number,
+    color: Color
+  ): BufferGeometry => {
+    const geometry = new BoxGeometry(width, height, depth);
+    const normal = geometry.getAttribute('normal');
+    const data = new Float32Array(normal.count * 3);
+    for (let i = 0; i < normal.count; i++) {
+      const source =
+        normal.getZ(i) > 0.5 ? color : normal.getY(i) > 0.5 ? pages : color;
+      const tone = normal.getZ(i) > 0.5 || normal.getY(i) > 0.5 ? 1 : 0.8;
+      data[i * 3] = source.r * tone;
+      data[i * 3 + 1] = source.g * tone;
+      data[i * 3 + 2] = source.b * tone;
+    }
+    geometry.setAttribute('color', new Float32BufferAttribute(data, 3));
+    return geometry;
+  };
+  const pick = (): Color => {
+    spine.setHex(config.palette[Math.floor(random() * config.palette.length)]);
+    return spine.clone().multiplyScalar(0.85 + random() * 0.3);
+  };
+  for (const tier of config.tiers) {
+    for (const run of tier.runs) {
+      const lean = run.lean ?? 0;
+      let cursor = run.from;
+      const reserve = lean ? 0.3 : 0;
+      for (;;) {
+        const width = 0.028 + random() * 0.025;
+        const height = 0.2 + random() * (tier.maxHeight - 0.2);
+        if (cursor + width > run.to - reserve) {
+          break;
+        }
+        const depth = Math.min(config.depth, 0.16 + random() * 0.06);
+        result.push(
+          book(width, height, depth, pick()).translate(
+            cursor + width / 2,
+            tier.top + height / 2,
+            config.zCenter + (random() - 0.5) * 0.012
+          )
+        );
+        cursor += width + 0.002;
+      }
+      if (lean) {
+        // El último libro se apoya en el vecino: pivota sobre su arista inferior izquierda.
+        const width = 0.04;
+        const height = 0.3;
+        const pivot = cursor + height * Math.sin(lean);
+        result.push(
+          book(width, height, 0.19, pick())
+            .translate(width / 2, height / 2, 0)
+            .rotateZ(lean)
+            .translate(pivot, tier.top, config.zCenter)
+        );
+      }
+    }
+    if (tier.stack) {
+      for (let k = 0; k < tier.stack.count; k++) {
+        const width = 0.24 + random() * 0.05;
+        const height = 0.032 + random() * 0.012;
+        const base = tier.top + k * 0.04;
+        result.push(
+          book(width, height, 0.18, pick())
+            .translate(width / 2, height / 2, 0)
+            .rotateY((random() - 0.5) * 0.2)
+            .translate(tier.stack.x, base, config.zCenter)
+        );
+      }
+    }
+    if (tier.jar !== undefined) {
+      const jar = new CylinderGeometry(0.05, 0.058, 0.17, RADIAL_SEGMENTS);
+      result.push(
+        paint(
+          jar.translate(tier.jar, tier.top + 0.085, config.zCenter),
+          new Color(config.jarColor)
+        )
+      );
+    }
+  }
+  return result;
 }
 
 /** Cilindro con el eje en Z, centrado (placas y brazos de los apliques, barra). */
@@ -511,6 +692,18 @@ export class DecorBuilderService {
         piece
       );
       const { shade } = sconces;
+      const shadeCenter = position
+        .clone()
+        .add(
+          new Vector3(
+            0,
+            0,
+            sconces.plateDepth / 2 +
+              sconces.armLength +
+              shade.radiusBottom * 0.5
+          )
+        );
+      const shadeMatrix = matrixOf(shadeCenter);
       collector.add(
         sconceShadeKey,
         new CylinderGeometry(
@@ -521,18 +714,36 @@ export class DecorBuilderService {
           1,
           true
         ),
+        shadeMatrix,
+        piece
+      );
+      // Volumen: tapa superior, bombilla visible por la boca y casquillo de latón.
+      collector.add(
+        sconceShadeKey,
+        new CircleGeometry(shade.radiusTop, RADIAL_SEGMENTS).rotateX(
+          -Math.PI / 2
+        ),
+        matrixOf(shadeCenter.clone().add(new Vector3(0, shade.height / 2, 0))),
+        piece
+      );
+      collector.add(
+        sconceShadeKey,
+        new SphereGeometry(shade.radiusTop * 0.62, 12, 9),
         matrixOf(
-          position
-            .clone()
-            .add(
-              new Vector3(
-                0,
-                0,
-                sconces.plateDepth / 2 +
-                  sconces.armLength +
-                  shade.radiusBottom * 0.5
-              )
-            )
+          shadeCenter.clone().add(new Vector3(0, -shade.height * 0.28, 0))
+        ),
+        piece
+      );
+      collector.add(
+        brassKey,
+        new CylinderGeometry(
+          shade.radiusTop * 0.45,
+          shade.radiusTop * 0.45,
+          0.03,
+          RADIAL_SEGMENTS
+        ),
+        matrixOf(
+          shadeCenter.clone().add(new Vector3(0, shade.height / 2 + 0.015, 0))
         ),
         piece
       );
@@ -669,7 +880,9 @@ export class DecorBuilderService {
     // Lámpara de pie (no interactiva; su luz la pone RoomBuilderService).
     {
       const piece = collector.piece('floor-lamp', 'lamp');
-      const lampShadeKey = material('lamp-shade', () =>
+      // `floorLamp:shade`: nombre y material propios (no fusionado con otros)
+      // para que `PieceActionsRuntime` apague también la pantalla (R8-M4).
+      const lampShadeKey = material('floorLamp:shade', () =>
         standard(floorLamp.shade.color, 0.7, {
           emissive: new Color(floorLamp.shade.emissive),
           emissiveIntensity: floorLamp.shade.emissiveIntensity,
@@ -704,7 +917,7 @@ export class DecorBuilderService {
       collector.add(
         lampShadeKey,
         new CylinderGeometry(
-          floorLamp.shade.radius,
+          floorLamp.shade.radiusTop,
           floorLamp.shade.radius,
           floorLamp.shade.height,
           RADIAL_SEGMENTS,
@@ -714,32 +927,56 @@ export class DecorBuilderService {
         at(floorLamp.shade.bottom + floorLamp.shade.height / 2),
         piece
       );
+      // Volumen: tapa, bombilla bajo la boca y remate de latón.
+      collector.add(
+        lampShadeKey,
+        new CircleGeometry(floorLamp.shade.radiusTop, RADIAL_SEGMENTS).rotateX(
+          -Math.PI / 2
+        ),
+        at(floorLamp.shade.bottom + floorLamp.shade.height),
+        piece
+      );
+      collector.add(
+        lampShadeKey,
+        new SphereGeometry(0.055, 12, 9),
+        at(floorLamp.shade.bottom + floorLamp.shade.height * 0.3),
+        piece
+      );
+      collector.add(
+        brassKey,
+        new SphereGeometry(0.022, 12, 8),
+        at(floorLamp.shade.bottom + floorLamp.shade.height + 0.018),
+        piece
+      );
     }
 
     // ── textiles: cojines y manta ──────────────────────────────────────────
-    // Escriben stencil = 1 como el sofá seleccionado: así su silueta cuenta como
-    // parte del mueble y el casco del contorno no los rellena donde lo tapan.
-    const markAsSofaSilhouette = (key: string): string => {
-      const m = materials.get(key)!;
-      m.stencilWrite = true;
-      m.stencilRef = 1;
-      m.stencilFunc = AlwaysStencilFunc;
-      m.stencilZPass = ReplaceStencilOp;
+    // Escriben stencil = 1 (ver `setSilhouette`): su silueta cuenta como parte
+    // del mueble y el casco del contorno no los rellena. Con otro mueble
+    // seleccionado conviene apagarlo (R8-M3).
+    const silhouettes: Record<DecorSilhouetteHost, Material[]> = {
+      sofa: [],
+      bookshelf: [],
+    };
+    const textileMaterials = silhouettes.sofa;
+    const textile = (
+      key: string,
+      color: number,
+      normalScale: number
+    ): string => {
+      material(key, () => {
+        const made = brighten(
+          linenMaterial(color, textiles.roughness, normalScale),
+          textiles.brightness
+        );
+        made.vertexColors = true;
+        textileMaterials.push(made);
+        return made;
+      });
       return key;
     };
     const cushionKeys = textiles.cushions.map(cushion =>
-      markAsSofaSilhouette(
-        material(`textile:${cushion.id}`, () =>
-          brighten(
-            linenMaterial(
-              cushion.color,
-              textiles.roughness,
-              textiles.normalScale
-            ),
-            textiles.brightness
-          )
-        )
-      )
+      textile(`textile:${cushion.id}`, cushion.color, textiles.normalScale)
     );
     textiles.cushions.forEach((cushion, index) => {
       collector.add(
@@ -751,17 +988,10 @@ export class DecorBuilderService {
     });
     {
       const blanket = textiles.throw;
-      const throwKey = markAsSofaSilhouette(
-        material('textile:throw', () =>
-          brighten(
-            linenMaterial(
-              blanket.color,
-              textiles.roughness,
-              textiles.normalScale
-            ),
-            textiles.brightness
-          )
-        )
+      const throwKey = textile(
+        'textile:throw',
+        blanket.color,
+        textiles.throwNormalScale
       );
       // La losa mira a +Z: se tumba para que su cara superior apunte arriba.
       collector.add(
@@ -774,6 +1004,27 @@ export class DecorBuilderService {
         collector.piece(blanket.id, 'throw')
       );
     }
+    const setSilhouette = (
+      host: DecorSilhouetteHost,
+      active: boolean
+    ): void => {
+      for (const m of silhouettes[host]) {
+        m.stencilWrite = active;
+        m.stencilRef = 1;
+        m.stencilFunc = AlwaysStencilFunc;
+        m.stencilZPass = ReplaceStencilOp;
+      }
+    };
+
+    // ── libros y bote sobre las baldas de la estantería (R8-M4) ─────────────
+    const booksKey = material('books', () => {
+      const made = standard(0xffffff, 0.85, { vertexColors: true });
+      silhouettes.bookshelf.push(made);
+      return made;
+    });
+    createBooks(config.books).forEach(geometry =>
+      collector.add(booksKey, geometry, new Matrix4())
+    );
 
     // ── ensamblado: una malla por material, en su grupo ────────────────────
     const group = new Group();
@@ -808,9 +1059,14 @@ export class DecorBuilderService {
       sub[destination(key)].add(mesh);
     }
 
+    // Estado inicial: activos, como antes (sin cableado de selección no se rellenan).
+    setSilhouette('sofa', true);
+    setSilhouette('bookshelf', true);
+
     return {
       group,
       pieces: collector.pieces,
+      setSilhouette,
       dispose: () => {
         geometries.forEach(geometry => geometry.dispose());
         owned.forEach(item => item.dispose());
