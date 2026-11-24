@@ -343,6 +343,26 @@ describe('PieceActionsRuntime', () => {
       expect(state.pieceState().tv.index).toBe(2);
     });
 
+    it('con la TV fuera de cuadro el TICK espera: sin cambio, sin fundido, sin despertar', () => {
+      let inView = false;
+      const onWake = vi.fn();
+      const { runtime, state } = setup(
+        { tvVisible: () => inView, onWake },
+        true
+      );
+      onWake.mockClear();
+      vi.advanceTimersByTime(8000 * 3);
+      expect(state.pieceState().tv.index).toBe(0);
+      expect(runtime.animating).toBe(false);
+      expect(onWake).not.toHaveBeenCalled();
+      expect(state.pieceState().tv.power).toBe(true);
+
+      inView = true; // entra en cuadro: retoma con fundido
+      vi.advanceTimersByTime(500);
+      expect(state.pieceState().tv.index).toBe(1);
+      expect(runtime.animating).toBe(true);
+    });
+
     it('NEXT reinicia la cuenta del TICK', () => {
       const { runtime, state } = setup();
       runtime.run('tv', 'power');

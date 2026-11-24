@@ -1407,6 +1407,40 @@ describe('SceneService', () => {
       expect(renderer.render).toHaveBeenCalledTimes(3);
     });
 
+    describe('TV art-mode TICK', () => {
+      beforeEach(() =>
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      );
+      afterEach(() => vi.useRealTimers());
+
+      it('does not render during two TICK cycles while the TV is out of frame', async () => {
+        service.initialize(canvas);
+        await service.loadAll();
+        idle();
+        expect(state.pieceState().tv.power).toBe(true);
+        let frame = 100;
+        for (let i = 0; i < 2 * 8; i++) {
+          vi.advanceTimersByTime(1000);
+          runFrame((frame += 1000));
+        }
+        expect(state.pieceState().tv.index).toBe(0);
+        expect(renderer.render).not.toHaveBeenCalled();
+      });
+
+      it('renders the plate change when the TV is in frame', async () => {
+        service.initialize(canvas);
+        await service.loadAll();
+        // De cara a la TV (pared +z), a 4 m.
+        service.getCamera().position.set(0, 1.6, 3.5);
+        camera().getTarget().set(0, 1.2, 8);
+        idle();
+        vi.advanceTimersByTime(8500);
+        runFrame(9000);
+        expect(state.pieceState().tv.index).toBe(1);
+        expect(renderer.render).toHaveBeenCalled();
+      });
+    });
+
     it('keeps drawing while something is selected (the outline pulses)', async () => {
       service.initialize(canvas);
       await service.loadAll();

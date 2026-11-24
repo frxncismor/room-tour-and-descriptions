@@ -46,6 +46,8 @@ export const LAMP_IDS: readonly LampId[] = [
 /** Cifras de B.1 y B.5. */
 export const TUNING = {
   tvTickMs: 8000,
+  /** Cada cuánto se vuelve a mirar si la TV entró en cuadro con el TICK en espera. */
+  tvRecheckMs: 500,
   tvCrossfade: 1.2,
   tvHaloFade: 0.4,
   tvHaloMax: 0.3,
@@ -92,6 +94,11 @@ export interface PieceActionsOptions {
   onWake?: () => void;
   /** El audio no pudo arrancar (mostrable, constitución V). */
   onAudioError?: (error: { code: string }) => void;
+  /**
+   * ¿Está la TV en el frustum de la cámara? Si no, el TICK espera (sin fundido
+   * ni estado nuevo, así que no pide fotogramas). Por defecto, siempre visible.
+   */
+  tvVisible?: () => boolean;
   document?: Document;
 }
 
@@ -353,7 +360,7 @@ export class PieceActionsRuntime {
     });
   }
 
-  private scheduleTick(): void {
+  private scheduleTick(delay: number = TUNING.tvTickMs): void {
     this.clearTick();
     if (this.disposed || !this.root) return;
     if (!this.state.pieceState().tv.power) return;
@@ -361,10 +368,14 @@ export class PieceActionsRuntime {
     this.tick = setTimeout(() => {
       this.tick = null;
       if (this.disposed) return;
-      if (this.state.pieceState().tv.power && !this.isReduced()) {
-        this.advanceTv(); // TICK: no se anuncia
+      if (!this.state.pieceState().tv.power || this.isReduced()) return;
+      if (this.options.tvVisible && !this.options.tvVisible()) {
+        // Fuera de cuadro: sin fundido, sin cambio de estado, sin anuncio.
+        this.scheduleTick(TUNING.tvRecheckMs);
+        return;
       }
-    }, TUNING.tvTickMs);
+      this.advanceTv(); // TICK: no se anuncia
+    }, delay);
   }
 
   private clearTick(): void {
