@@ -1,10 +1,60 @@
 import { Euler, Object3D, Vector3 } from 'three';
 import type { FurnitureId } from '../i18n/messages';
+import type { ActionId, PieceId, SurfaceId } from '../pieces/piece-ids';
 
+export type { ActionId, PieceId, SurfaceId };
+
+/** Cualquier cosa que se puede seleccionar: mueble, pieza o pared/techo. */
+export type SelectableId = FurnitureId | PieceId | SurfaceId;
+
+/** Tipo de lo seleccionado: decide de dónde sale su texto y su encuadre. */
+export type ObjectKind = 'furniture' | 'piece' | 'surface';
+
+/**
+ * Mueble seleccionable (los de `MODEL_CONFIGURATIONS`). Es la forma que
+ * consumen hoy los componentes: `kind` es opcional y vale `'furniture'` por
+ * defecto, así que nada de lo existente cambia.
+ */
 export interface ObjectInfo {
   /** Id del mueble (clave de `MODEL_CONFIGURATIONS`). */
   id: FurnitureId;
+  kind?: 'furniture';
 }
+
+/** Pieza nueva o decorativa que pasa a ser seleccionable (spec A.2). */
+export interface PieceInfo {
+  id: Exclude<PieceId, FurnitureId>;
+  kind: 'piece';
+}
+
+/** Pared o techo (spec C.2). */
+export interface SurfaceInfo {
+  id: SurfaceId;
+  kind: 'surface';
+}
+
+/**
+ * Lo que puede estar seleccionado en la escena. Los consumidores migran a
+ * este tipo cuando soportan piezas y superficies; `kind` discrimina.
+ */
+export type SelectedInfo = ObjectInfo | PieceInfo | SurfaceInfo;
+
+/**
+ * Estado de sesión de una pieza interactiva (spec B.1); no se guarda.
+ * `on` es el interruptor principal: encendido (TV, monitor, lámparas) o
+ * disco puesto (tocadiscos). Las lámparas y la TV arrancan según B.1:
+ * todo apagado salvo la lámpara de pie.
+ */
+export interface PieceState {
+  on: boolean;
+  /** TV encendida: índice de la lámina en pantalla (0..7). */
+  frame?: number;
+  /** Tocadiscos: sonido activado (solo puede estarlo con el disco puesto). */
+  sound?: boolean;
+}
+
+/** Estado de las piezas que tienen acciones. */
+export type PieceStates = Partial<Record<PieceId, PieceState>>;
 
 export interface SceneConfiguration {
   camera: CameraConfiguration;

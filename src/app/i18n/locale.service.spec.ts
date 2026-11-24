@@ -8,13 +8,22 @@ import {
   ES_MESSAGES_LOADER,
   LOCALE_STORAGE_KEY,
   LocaleService,
+  PIECE_MESSAGES_LOADER,
 } from './locale.service';
-import { Messages } from './messages';
+import PIECES_EN from '../pieces/pieces.en';
+import PIECES_ES from '../pieces/pieces.es';
+import { Messages, PieceMessages } from './messages';
 import { localeReady, provideLocale } from './testing';
+
+type PieceLoader = (locale: 'en' | 'es') => Promise<PieceMessages>;
+
+const piecesFor = (locale: 'en' | 'es') =>
+  Promise.resolve(locale === 'es' ? PIECES_ES : PIECES_EN);
 
 function setup(options: {
   languages?: string[];
   loader?: () => Promise<Messages>;
+  pieceLoader?: PieceLoader;
 }) {
   vi.spyOn(navigator, 'languages', 'get').mockReturnValue(
     options.languages ?? ['en-US']
@@ -24,6 +33,10 @@ function setup(options: {
       {
         provide: ES_MESSAGES_LOADER,
         useValue: options.loader ?? (() => Promise.resolve(ES)),
+      },
+      {
+        provide: PIECE_MESSAGES_LOADER,
+        useValue: options.pieceLoader ?? piecesFor,
       },
     ],
   });
@@ -208,6 +221,131 @@ describe('LocaleService', () => {
     await service.setLocale('en');
     await service.setLocale('es');
     expect(loader).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('LocaleService: piece dictionaries (T-422)', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('has no piece texts and loads nothing until the pieces chunk is present', async () => {
+    const pieceLoader = vi.fn(piecesFor);
+    const service = setup({ pieceLoader });
+    await service.init();
+    await service.setLocale('es');
+    expect(service.pieceMessages()).toBeNull();
+    expect(pieceLoader).not.toHaveBeenCalled();
+  });
+
+  it('enablePieces loads the dictionary of the active language', async () => {
+    const service = setup({});
+    await service.init();
+    expect(await service.enablePieces()).toBe(true);
+    expect(service.pieceMessages()).toBe(PIECES_EN);
+  });
+
+  it('switching EN→ES with the pieces loaded updates pieceMessages()', async () => {
+    const service = setup({});
+    await service.init();
+    await service.enablePieces();
+    await service.setLocale('es');
+    expect(service.locale()).toBe('es');
+    expect(service.messages()).toBe(ES);
+    expect(service.pieceMessages()).toBe(PIECES_ES);
+    await service.setLocale('en');
+    expect(service.pieceMessages()).toBe(PIECES_EN);
+  });
+
+  it('a Spanish start loads the Spanish pieces on enablePieces', async () => {
+    const service = setup({ languages: ['es-ES'] });
+    await service.init();
+    await service.enablePieces();
+    expect(service.pieceMessages()).toBe(PIECES_ES);
+  });
+
+  it('loads each piece dictionary only once', async () => {
+    const pieceLoader = vi.fn(piecesFor);
+    const service = setup({ pieceLoader });
+    await service.enablePieces();
+    await service.setLocale('es');
+    await service.setLocale('en');
+    await service.setLocale('es');
+    expect(pieceLoader).toHaveBeenCalledTimes(2);
+  });
+
+  it('a failed piece load on a language change keeps the previous language and shows the notice', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const service = setup({
+      pieceLoader: locale =>
+        locale === 'en'
+          ? Promise.resolve(PIECES_EN)
+          : Promise.reject(new Error('offline')),
+    });
+    await service.init();
+    await service.enablePieces();
+    await service.setLocale('es');
+    expect(service.locale()).toBe('en');
+    expect(service.messages()).toBe(EN);
+    expect(service.pieceMessages()).toBe(PIECES_EN);
+    expect(service.announcement()).toBe('');
+    expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBeNull();
+    expect(document.documentElement.lang).toBe('en');
+    expect(TestBed.inject(ViewerStateService).error()?.code).toBe(
+      'pieces-load-failed'
+    );
+  });
+
+  it('the notice retry switches language once the network is back', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let online = false;
+    const service = setup({
+      pieceLoader: locale =>
+        locale === 'en' || online
+          ? piecesFor(locale)
+          : Promise.reject(new Error('offline')),
+    });
+    await service.init();
+    await service.enablePieces();
+    await service.setLocale('es');
+    const state = TestBed.inject(ViewerStateService);
+    online = true;
+    state.error()?.retry?.();
+    await vi.waitFor(() => expect(service.locale()).toBe('es'));
+    expect(service.pieceMessages()).toBe(PIECES_ES);
+    expect(state.error()).toBeNull();
+  });
+
+  it('a failed enablePieces reports false, shows the notice and keeps the language', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const service = setup({
+      pieceLoader: () => Promise.reject(new Error('offline')),
+    });
+    await service.init();
+    expect(await service.enablePieces()).toBe(false);
+    expect(service.locale()).toBe('en');
+    expect(service.pieceMessages()).toBeNull();
+    expect(TestBed.inject(ViewerStateService).error()?.code).toBe(
+      'pieces-load-failed'
+    );
+  });
+
+  it('after a failed enablePieces, the notice retry loads the dictionary', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let online = false;
+    const service = setup({
+      pieceLoader: locale =>
+        online ? piecesFor(locale) : Promise.reject(new Error('offline')),
+    });
+    await service.init();
+    await service.enablePieces();
+    const state = TestBed.inject(ViewerStateService);
+    online = true;
+    state.error()?.retry?.();
+    await vi.waitFor(() => expect(service.pieceMessages()).toBe(PIECES_EN));
+    expect(state.error()).toBeNull();
   });
 });
 
