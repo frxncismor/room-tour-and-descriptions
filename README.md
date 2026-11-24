@@ -65,6 +65,7 @@ The interface is available in English and Spanish ([Languages](#languages)); her
 | Piece list (keyboard or touch)              | Pick any piece or surface by name, grouped by wall, floor and ceiling; the search box filters it; _Reset view_ goes back |
 | `Esc`                                       | Close the details panel                                                                                                  |
 | `Home`                                      | Return to the initial view                                                                                               |
+| `Page Up` / `Page Down`                     | Previous / next section of a framed wall (works with the focus on the canvas or on the piece list)                       |
 
 The **Controls** button in the corner reopens these instructions at any time.
 
@@ -252,8 +253,8 @@ The eight prints hanging in the room, which the TV also cycles through in art mo
 | Piece                               | Author                   | Date      | Source and license                                                                                                                                    |
 | ----------------------------------- | ------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | _Spiraea aruncus (Tyrol)_           | Anna Atkins              | 1851–54   | [Commons](<https://commons.wikimedia.org/wiki/File:Spiraea_aruncus_(Tyrol)_MET_DT5664.jpg>), cyanotype, The Met, CC0                                  |
-| _Osmunda regalis (Australia)_       | Anna Atkins              | c. 1850   | [Commons](<https://commons.wikimedia.org/wiki/File:Anna_Atkins_-_Osmunda_Rigalis_(Australia)_-_Google_Art_Project.jpg>), public domain                |
-| _Pteris aquilina_                   | Anna Atkins              | c. 1850   | [Commons](https://commons.wikimedia.org/wiki/File:Anna_Atkins_-_Pteris_aquilina_-_Google_Art_Project.jpg), cyanotype, public domain                   |
+| _Osmunda regalis (Australia)_       | Anna Atkins              | 1853/54   | [Commons](<https://commons.wikimedia.org/wiki/File:Anna_Atkins_-_Osmunda_Rigalis_(Australia)_-_Google_Art_Project.jpg>), public domain                |
+| _Pteris aquilina_                   | Anna Atkins              | 1851      | [Commons](https://commons.wikimedia.org/wiki/File:Anna_Atkins_-_Pteris_aquilina_-_Google_Art_Project.jpg), cyanotype, public domain                   |
 | _Felce_                             | William Henry Fox Talbot | 1839      | [Commons](https://commons.wikimedia.org/wiki/File:Felce_MET_DP202191.jpg), salted paper print, The Met, CC0                                           |
 | _Asplenium Braziliense, S. America_ | Anna Atkins              | 1854      | [Commons](https://commons.wikimedia.org/wiki/File:Anna_Atkins_-_Asplenium_Braziliense,_S._America_-_Google_Art_Project.jpg), cyanotype, public domain |
 | _Foreign Ferns_                     | Anna Atkins              | 1845/1855 | [Commons](https://commons.wikimedia.org/wiki/File:Anna_Atkins_-_Foreign_Ferns_-_Google_Art_Project.jpg), cyanotype, public domain                     |

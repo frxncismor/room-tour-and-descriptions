@@ -62,6 +62,11 @@ export class ViewerStateService {
    * trabajo por frame (la app es zoneless).
    */
   readonly pieceState = signal<PieceStateMap>(initialPieceState());
+  /**
+   * El sonido del tocadiscos no pudo arrancar (sin `AudioContext`): la ficha
+   * lo muestra como pista bajo el botón y lo anuncia. Se borra al reintentar.
+   */
+  readonly audioError = signal<'audio-unavailable' | null>(null);
   /** Id del objeto bajo el cursor, o null. */
   readonly hovered = signal<string | null>(null);
   readonly sceneReady = signal(false);
@@ -83,6 +88,7 @@ export class ViewerStateService {
     this.selectedKind.set(null);
     this.surfaceTramo.set(null);
     this.pieceState.set(initialPieceState());
+    this.audioError.set(null);
     this.hovered.set(null);
     this.sceneReady.set(false);
   }

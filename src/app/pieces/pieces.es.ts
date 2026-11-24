@@ -208,7 +208,7 @@ const PIECES_ES = {
       description:
         'Dos láminas en cianotipo, una junto a otra y con marcos iguales, en la pared del escritorio.',
       details:
-        '«Osmunda regalis (Australia)» y «Pteris aquilina», Anna Atkins, h. 1850. Dominio público.',
+        '«Osmunda regalis (Australia)», 1853/54, y «Pteris aquilina», 1851, Anna Atkins. Dominio público.',
     },
     tallCabinet: {
       name: 'Armario pintado',

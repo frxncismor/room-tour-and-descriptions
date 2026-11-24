@@ -27,8 +27,12 @@ import { PANEL_ACTIONS } from './panel-actions';
 interface ActionView {
   id: ActionId;
   label: string;
-  /** Botón de alternar: `aria-pressed`; sin estado («Siguiente lámina»): null. */
-  pressed: boolean | null;
+  /**
+   * Botón de alternar activo (solo aspecto visual). Sin `aria-pressed`: la
+   * etiqueta ya cambia de verbo («Encender» / «Apagar») y el `aria-live` anuncia
+   * el estado; ambos a la vez se leerían dos veces o de forma ambigua.
+   */
+  active: boolean;
   disabled: boolean;
   /** Pista del botón deshabilitado (también su descripción accesible). */
   hint: string | null;
@@ -116,15 +120,12 @@ function lowerFirst(text: string): string {
                 <button
                   type="button"
                   class="act"
-                  [class.on]="action.pressed"
-                  [attr.aria-pressed]="action.pressed"
+                  [class.on]="action.active"
                   [attr.aria-disabled]="action.disabled ? 'true' : null"
-                  [attr.aria-describedby]="
-                    action.disabled && action.hint ? 'hint-' + action.id : null
-                  "
+                  [attr.aria-describedby]="describedBy(action)"
                   (click)="run(action)"
                 >
-                  @if (action.pressed) {
+                  @if (action.active) {
                     <span class="dot" aria-hidden="true"></span>
                   }
                   {{ action.label }}
@@ -139,6 +140,11 @@ function lowerFirst(text: string): string {
               } @else if (action.status) {
                 <p class="state">{{ action.status }}</p>
               }
+            }
+            @if (audioNotice(); as notice) {
+              <p class="state notice" id="audio-notice" data-audio-notice>
+                {{ notice }}
+              </p>
             }
           }
           @if (item.details) {
@@ -362,6 +368,16 @@ export class DescriptionPanelComponent {
     return views;
   });
 
+  /** Aviso bajo el botón de sonido si el navegador no pudo arrancarlo. */
+  protected readonly audioNotice = computed(() => {
+    const info = this.info();
+    if (info?.kind !== 'piece' || info.id !== 'turntable') return null;
+    if (!this.state.audioError() || this.state.pieceState().turntable.sound) {
+      return null;
+    }
+    return this.i18n.messages().errors.messages['audio-unavailable'];
+  });
+
   /** Anuncio tras pulsar un botón; se borra al abrir otra ficha. */
   private readonly announcement = linkedSignal<
     SelectedInfo | null,
@@ -375,6 +391,8 @@ export class DescriptionPanelComponent {
   protected readonly liveText = computed(() => {
     const item = this.content();
     if (!item) return '';
+    const notice = this.audioNotice();
+    if (notice) return notice;
     const said = this.announcement();
     if (said) return said;
     const section = this.section();
@@ -387,6 +405,8 @@ export class DescriptionPanelComponent {
     if (action.disabled || info?.kind !== 'piece' || !hasActions(info.id)) {
       return;
     }
+    // Un nuevo intento de sonido borra el aviso anterior; si falla, vuelve.
+    if (action.id === 'sound') this.state.audioError.set(null);
     const result = this.port.run(info.id, action.id);
     if (result.announcement) this.announcement.set(result.announcement);
   }
@@ -396,6 +416,14 @@ export class DescriptionPanelComponent {
     if (!nav) return;
     const next = nav.tramo + delta;
     if (next >= 1 && next <= nav.count) this.port.focusTramo(next);
+  }
+
+  /** Descripciones del botón: la pista de deshabilitado y el aviso de sonido. */
+  protected describedBy(action: ActionView): string | null {
+    const ids: string[] = [];
+    if (action.disabled && action.hint) ids.push('hint-' + action.id);
+    if (action.id === 'sound' && this.audioNotice()) ids.push('audio-notice');
+    return ids.length ? ids.join(' ') : null;
   }
 
   private view(
@@ -411,7 +439,7 @@ export class DescriptionPanelComponent {
     return {
       id,
       label: toggles && active ? (text.whenOn ?? text.whenOff) : text.whenOff,
-      pressed: toggles ? active : null,
+      active: toggles && active,
       disabled:
         (id === 'sound' && !piece.spin) || (id === 'next' && !piece.power),
       hint: text.disabledHint ?? null,

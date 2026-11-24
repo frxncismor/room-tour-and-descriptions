@@ -1023,7 +1023,8 @@ export class SceneService {
       audio: new mod.TurntableAudio(),
       onWake: () => this.requestRender(),
       tvVisible: () => this.isTvInView(build.named('tv:screen')),
-      onAudioError: error => console.warn('Audio unavailable:', error.code),
+      // Sin `AudioContext` el botón vuelve a apagado: la ficha lo explica.
+      onAudioError: () => this.state.audioError.set('audio-unavailable'),
     });
     runtime.attach(build.group);
     const animated = new Set<Object3D | undefined>([

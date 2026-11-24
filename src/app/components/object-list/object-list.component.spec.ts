@@ -4,6 +4,7 @@ import ES from '../../i18n/es';
 import { LocaleService } from '../../i18n/locale.service';
 import { GROUP_IDS, GroupId } from '../../i18n/messages';
 import { localeReady, provideLocale } from '../../i18n/testing';
+import type { SurfaceId } from '../../pieces/piece-ids';
 import { PIECES } from '../../pieces/pieces.config';
 import PIECES_EN from '../../pieces/pieces.en';
 import {
@@ -12,7 +13,7 @@ import {
   normalizeText,
 } from './object-list.component';
 
-const SURFACES: Partial<Record<GroupId, string>> = {
+const SURFACES: Partial<Record<GroupId, SurfaceId>> = {
   greenWall: 'wallGreen',
   windowWall: 'wallWindow',
   tvWall: 'wallTv',
@@ -154,6 +155,21 @@ describe('ObjectListComponent', () => {
     fixture.componentRef.setInput('selectedId', 'desk');
     await fixture.whenStable();
     expect(open()).toBe('deskWall');
+  });
+
+  it('keeps a group the user folded when the groups are recomputed (R9-M6)', async () => {
+    const { fixture, el } = create(allGroups(), 'tv');
+    await fixture.whenStable();
+    const tvHeader = () =>
+      headers(el).find(h => h.getAttribute('data-group') === 'tvWall')!;
+    expect(tvHeader().getAttribute('aria-expanded')).toBe('true');
+    tvHeader().click();
+    await fixture.whenStable();
+    expect(tvHeader().getAttribute('aria-expanded')).toBe('false');
+    // Encender una lámpara o cambiar de idioma produce un array nuevo.
+    fixture.componentRef.setInput('groups', allGroups());
+    await fixture.whenStable();
+    expect(tvHeader().getAttribute('aria-expanded')).toBe('false');
   });
 
   it('shows «View wall» first in a group and emits the surface', async () => {

@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { LocaleService } from '../../i18n/locale.service';
+import type { SurfaceId } from '../../pieces/piece-ids';
 import { SceneService } from '../../services/scene.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
 import { BrandLabelComponent } from '../brand-label/brand-label.component';
@@ -23,15 +24,6 @@ import { ObjectListPanelComponent } from '../object-list/object-list-panel.compo
 
 /** Distancia (px) a partir de la cual un gesto es arrastre y no clic (C10). */
 const DRAG_THRESHOLD_PX = 5;
-
-/**
- * Lo que `SceneService` ofrecerá para paredes y techo (cableado de F3). Se
- * llama por interfaz opcional: hasta entonces no hace nada.
- */
-interface SurfaceNavigation {
-  viewSurface?(id: string): void;
-  stepSurfaceSection?(delta: -1 | 1): void;
-}
 
 const BLOCKING_ERRORS = ['webgl-unavailable', 'webgl-context-lost'];
 
@@ -52,6 +44,7 @@ const BLOCKING_ERRORS = ['webgl-unavailable', 'webgl-context-lost'];
   styleUrls: ['./viewer.component.scss'],
   host: {
     '(document:keydown.escape)': 'onEscape()',
+    '(document:keydown)': 'onDocumentKey($event)',
   },
 })
 export class ViewerComponent implements AfterViewInit, OnDestroy {
@@ -197,16 +190,35 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
 
   protected onCanvasKey(event: KeyboardEvent): void {
     if (event.key !== 'Tab' && event.key !== 'Shift') this.interacted.set(true);
-    // Av Pág / Re Pág recorren los tramos de una pared encuadrada.
+  }
+
+  /**
+   * Av Pág / Re Pág recorren los tramos de una pared encuadrada con el foco
+   * donde esté (tras «Ver pared» sigue en la lista). Solo se intercepta si
+   * hay varios tramos y el foco no está en un campo de texto: sin tramos
+   * que recorrer, la lista se desplaza con normalidad.
+   */
+  protected onDocumentKey(event: KeyboardEvent): void {
+    if (event.key !== 'PageDown' && event.key !== 'PageUp') return;
     if (
-      (event.key === 'PageDown' || event.key === 'PageUp') &&
-      this.state.selectedKind() === 'surface'
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey
+    )
+      return;
+    if (this.state.selectedKind() !== 'surface') return;
+    if ((this.state.surfaceTramo()?.count ?? 0) < 2) return;
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      target.closest('input, textarea, select, [contenteditable]')
     ) {
-      event.preventDefault();
-      (this.sceneService as SurfaceNavigation).stepSurfaceSection?.(
-        event.key === 'PageDown' ? 1 : -1
-      );
+      return;
     }
+    event.preventDefault();
+    this.interacted.set(true);
+    this.sceneService.stepSurfaceSection(event.key === 'PageDown' ? 1 : -1);
   }
 
   protected onHome(event: Event): void {
@@ -225,9 +237,9 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
     this.sceneService.selectObject(id);
   }
 
-  protected viewSurface(id: string): void {
+  protected viewSurface(id: SurfaceId): void {
     this.interacted.set(true);
-    (this.sceneService as SurfaceNavigation).viewSurface?.(id);
+    this.sceneService.viewSurface(id);
   }
 
   protected resetView(): void {

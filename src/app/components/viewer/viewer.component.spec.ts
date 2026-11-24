@@ -448,9 +448,38 @@ describe('ViewerComponent', () => {
       press('PageDown');
       expect(scene.stepSurfaceSection).not.toHaveBeenCalled();
       state.selectedKind.set('surface');
+      state.surfaceTramo.set({ tramo: 1, count: 2 });
       press('PageDown');
       press('PageUp');
       expect(scene.stepSurfaceSection.mock.calls).toEqual([[1], [-1]]);
+    });
+
+    it('also steps when the focus is still on the list after «View wall» (R9-M4)', async () => {
+      const state = TestBed.inject(ViewerStateService);
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      state.selectedKind.set('surface');
+      state.surfaceTramo.set({ tramo: 1, count: 2 });
+      const button = document.createElement('button');
+      const field = document.createElement('input');
+      fixture.nativeElement.append(button, field);
+      const press = (target: HTMLElement) => {
+        const event = new KeyboardEvent('keydown', {
+          key: 'PageDown',
+          bubbles: true,
+          cancelable: true,
+        });
+        target.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      expect(press(button)).toBe(true);
+      expect(scene.stepSurfaceSection.mock.calls).toEqual([[1]]);
+      // En un campo de texto no se intercepta.
+      expect(press(field)).toBe(false);
+      // Con un solo tramo no hay nada que recorrer: la lista se desplaza.
+      state.surfaceTramo.set({ tramo: 1, count: 1 });
+      expect(press(button)).toBe(false);
+      expect(scene.stepSurfaceSection).toHaveBeenCalledTimes(1);
     });
   });
 
