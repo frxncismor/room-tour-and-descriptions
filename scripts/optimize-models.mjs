@@ -41,6 +41,8 @@ const WEBP_QUALITY = 85;
 // Per-model texture resolution for the decor pieces (spec 002). Models not listed here
 // (sofa, poker_table, bookshelf) use the defaults above. `large` names the textures that
 // get `largeSize`; every other texture is capped at `size`.
+// Matches nothing: used as `large` to disable the wood rule for a model.
+const NEVER = /(?!)/;
 const TEXTURE_POLICY = {
   landscape_painting: { large: /canvas_diff/i, largeSize: 1024, size: 512 },
   wall_clock: { size: 512 },
@@ -48,6 +50,18 @@ const TEXTURE_POLICY = {
   // the plan (6.1k / 2.8k): `simplify` brings them within the SC-202 triangle budget.
   succulent: { size: 512, simplify: { ratio: 0.7, error: 0.005 } },
   ceramic_vase: { size: 512, simplify: { ratio: 0.25, error: 0.01 } },
+  // Spec 004 pieces (Poly Haven 1k originals): 512 px for the armchairs and the sideboard,
+  // 256 px for the rest. `large: NEVER` stops the wood rule (names like painted_wooden_*)
+  // from keeping 2048 px.
+  mid_century_lounge_chair: { large: NEVER, size: 512 },
+  modern_arm_chair_01: { large: NEVER, size: 512 },
+  vintage_wooden_drawer_01: { large: NEVER, size: 512 },
+  side_table_01: { large: NEVER, size: 256 },
+  modern_coffee_table_01: { large: NEVER, size: 256 },
+  painted_wooden_chair_02: { large: NEVER, size: 256 },
+  wooden_display_shelves_01: { large: NEVER, size: 256 },
+  painted_wooden_cabinet_02: { large: NEVER, size: 256 },
+  modern_ceiling_lamp_01: { large: NEVER, size: 256 },
 };
 
 function gt(...args) {
