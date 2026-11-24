@@ -26,12 +26,12 @@ export interface PieceRuntimeState {
 /** Estado de todas las piezas con acciones. */
 export type PieceStateMap = Record<ActionPieceId, PieceRuntimeState>;
 
-/** Estado inicial (B.1): todo apagado salvo la lámpara de pie. Objeto nuevo en cada llamada. */
+/** Estado inicial (B.1): todo apagado salvo la lámpara de pie y la TV (modo arte). Objeto nuevo en cada llamada. */
 export function initialPieceState(): PieceStateMap {
   const state = {} as PieceStateMap;
   for (const id of Object.keys(PIECE_IDS_WITH_ACTIONS) as ActionPieceId[]) {
     state[id] = {
-      power: id === 'floorLamp',
+      power: id === 'floorLamp' || id === 'tv',
       index: 0,
       spin: false,
       sound: false,

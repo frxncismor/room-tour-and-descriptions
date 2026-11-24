@@ -5,7 +5,10 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
+  EdgesGeometry,
   Group,
+  LineBasicMaterial,
+  LineSegments,
   Material,
   KeepStencilOp,
   Mesh,
@@ -48,6 +51,11 @@ export interface PieceRegistration {
    * una pieza procedural). Por defecto se contornean los propios proxies.
    */
   visuals?: Object3D[];
+  /**
+   * Los `visuals` solo cubren una parte de la pieza (el resto está fundido con
+   * otras): se dibujan además las aristas de sus cajas proxy.
+   */
+  withProxyEdges?: boolean;
 }
 
 /** Mínimo que necesita el servicio de un evento de puntero/ratón. */
@@ -251,6 +259,7 @@ export class ObjectInteractionService {
   private readonly groups = new Map<SelectableId, Set<Object3D>>();
   /** Objetos a contornear por id cuando no son los propios proxies. */
   private readonly visuals = new Map<SelectableId, Object3D[]>();
+  private readonly partialVisuals = new Set<SelectableId>();
   private floorMesh: Object3D | null = null;
   private roomLimits: RoomLimits = {
     minX: -8,
@@ -265,6 +274,9 @@ export class ObjectInteractionService {
 
   private outlines: Group[] = [];
   private outlineMaterial: MeshBasicMaterial | null = null;
+  /** Aristas de las cajas proxy (piezas sin malla propia): nunca un casco relleno. */
+  private edgeMaterial: LineBasicMaterial | null = null;
+  private hoverEdgeMaterial: LineBasicMaterial | null = null;
   /** Desplazamiento del contorno en NDC (se actualiza con el tamaño del canvas). */
   private readonly outlineOffset = { value: new Vector2(0.01, 0.01) };
   private hoverOutlines: Group[] = [];
@@ -470,6 +482,7 @@ export class ObjectInteractionService {
         ((Math.sin(timeMs * OUTLINE_PULSE_SPEED) + 1) / 2) *
         OUTLINE_PULSE_AMPLITUDE;
       this.outlineMaterial.color.setHex(OUTLINE_COLOR).lerp(this.pulseColor, t);
+      this.edgeMaterial?.color.setHex(OUTLINE_COLOR).lerp(this.pulseColor, t);
     }
     if (this.hoverDirty) {
       this.hoverDirty = false;
@@ -495,6 +508,8 @@ export class ObjectInteractionService {
       this.outlineMaterial.dispose();
       this.outlineMaterial = null;
     }
+    this.edgeMaterial?.dispose();
+    this.edgeMaterial = null;
     this.selected = null;
     this.hoverDirty = true; // re-evalúa el hover (el objeto ya no está seleccionado)
   }
@@ -531,6 +546,7 @@ export class ObjectInteractionService {
   ): void {
     for (const proxy of proxies) this.addObject(proxy, info);
     if (options.visuals) this.visuals.set(info.id, options.visuals);
+    if (options.withProxyEdges) this.partialVisuals.add(info.id);
   }
 
   /** Registra una pared o el techo (`kind: 'surface'`). */
@@ -592,6 +608,8 @@ export class ObjectInteractionService {
     this.removeHoverOutline();
     this.hoverMaterial?.dispose();
     this.hoverMaterial = null;
+    this.hoverEdgeMaterial?.dispose();
+    this.hoverEdgeMaterial = null;
     this.hovered = null;
     this.pendingHover = null;
     this.hoverDirty = false;
@@ -601,6 +619,7 @@ export class ObjectInteractionService {
     this.pickableList = null;
     this.groups.clear();
     this.visuals.clear();
+    this.partialVisuals.clear();
     this.floorMesh = null;
     this.canvas = null;
     this.camera = null;
@@ -648,7 +667,11 @@ export class ObjectInteractionService {
   private outlineRoots(root: Object3D, info?: SelectedInfo): Object3D[] {
     if (!info) return [root];
     const visuals = this.visuals.get(info.id);
-    if (visuals?.length) return visuals;
+    if (visuals?.length) {
+      return this.partialVisuals.has(info.id)
+        ? [...visuals, ...(this.groups.get(info.id) ?? [])]
+        : visuals;
+    }
     const group = this.groups.get(info.id);
     return group && group.size > 0 ? [...group] : [root];
   }
@@ -663,11 +686,17 @@ export class ObjectInteractionService {
       this.outlineOffset,
       'selection-outline'
     );
+    this.edgeMaterial = this.createEdgeMaterial({ color: OUTLINE_COLOR });
     const stencil: StencilBackup = new Map();
     for (const target of this.outlineRoots(root, info)) {
       writeStencil(target, stencil);
       this.outlines.push(
-        this.buildOutline(target, this.outlineMaterial, OUTLINE_NAME)
+        this.buildOutline(
+          target,
+          this.outlineMaterial,
+          OUTLINE_NAME,
+          this.edgeMaterial
+        )
       );
     }
     this.selectedStencil = stencil;
@@ -677,7 +706,8 @@ export class ObjectInteractionService {
   private buildOutline(
     root: Object3D,
     material: MeshBasicMaterial,
-    name: string
+    name: string,
+    edgeMaterial: LineBasicMaterial
   ): Group {
     const outline = new Group();
     outline.name = name;
@@ -698,6 +728,20 @@ export class ObjectInteractionService {
       }
     });
     for (const mesh of meshes) {
+      if (!this.isDrawn(mesh)) {
+        // Caja proxy invisible: un casco la rellenaría entera (el stencil no se
+        // escribe donde no se dibuja). Solo sus aristas, finas y del mismo color.
+        const edges = new EdgesGeometry(mesh.geometry);
+        this.ownedGeometries.add(edges);
+        const lines = new LineSegments(edges, edgeMaterial);
+        lines.renderOrder = OUTLINE_RENDER_ORDER;
+        lines.raycast = () => undefined;
+        lines.matrixAutoUpdate = false;
+        lines.matrix.copy(rootInverse).multiply(mesh.matrixWorld);
+        lines.matrixWorldNeedsUpdate = true;
+        outline.add(lines);
+        continue;
+      }
       ensureOutlineNormals(mesh.geometry);
       const groups = outlineGroups(mesh);
       let geometry = mesh.geometry;
@@ -725,6 +769,29 @@ export class ObjectInteractionService {
     outline.raycast = () => undefined;
     container.add(outline);
     return outline;
+  }
+
+  /** ¿Se dibuja la malla (ella y sus ancestros visibles)? Las cajas proxy no. */
+  private isDrawn(mesh: Object3D): boolean {
+    const material = (mesh as Mesh).material;
+    if (!Array.isArray(material) && material?.visible === false) return false;
+    for (let o: Object3D | null = mesh; o; o = o.parent) {
+      if (!o.visible) return false;
+    }
+    return true;
+  }
+
+  private createEdgeMaterial(params: {
+    color: number;
+    opacity?: number;
+  }): LineBasicMaterial {
+    return new LineBasicMaterial({
+      ...params,
+      transparent: params.opacity !== undefined,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    });
   }
 
   /**
@@ -827,11 +894,20 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
         this.hoverOffset,
         'hover-outline'
       );
+      this.hoverEdgeMaterial ??= this.createEdgeMaterial({
+        color: HOVER_OUTLINE_COLOR,
+        opacity: HOVER_OUTLINE_OPACITY,
+      });
       const stencil: StencilBackup = new Map();
       for (const root of this.outlineRoots(target.object, target.info)) {
         writeStencil(root, stencil);
         this.hoverOutlines.push(
-          this.buildOutline(root, this.hoverMaterial, HOVER_OUTLINE_NAME)
+          this.buildOutline(
+            root,
+            this.hoverMaterial,
+            HOVER_OUTLINE_NAME,
+            this.hoverEdgeMaterial
+          )
         );
       }
       this.hoverStencil = stencil;

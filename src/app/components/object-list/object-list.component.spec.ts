@@ -121,14 +121,9 @@ describe('ObjectListComponent', () => {
     await fixture.whenStable();
     const expanded = () =>
       headers(el).map(h => h.getAttribute('aria-expanded'));
-    expect(expanded()).toEqual([
-      'true',
-      'false',
-      'false',
-      'false',
-      'false',
-      'false',
-    ]);
+    // Arranca todo plegado (no tapa la vista inicial).
+    expect(expanded().every(v => v === 'false')).toBe(true);
+    expect(chips(el).length).toBe(0);
     headers(el)[2].click();
     await fixture.whenStable();
     expect(expanded()).toEqual([
@@ -425,6 +420,8 @@ describe('ObjectListComponent', () => {
     const { fixture, el } = create(group(['a', 'b']));
     document.body.appendChild(el);
     try {
+      await fixture.whenStable();
+      el.querySelector<HTMLElement>('.gh')!.click();
       await fixture.whenStable();
       el.querySelector<HTMLElement>('.chip[data-id="b"]')!.focus();
       fixture.componentRef.setInput('groups', group(['b', 'a']));

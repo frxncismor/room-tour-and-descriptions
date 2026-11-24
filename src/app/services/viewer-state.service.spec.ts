@@ -18,7 +18,7 @@ describe('ViewerStateService', () => {
     expect(state.sceneReady()).toBe(false);
   });
 
-  it('starts with only the floor lamp switched on', () => {
+  it('starts with the floor lamp and the TV (art mode) switched on', () => {
     const pieces = state.pieceState();
     expect(Object.keys(pieces).sort()).toEqual([
       'deskLamp',
@@ -29,7 +29,7 @@ describe('ViewerStateService', () => {
       'tv',
     ]);
     for (const [id, piece] of Object.entries(pieces)) {
-      expect(piece.power).toBe(id === 'floorLamp');
+      expect(piece.power).toBe(id === 'floorLamp' || id === 'tv');
       expect(piece.index).toBe(0);
       expect(piece.spin).toBe(false);
       expect(piece.sound).toBe(false);
@@ -47,7 +47,7 @@ describe('ViewerStateService', () => {
       sound: false,
     });
     expect(after.floorLamp).toBe(before.floorLamp);
-    expect(before.tv.power).toBe(false);
+    expect(before.tv.index).toBe(0);
   });
 
   it('initialPieceState() returns a fresh object each time', () => {

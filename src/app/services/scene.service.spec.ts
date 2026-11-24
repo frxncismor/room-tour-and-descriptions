@@ -6,6 +6,7 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   NeutralToneMapping,
   NoToneMapping,
   Object3D,
@@ -38,6 +39,9 @@ import {
   RENDERER_FACTORY,
   SceneRenderer,
   SceneService,
+  SOFA_LIGHTNESS,
+  SOFA_SATURATION,
+  tameSofaColor,
 } from './scene.service';
 import { ViewerStateService } from './viewer-state.service';
 
@@ -1081,6 +1085,62 @@ describe('SceneService', () => {
       }
     });
 
+    it('no selectable piece ends up with a filled proxy hull (all 35)', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      vi.spyOn(camera(), 'focusOn').mockResolvedValue(true);
+      const proxyGeometries = new Set<BufferGeometry>(
+        (
+          internals().piecesBuild?.group.getObjectByName('piece-proxies')
+            ?.children ?? []
+        ).map(p => (p as Mesh).geometry)
+      );
+      expect(proxyGeometries.size).toBeGreaterThan(0);
+      const ids = service.getObjectList().map(o => o.id);
+      expect(ids).toHaveLength(35);
+      for (const id of ids) {
+        service.selectObject(id);
+        const outlines: Object3D[] = [];
+        service.getScene().traverse(o => {
+          if (o.name === '__selection-outline') outlines.push(o);
+        });
+        for (const outline of outlines) {
+          for (const child of outline.children) {
+            const mesh = child as Mesh;
+            expect(
+              mesh.isMesh && proxyGeometries.has(mesh.geometry),
+              `${id}: hull over a proxy box`
+            ).toBeFalsy();
+          }
+        }
+      }
+      service.clearSelection();
+    });
+
+    it('textile and book silhouettes write stencil only for their selected or hovered host (R8-M3)', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      vi.spyOn(camera(), 'focusOn').mockResolvedValue(true);
+      const textile = () => {
+        let stencil: boolean | undefined;
+        service.getScene().traverse(o => {
+          const m = o as Mesh;
+          if (m.isMesh && m.name.startsWith('textile:')) {
+            stencil = (m.material as { stencilWrite: boolean }).stencilWrite;
+          }
+        });
+        return stencil;
+      };
+      // Sin selección ni hover: los textiles no recortan anillos ajenos.
+      expect(textile()).toBe(false);
+      service.selectObject('sofa');
+      expect(textile()).toBe(true);
+      service.selectObject('bookshelf');
+      expect(textile()).toBe(false);
+      service.clearSelection();
+      expect(textile()).toBe(false);
+    });
+
     it('a failing pieces chunk warns with retry and keeps the scene usable', async () => {
       const real = internals().importPieces.bind(service);
       internals().importPieces = () => Promise.reject(new Error('chunk'));
@@ -1126,14 +1186,17 @@ describe('SceneService', () => {
       service.selectObject('tv');
       expect(state.selected()).toEqual({ id: 'tv', kind: 'piece' });
       expect(state.selectedKind()).toBe('piece');
-      expect(state.pieceState().tv.power).toBe(false);
+      // La TV arranca encendida (modo arte): elegir de la lista no la toca.
+      expect(state.pieceState().tv.power).toBe(true);
       expect(focus).toHaveBeenCalled();
 
-      service.selectObject('tv', { pointer: true });
-      expect(state.pieceState().tv.power).toBe(true);
-      // Ya encendida: otro clic no la apaga.
-      service.selectObject('tv', { pointer: true });
-      expect(state.pieceState().tv.power).toBe(true);
+      // Con una pieza apagada, el clic la enciende y otro clic no la apaga.
+      service.selectObject('readingLamp');
+      expect(state.pieceState().readingLamp.power).toBe(false);
+      service.selectObject('readingLamp', { pointer: true });
+      expect(state.pieceState().readingLamp.power).toBe(true);
+      service.selectObject('readingLamp', { pointer: true });
+      expect(state.pieceState().readingLamp.power).toBe(true);
     });
 
     it('a click on a piece with actions goes through handlePointerSelect', async () => {
@@ -1233,6 +1296,11 @@ describe('SceneService', () => {
       expect(service.workOnScreen()).toBeNull();
       service.initialize(canvas);
       await service.loadAll();
+      // Arranca encendida (modo arte): ya muestra una obra, también tras reiniciar.
+      expect(state.pieceState().tv.power).toBe(true);
+      expect(service.workOnScreen()).toEqual(expect.any(String));
+      service.runPieceAction('tv', 'power');
+      expect(service.workOnScreen()).toBeNull();
       service.runPieceAction('tv', 'power');
       expect(service.workOnScreen()).toEqual(expect.any(String));
     });
@@ -1353,6 +1421,27 @@ describe('SceneService', () => {
       renderer.render.mockClear();
       runFrame(148);
       expect(renderer.render).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sofa colour (R8-M4)', () => {
+    it('lowers saturation and lightness once per material and leaves others alone', () => {
+      const shared = new MeshStandardMaterial({ color: 0xa65f3a });
+      const sofa = new Group();
+      sofa.add(
+        new Mesh(new BoxGeometry(), shared),
+        new Mesh(new BoxGeometry(), shared)
+      );
+      const other = new MeshStandardMaterial({ color: 0xa65f3a });
+      const before = { h: 0, s: 0, l: 0 };
+      shared.color.getHSL(before);
+      tameSofaColor(sofa);
+      const after = { h: 0, s: 0, l: 0 };
+      shared.color.getHSL(after);
+      expect(after.s).toBeCloseTo(before.s * SOFA_SATURATION, 2);
+      expect(after.l).toBeCloseTo(before.l * SOFA_LIGHTNESS, 2);
+      expect(after.h).toBeCloseTo(before.h, 2);
+      expect(other.color.getHex()).toBe(0xa65f3a);
     });
   });
 });

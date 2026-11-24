@@ -2,6 +2,8 @@ import {
   AlwaysStencilFunc,
   BoxGeometry,
   KeepStencilOp,
+  LineBasicMaterial,
+  LineSegments,
   NotEqualStencilFunc,
   ReplaceStencilOp,
   Box3,
@@ -585,6 +587,51 @@ describe('ObjectInteractionService', () => {
       );
       const again = await click(p.x, p.y);
       expect(again.object).toBe(proxy);
+    });
+
+    it('a piece without its own mesh is outlined by box edges, never a filled hull', async () => {
+      const proxy = makeProxy(3, 0.5, 0, 1);
+      service.registerPiece({ id: 'cushionsThrow', kind: 'piece' }, [proxy]);
+      service.selectObject(proxy);
+      const outline = scene.children.find(
+        c => c.name === '__selection-outline'
+      );
+      expect(outline).toBeDefined();
+      expect(outline!.children.length).toBeGreaterThan(0);
+      for (const child of outline!.children) {
+        expect((child as Mesh).isMesh).toBeFalsy();
+        expect((child as LineSegments).isLineSegments).toBe(true);
+        expect(
+          ((child as LineSegments).material as LineBasicMaterial).toneMapped
+        ).toBe(false);
+      }
+      service.clearSelection();
+      expect(scene.children.some(c => c.name === '__selection-outline')).toBe(
+        false
+      );
+    });
+
+    it('with partial visuals it draws the hull of the visual and the proxy edges', () => {
+      const proxy = makeProxy(3, 0.5, 0, 1);
+      const shade = new Mesh(
+        new BoxGeometry(1, 1, 1),
+        new MeshStandardMaterial()
+      );
+      shade.position.set(3, 1, 0);
+      scene.add(shade);
+      service.registerPiece({ id: 'floorLamp', kind: 'piece' }, [proxy], {
+        visuals: [shade],
+        withProxyEdges: true,
+      });
+      service.selectObject(proxy);
+      const kinds: boolean[] = [];
+      scene.traverse(o => {
+        if (o.name === '__selection-outline') {
+          o.children.forEach(c => kinds.push((c as Mesh).isMesh === true));
+        }
+      });
+      expect(kinds).toContain(true);
+      expect(kinds).toContain(false);
     });
 
     it('40+ proxies do not change the floor result', async () => {

@@ -558,17 +558,21 @@ export class ObjectListComponent {
   protected readonly searching = computed(
     () => normalizeText(this.query()).trim() !== ''
   );
-  /** Grupo abierto: `null` = el primero; `''` = ninguno (se cerró a mano). */
+  /**
+   * Grupo abierto: `null` = sin elección (escritorio: todos plegados; móvil: el
+   * primero, la tira necesita una pestaña activa); `''` = ninguno (se cerró a mano).
+   */
+  protected readonly compact = signal(false);
   private readonly openGroup = signal<string | null>(null);
   protected readonly openId = computed(
-    () => this.openGroup() ?? this.groups()[0]?.id ?? ''
+    () =>
+      this.openGroup() ?? (this.compact() ? (this.groups()[0]?.id ?? '') : '')
   );
   protected readonly activeGroup = computed<ObjectListGroup | undefined>(
     () =>
       this.groups().find(group => group.id === this.openId()) ??
       this.groups()[0]
   );
-  protected readonly compact = signal(false);
 
   /** Grupos con las piezas que cumplen la búsqueda (todos sin búsqueda). */
   protected readonly visibleGroups = computed(() => {

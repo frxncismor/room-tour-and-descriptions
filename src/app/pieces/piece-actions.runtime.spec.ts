@@ -70,8 +70,10 @@ function fakeAudio() {
   } satisfies AudioPort;
 }
 
-function setup(extra: Partial<PieceActionsOptions> = {}) {
+/** `tvOn`: el estado de arranque real (TV encendida); por defecto se apaga para los casos de la TV. */
+function setup(extra: Partial<PieceActionsOptions> = {}, tvOn = false) {
   const state = new ViewerStateService();
+  if (!tvOn) state.patchPiece('tv', { power: false });
   const { root, parts } = build();
   const audio = fakeAudio();
   const light = new PointLight(0xffffff, 2.2);
@@ -108,7 +110,20 @@ describe('PieceActionsRuntime', () => {
   afterEach(() => vi.useRealTimers());
 
   describe('estado inicial (B.1)', () => {
-    it('solo la lámpara de pie está encendida y todo queda en reposo', () => {
+    it('arrancan la lámpara de pie y la TV en modo arte; el resto queda en reposo', () => {
+      const { parts, runtime, state } = setup({}, true);
+      expect(state.pieceState().tv).toMatchObject({ power: true, index: 0 });
+      expect(parts[PART.tvScreen].visible).toBe(true);
+      expect(basic(parts[PART.tvScreen]).map).toBe(
+        runtime['plates'][0].texture
+      );
+      expect(basic(parts[PART.tvHalo]).opacity).toBeCloseTo(0.3);
+      expect(runtime.workOnScreen).toBe('Plate 0');
+      // Sin trabajo por frame: solo el TICK de 8 s cambia (y pide un redibujo).
+      expect(runtime.animating).toBe(false);
+    });
+
+    it('con la TV apagada: pantalla y halo apagados', () => {
       const { parts, light, runtime } = setup();
       expect(std(parts['floorLamp:shade']).emissiveIntensity).toBe(0.9);
       expect(basic(parts['floorLamp:halo']).opacity).toBe(0.35);
