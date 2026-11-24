@@ -76,4 +76,14 @@ describe('ViewerStateService', () => {
     expect(state.hovered()).toBeNull();
     expect(state.sceneReady()).toBe(false);
   });
+
+  it('selected accepts pieces and surfaces, and reset clears the wall tramo', () => {
+    const state = TestBed.inject(ViewerStateService);
+    state.selected.set({ id: 'tv', kind: 'piece' });
+    state.selected.set({ id: 'wallGreen', kind: 'surface' });
+    state.surfaceTramo.set({ tramo: 2, count: 3 });
+    state.reset();
+    expect(state.selected()).toBeNull();
+    expect(state.surfaceTramo()).toBeNull();
+  });
 });

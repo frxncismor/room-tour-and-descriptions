@@ -20,6 +20,7 @@ import {
   applyMaterialOverride,
   disableRaycast,
   disposeObject3D,
+  freezeMatrices,
 } from './model-loader.service';
 
 function config(
@@ -244,6 +245,19 @@ describe('applyMaterialOverride', () => {
     expect(material.map.anisotropy).toBe(TEXTURE_ANISOTROPY);
   });
 
+  it('clearMap removes the colour map so the colour rules', () => {
+    const material = new MeshStandardMaterial({ color: 0x888888 });
+    const map = new Texture();
+    const dispose = vi.spyOn(map, 'dispose');
+    material.map = map;
+    const root = new Group();
+    root.add(new Mesh(new BoxGeometry(), material));
+    applyMaterialOverride(root, { color: 0xe6dcc6, clearMap: true });
+    expect(material.map).toBeNull();
+    expect(dispose).toHaveBeenCalled();
+    expect(material.color.getHex()).toBe(0xe6dcc6);
+  });
+
   it('keeps the original material when there is no override', () => {
     const material = new MeshStandardMaterial({ color: 0x123456 });
     const root = new Group();
@@ -278,5 +292,29 @@ describe('disableRaycast', () => {
     expect(ray.intersectObject(group, true).length).toBeGreaterThan(0);
     disableRaycast(group);
     expect(ray.intersectObject(group, true)).toEqual([]);
+  });
+});
+
+describe('freezeMatrices', () => {
+  it('freezes the tree after computing matrices, except what `keep` spares', () => {
+    const root = new Group();
+    const moving = new Group();
+    const child = new Mesh(new BoxGeometry(), new MeshBasicMaterial());
+    root.position.set(1, 2, 3);
+    moving.add(child);
+    root.add(moving);
+    freezeMatrices(root, o => o === moving);
+    expect(root.matrixAutoUpdate).toBe(false);
+    expect(child.matrixAutoUpdate).toBe(false);
+    expect(moving.matrixAutoUpdate).toBe(true);
+    expect(child.matrixWorld.elements[12]).toBe(1);
+  });
+
+  it('loadModel returns a model with frozen matrices', async () => {
+    vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockResolvedValue({
+      scene: fakeScene(),
+    } as never);
+    const model = await TestBed.inject(ModelLoaderService).loadModel(config());
+    expect(model.matrixAutoUpdate).toBe(false);
   });
 });

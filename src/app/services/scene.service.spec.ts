@@ -26,6 +26,8 @@ import {
   ModelConfiguration,
   ObjectInfo,
 } from '../interfaces/scene.interface';
+import { PIECE_IDS } from '../pieces/piece-ids';
+import { LocaleService } from '../i18n/locale.service';
 import { CameraService } from './camera.service';
 import { ModelLoaderService } from './model-loader.service';
 import { ObjectInteractionService } from './object-interaction.service';
@@ -92,6 +94,8 @@ describe('SceneService', () => {
       ([, c]) => c.path === path
     )?.[0] ?? '';
   const MODEL_COUNT = Object.keys(MODEL_CONFIGURATIONS).length;
+  const OBJECT_COUNT = PIECE_IDS.length;
+  const PIECE_MODEL_COUNT = 10;
   let textureLoad: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -132,6 +136,14 @@ describe('SceneService', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: RENDERER_FACTORY, useValue: () => renderer },
+        {
+          // El `effect` real de LocaleService pide un rAF: aquí se simula.
+          provide: LocaleService,
+          useValue: {
+            enablePieces: async () => true,
+            pieceMessages: () => null,
+          },
+        },
         {
           provide: ModelLoaderService,
           useValue: { loadModel },
@@ -180,7 +192,8 @@ describe('SceneService', () => {
     service.initialize(canvas);
     runFrame(16);
     runFrame(32);
-    expect(renderer.render).toHaveBeenCalledTimes(2);
+    // Render bajo demanda: el primer frame dibuja, el segundo (en reposo) no.
+    expect(renderer.render).toHaveBeenCalledTimes(1);
     expect(rafCallbacks.size).toBe(1);
   });
 
@@ -291,7 +304,7 @@ describe('SceneService', () => {
         .getObjectList()
         .map(o => o.id)
         .sort()
-    ).toEqual(Object.keys(MODEL_CONFIGURATIONS).sort());
+    ).toEqual([...PIECE_IDS].sort());
   });
 
   it('progress is finite and never decreases', async () => {
@@ -315,14 +328,14 @@ describe('SceneService', () => {
     expect(state.loadStatus()).toBe('error');
     expect(state.error()?.code).toBe('model-load-failed');
     expect(state.error()?.params?.names).toEqual(['pokerTable']);
-    expect(service.getObjectList()).toHaveLength(MODEL_COUNT - 1);
+    expect(service.getObjectList()).toHaveLength(OBJECT_COUNT - 1);
     expect(state.sceneReady()).toBe(true);
 
     failing.clear();
     await service.retryLoad();
     expect(state.loadStatus()).toBe('ready');
     expect(state.error()).toBeNull();
-    expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+    expect(service.getObjectList()).toHaveLength(OBJECT_COUNT);
   });
 
   it('error.retry() reloads the failed model', async () => {
@@ -332,7 +345,7 @@ describe('SceneService', () => {
     failing.clear();
     state.error()?.retry?.();
     await vi.waitFor(() => expect(state.loadStatus()).toBe('ready'));
-    expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+    expect(service.getObjectList()).toHaveLength(OBJECT_COUNT);
   });
 
   it('reports WebGL unavailable instead of throwing', () => {
@@ -344,6 +357,10 @@ describe('SceneService', () => {
           useValue: () => {
             throw new Error('no webgl');
           },
+        },
+        {
+          provide: LocaleService,
+          useValue: { enablePieces: async () => true },
         },
       ],
     });
@@ -453,7 +470,7 @@ describe('SceneService', () => {
     service.selectObject('bookshelf');
 
     expect(focus.mock.calls[0][1]).toHaveLength(
-      service.getObjectList().length - 1
+      MODEL_COUNT - 1 + PIECE_MODEL_COUNT
     );
   });
 
@@ -654,7 +671,7 @@ describe('SceneService', () => {
       MODEL_CONFIGURATIONS.sofa.path
     );
     expect(service.getObjectList().map(o => o.id)).toContain('sofa');
-    expect(service.getObjectList()).toHaveLength(MODEL_COUNT - 1);
+    expect(service.getObjectList()).toHaveLength(OBJECT_COUNT - 1);
   });
 
   it('retryLoad does nothing before initialize or when everything is loaded', async () => {
@@ -754,9 +771,10 @@ describe('SceneService', () => {
         Object.keys(DECOR_CONFIGURATIONS).length
       );
       const ids = service.getObjectList().map(o => o.id);
-      expect(ids).not.toContain('clock');
-      expect(ids).not.toContain('vase');
-      expect(ids.sort()).toEqual(Object.keys(MODEL_CONFIGURATIONS).sort());
+      // El reloj y el jarrón son seleccionables por su caja proxy (ronda 4).
+      expect(ids).toContain('clock');
+      expect(ids).toContain('vase');
+      expect(ids).toHaveLength(OBJECT_COUNT);
     });
 
     it('decor never receives raycast hits', async () => {
@@ -783,7 +801,9 @@ describe('SceneService', () => {
       expect(seen).toEqual([...seen].sort((a, b) => a - b));
       expect(seen.at(-1)).toBe(100);
       expect(loadModel).toHaveBeenCalledTimes(
-        MODEL_COUNT + Object.keys(DECOR_CONFIGURATIONS).length
+        MODEL_COUNT +
+          Object.keys(DECOR_CONFIGURATIONS).length +
+          PIECE_MODEL_COUNT
       );
     });
 
@@ -813,7 +833,7 @@ describe('SceneService', () => {
       expect(state.error()?.code).toBe('model-load-failed');
       expect(state.error()?.params?.names).toContain('floor');
       expect(state.sceneReady()).toBe(true);
-      expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+      expect(service.getObjectList()).toHaveLength(OBJECT_COUNT);
 
       textureLoad.mockImplementation(async () => new Texture());
       await service.retryLoad();
@@ -878,7 +898,7 @@ describe('SceneService', () => {
       expect(seen).toEqual([...seen].sort((a, b) => a - b));
       expect(seen.at(-1)).toBe(100);
       expect(state.loadStatus()).toBe('ready');
-      expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+      expect(service.getObjectList()).toHaveLength(OBJECT_COUNT);
     });
 
     it('stays loading until decor3 has finished', async () => {
@@ -954,7 +974,7 @@ describe('SceneService', () => {
         'prints',
       ]);
       expect(state.sceneReady()).toBe(true);
-      expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+      expect(service.getObjectList()).toHaveLength(OBJECT_COUNT);
       expect(service.getScene().getObjectByName('decor3')).toBeUndefined();
 
       spy.mockRestore();
@@ -1005,6 +1025,326 @@ describe('SceneService', () => {
       service.selectObject('sofa');
       expect(state.selected()?.id).toBe('sofa');
       expect(service.getObjectList()).toContainEqual({ id: 'sofa' });
+    });
+  });
+  // ── Ronda 4: piezas, selección, sombras estáticas y render bajo demanda ──
+
+  describe('pieces (spec 004)', () => {
+    interface Internals {
+      piecesBuild: {
+        group: Group;
+        named: (name: string) => Object3D | undefined;
+      } | null;
+      runtime: {
+        missing: readonly string[];
+        animating: boolean;
+      } | null;
+      pieceModels: Record<string, Object3D>;
+      importPieces: () => Promise<unknown>;
+    }
+    const internals = () => service as unknown as Internals;
+    const camera = () => TestBed.inject(CameraService);
+
+    it('loads the 35 pieces, the E–H plates and their frames', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      expect(state.error()).toBeNull();
+      expect(service.getObjectList()).toHaveLength(35);
+      const paths = textureLoad.mock.calls.map(
+        (c: unknown[]) => c[0] as string
+      );
+      for (const k of ['e', 'f', 'g', 'h']) {
+        expect(paths).toContain(`assets/textures/art/${k}.webp`);
+      }
+      const frames = service.getScene().getObjectByName('plates-efgh')!;
+      expect(frames.children).toHaveLength(4);
+      expect(service.getScene().getObjectByName('pieces')).toBeDefined();
+    });
+
+    it('every animated part the runtime looks for exists in the builder output (PART)', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      // La pantalla de la lámpara de pie sigue en la decoración 003 (decor3): el runtime
+      // no la encuentra y solo atenúa su halo, su charco y la luz.
+      expect(internals().runtime?.missing).toEqual(['floorLamp:shade']);
+      for (const name of [
+        'tv:screen',
+        'tv:halo',
+        'monitor:screen',
+        'turntable:platter',
+        'turntable:arm',
+        'deskLamp:shade',
+        'readingLamp:shade',
+        'floorLamp:halo',
+      ]) {
+        expect(internals().piecesBuild?.named(name), name).toBeDefined();
+      }
+    });
+
+    it('a failing pieces chunk warns with retry and keeps the scene usable', async () => {
+      const real = internals().importPieces.bind(service);
+      internals().importPieces = () => Promise.reject(new Error('chunk'));
+      service.initialize(canvas);
+      await service.loadAll();
+      expect(state.error()?.code).toBe('pieces-load-failed');
+      expect(state.sceneReady()).toBe(true);
+      expect(service.getObjectList()).toHaveLength(MODEL_COUNT);
+
+      internals().importPieces = real;
+      state.error()?.retry?.();
+      await vi.waitFor(() => expect(state.loadStatus()).toBe('ready'));
+      expect(state.error()).toBeNull();
+      expect(service.getObjectList()).toHaveLength(35);
+    });
+
+    it('a failing piece model warns, keeps the rest and retries only that one', async () => {
+      loadModel.mockImplementation(async (config: ModelConfiguration) => {
+        if (config.path.includes('modern_arm_chair_01')) throw new Error('x');
+        return fakeModel();
+      });
+      service.initialize(canvas);
+      await service.loadAll();
+      expect(state.error()?.code).toBe('pieces-load-failed');
+      expect(Object.keys(internals().pieceModels)).not.toContain('armchair');
+      expect(Object.keys(internals().pieceModels)).toContain('coffeeTable');
+      // La pieza sigue en la lista y se puede encuadrar por su caja de la config.
+      expect(service.getObjectList()).toHaveLength(35);
+
+      loadModel.mockClear();
+      loadModel.mockImplementation(async () => fakeModel());
+      await service.retryLoad();
+      expect(loadModel).toHaveBeenCalledTimes(1);
+      expect(state.error()).toBeNull();
+      expect(Object.keys(internals().pieceModels)).toContain('armchair');
+    });
+
+    it('selecting from the list only selects; a pointer click turns an off piece on', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      const focus = vi.spyOn(camera(), 'focusOn').mockResolvedValue(true);
+
+      service.selectObject('tv');
+      expect(state.selected()).toEqual({ id: 'tv', kind: 'piece' });
+      expect(state.selectedKind()).toBe('piece');
+      expect(state.pieceState().tv.power).toBe(false);
+      expect(focus).toHaveBeenCalled();
+
+      service.selectObject('tv', { pointer: true });
+      expect(state.pieceState().tv.power).toBe(true);
+      // Ya encendida: otro clic no la apaga.
+      service.selectObject('tv', { pointer: true });
+      expect(state.pieceState().tv.power).toBe(true);
+    });
+
+    it('a click on a piece with actions goes through handlePointerSelect', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      vi.spyOn(camera(), 'focusOn').mockResolvedValue(true);
+      vi.spyOn(
+        TestBed.inject(ObjectInteractionService),
+        'handleClick'
+      ).mockResolvedValue({
+        objectInfo: { id: 'readingLamp', kind: 'piece' },
+        success: true,
+      });
+      await service.handlePointerSelect({ clientX: 1, clientY: 1 });
+      expect(state.pieceState().readingLamp.power).toBe(true);
+    });
+
+    it('a wall click frames the wall by its nearest tramo and the sheet stays open', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      vi.spyOn(camera(), 'focusOn').mockResolvedValue(true);
+      const focusSurface = vi
+        .spyOn(camera(), 'focusSurface')
+        .mockResolvedValue(true);
+      vi.spyOn(camera(), 'surfaceTramos').mockReturnValue(3);
+      vi.spyOn(camera(), 'surfaceTramoAt').mockReturnValue(2);
+      service.selectObject('sofa');
+      vi.spyOn(
+        TestBed.inject(ObjectInteractionService),
+        'handleClick'
+      ).mockResolvedValue({
+        objectInfo: { id: 'wallGreen', kind: 'surface' },
+        success: true,
+        surfacePoint: new Vector3(0, 2, -8),
+      });
+      await service.handlePointerSelect({ clientX: 1, clientY: 1 });
+      expect(focusSurface).toHaveBeenCalledWith(
+        'wallGreen',
+        2,
+        expect.any(Number)
+      );
+      expect(state.selected()).toEqual({ id: 'wallGreen', kind: 'surface' });
+      expect(state.selectedKind()).toBe('surface');
+      expect(state.surfaceTramo()).toEqual({ tramo: 2, count: 3 });
+    });
+
+    it('the list can view a wall or the ceiling (1 tramo)', () => {
+      service.initialize(canvas);
+      const focusSurface = vi
+        .spyOn(camera(), 'focusSurface')
+        .mockResolvedValue(true);
+      service.selectObject('ceiling');
+      expect(focusSurface).toHaveBeenCalledWith(
+        'ceiling',
+        1,
+        expect.any(Number)
+      );
+      expect(state.surfaceTramo()?.count).toBe(1);
+      service.clearSelection();
+      expect(state.selected()).toBeNull();
+      expect(state.surfaceTramo()).toBeNull();
+    });
+
+    it('registers the four walls and the ceiling as surfaces from the start', () => {
+      service.initialize(canvas);
+      const interaction = TestBed.inject(ObjectInteractionService);
+      for (const id of [
+        'wallGreen',
+        'wallWindow',
+        'wallTv',
+        'wallDesk',
+        'ceiling',
+      ] as const) {
+        expect(interaction.groupOf(id)).toHaveLength(1);
+      }
+    });
+
+    it('proxies, glTF, the clock and the vase are registered', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      const interaction = TestBed.inject(ObjectInteractionService);
+      for (const id of PIECE_IDS) {
+        expect(interaction.groupOf(id).length, id).toBeGreaterThan(0);
+      }
+      expect(interaction.groupOf('readingChair')).toHaveLength(2);
+    });
+
+    it('runPieceAction runs the action and reports the change', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      const result = service.runPieceAction('monitor', 'power');
+      expect(result.changed).toBe(true);
+      expect(state.pieceState().monitor.power).toBe(true);
+    });
+  });
+
+  describe('static shadows and frozen matrices (R8-I1, T-490)', () => {
+    it('turns the shadow map auto update off and asks for updates after each load', async () => {
+      service.initialize(canvas);
+      expect(renderer.shadowMap.autoUpdate).toBe(false);
+      expect(renderer.shadowMap.needsUpdate).toBe(true);
+      renderer.shadowMap.needsUpdate = false;
+      await service.loadAll();
+      expect(renderer.shadowMap.needsUpdate).toBe(true);
+    });
+
+    it('asks for a shadow update after loadPieces', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      renderer.shadowMap.needsUpdate = false;
+      (
+        service as unknown as { piecesLoaded: Set<string> }
+      ).piecesLoaded.clear();
+      await service.loadPieces();
+      expect(renderer.shadowMap.needsUpdate).toBe(true);
+    });
+
+    it('keeps the new shadow casters within the budget (≤ 6)', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      const pieces = service.getScene().getObjectByName('pieces')!;
+      const frames = service.getScene().getObjectByName('plates-efgh')!;
+      const { countCasters } = await import('./scene-pieces');
+      expect(countCasters(pieces, frames)).toBeLessThanOrEqual(6);
+      expect(countCasters(frames)).toBe(0);
+    });
+
+    it('freezes static matrices but not the turntable parts', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      const scene = service.getScene();
+      expect(scene.getObjectByName('floor')!.matrixAutoUpdate).toBe(false);
+      expect(scene.getObjectByName('pieces')!.matrixAutoUpdate).toBe(false);
+      expect(scene.getObjectByName('plates-efgh')!.matrixAutoUpdate).toBe(
+        false
+      );
+      expect(scene.getObjectByName('turntable:platter')!.matrixAutoUpdate).toBe(
+        true
+      );
+      expect(scene.getObjectByName('turntable:arm')!.matrixAutoUpdate).toBe(
+        true
+      );
+    });
+  });
+
+  describe('render on demand (R8-I1)', () => {
+    const camera = () => TestBed.inject(CameraService);
+    const idle = () => {
+      // Deja pasar el primer render y el frame de la cámara (sin cambios).
+      runFrame(16);
+      runFrame(32);
+      renderer.render.mockClear();
+    };
+
+    it('renders nothing while idle', () => {
+      service.initialize(canvas);
+      idle();
+      for (let i = 0; i < 30; i++) runFrame(48 + i * 16);
+      expect(renderer.render).not.toHaveBeenCalled();
+    });
+
+    it('resumes when the camera moves and stops again afterwards', () => {
+      service.initialize(canvas);
+      idle();
+      service.getCamera().position.x += 0.5;
+      runFrame(100);
+      expect(renderer.render).toHaveBeenCalledTimes(1);
+      runFrame(116);
+      expect(renderer.render).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders every frame while a camera tween runs', () => {
+      service.initialize(canvas);
+      idle();
+      vi.spyOn(camera(), 'isAnimating').mockReturnValue(true);
+      runFrame(100);
+      runFrame(116);
+      expect(renderer.render).toHaveBeenCalledTimes(2);
+    });
+
+    it('renders on hover changes, resize and piece state changes', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      idle();
+      TestBed.inject(ObjectInteractionService).onHoverChange?.(null);
+      runFrame(100);
+      expect(renderer.render).toHaveBeenCalledTimes(1);
+
+      (service as unknown as { handleResize: () => void }).handleResize();
+      runFrame(116);
+      expect(renderer.render).toHaveBeenCalledTimes(2);
+
+      state.patchPiece('tv', { power: true });
+      runFrame(132);
+      expect(renderer.render).toHaveBeenCalledTimes(3);
+    });
+
+    it('keeps drawing while something is selected (the outline pulses)', async () => {
+      service.initialize(canvas);
+      await service.loadAll();
+      vi.spyOn(camera(), 'focusOn').mockResolvedValue(true);
+      service.selectObject('sofa');
+      idle();
+      runFrame(100);
+      runFrame(116);
+      expect(renderer.render).toHaveBeenCalledTimes(2);
+      service.clearSelection();
+      runFrame(132);
+      renderer.render.mockClear();
+      runFrame(148);
+      expect(renderer.render).not.toHaveBeenCalled();
     });
   });
 });

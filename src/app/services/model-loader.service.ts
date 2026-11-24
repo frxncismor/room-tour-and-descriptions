@@ -15,7 +15,6 @@ import {
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import {
   LoadProgressCallback,
   MaterialOverride,
@@ -125,6 +124,29 @@ export function mergeMeshesByMaterial(root: Object3D): number {
   return removed;
 }
 
+/**
+ * Congela las matrices de lo estático (`matrixAutoUpdate = false`) tras
+ * calcularlas una vez; lo que se anime (`keep`) se deja como está.
+ */
+export function freezeMatrices(
+  root: Object3D,
+  keep?: (object: Object3D) => boolean
+): void {
+  root.updateMatrixWorld(true);
+  root.traverse(object => {
+    if (keep?.(object)) return;
+    object.updateMatrix();
+    object.matrixAutoUpdate = false;
+  });
+}
+
+/** Decodificador meshopt: chunk perezoso (R8-M5), cargado una vez. */
+let meshoptDecoder: Promise<unknown> | null = null;
+const loadMeshoptDecoder = (): Promise<unknown> =>
+  (meshoptDecoder ??= import(
+    'three/addons/libs/meshopt_decoder.module.js'
+  ).then(module => module.MeshoptDecoder));
+
 /** Anisotropía pedida a las texturas (la GPU la limita a su máximo). */
 export const TEXTURE_ANISOTROPY = 8;
 
@@ -151,6 +173,10 @@ export function applyMaterialOverride(
       if (override?.metalness !== undefined) {
         standard.metalness = override.metalness;
       }
+      if (override?.clearMap) {
+        standard.map?.dispose();
+        standard.map = null;
+      }
       for (const value of Object.values(standard)) {
         if (value && (value as Texture).isTexture) {
           (value as Texture).anisotropy = TEXTURE_ANISOTROPY;
@@ -166,9 +192,13 @@ export function applyMaterialOverride(
 })
 export class ModelLoaderService {
   /** Cada carga usa su propio `LoadingManager` para contar .bin y texturas de ese modelo. */
-  private createLoader(manager: LoadingManager): GLTFLoader {
+  private async createLoader(manager: LoadingManager): Promise<GLTFLoader> {
     const loader = new GLTFLoader(manager);
-    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.setMeshoptDecoder(
+      (await loadMeshoptDecoder()) as Parameters<
+        GLTFLoader['setMeshoptDecoder']
+      >[0]
+    );
     return loader;
   }
 
@@ -205,21 +235,21 @@ export class ModelLoaderService {
       report();
     };
 
-    const gltf = await this.createLoader(manager).loadAsync(
-      cleanPath,
-      event => {
-        mainFraction =
-          event.lengthComputable && event.total > 0
-            ? Math.min(event.loaded / event.total, 1)
-            : 0;
-        report();
-      }
-    );
+    const gltf = await (
+      await this.createLoader(manager)
+    ).loadAsync(cleanPath, event => {
+      mainFraction =
+        event.lengthComputable && event.total > 0
+          ? Math.min(event.loaded / event.total, 1)
+          : 0;
+      report();
+    });
     const model = gltf.scene;
     applyMaterialOverride(model, config.materialOverride);
     if (config.mergeMeshes) mergeMeshesByMaterial(model);
     this.applyTransformations(model, config);
     this.setupShadows(model, config.castShadow ?? true);
+    freezeMatrices(model);
     return model;
   }
 
