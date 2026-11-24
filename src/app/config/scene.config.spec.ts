@@ -97,8 +97,8 @@ describe('warm lighting and 1.60 m axis (T-331)', () => {
  */
 const SIZES: Record<string, { w: number; d: number; h: number }> = {
   sofa: { w: 3.6, d: 1, h: 0.95 },
-  pokerTable: { w: 1.4, d: 1.4, h: 0.9 },
-  bookshelf: { w: 1.82, d: 0.5, h: 2.13 },
+  pokerTable: { w: 1.33, d: 1.33, h: 0.95 },
+  bookshelf: { w: 1.37, d: 0.58, h: 2.06 },
   landscapePainting: { w: 1.21, d: 0.04, h: 0.93 },
   clock: { w: 0.64, d: 0.06, h: 0.64 },
   succulent: { w: 0.37, d: 0.41, h: 0.59 },

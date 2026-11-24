@@ -238,7 +238,7 @@ export function allModelSpecs(): PieceModelSpec[] {
   specs.push({
     id: 'bookcaseLeft',
     piece: 'bookcaseLeft',
-    path: 'assets/models/bookshelf/scene.gltf',
+    path: 'assets/models/wooden_bookshelf_worn/scene.gltf',
     position: left.position,
     rotationY: left.rotationY,
     scale: 1,

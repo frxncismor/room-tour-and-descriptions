@@ -359,10 +359,11 @@ export const DECOR3: Decor3Config = {
       stripeTone: 0.62,
     },
   },
-  // Baldas del bookshelf medidas en el glTF: caras superiores a 0,05 / 0,59 /
-  // 1,12 / 1,65 m; interior de x -0,87 a 0,87 y de z -7,746 a -7,403.
+  // Baldas de la estantería (wooden_bookshelf_worn, Poly Haven) medidas en el glTF
+  // y colocadas en z = -7,69: caras superiores a 0,39 / 0,67 / 0,96 / 1,28 /
+  // 1,66 m; interior de x -0,606 a 0,606 y de z -7,96 a -7,42.
   books: {
-    zCenter: -7.575,
+    zCenter: -7.67,
     depth: 0.22,
     palette: [
       0x7a4a36, 0x9a7b4b, 0x4f6552, 0x35505f, 0xa65f49, 0xc2a67a, 0x6d5a7a,
@@ -370,24 +371,34 @@ export const DECOR3: Decor3Config = {
     jarColor: 0xa9b8a0,
     tiers: [
       {
-        top: 0.59,
-        maxHeight: 0.4,
-        runs: [{ from: -0.8, to: -0.3, lean: 0.18 }],
-        stack: { x: 0.35, count: 4 },
+        top: 0.39,
+        maxHeight: 0.26,
+        runs: [],
+        stack: { x: 0.18, count: 3 },
       },
       {
-        top: 1.12,
-        maxHeight: 0.4,
-        runs: [{ from: 0.1, to: 0.78 }],
-        jar: -0.55,
+        top: 0.67,
+        maxHeight: 0.26,
+        runs: [{ from: -0.56, to: -0.1, lean: 0.16 }],
       },
       {
-        top: 1.65,
-        maxHeight: 0.4,
+        top: 0.96,
+        maxHeight: 0.28,
+        runs: [{ from: 0.05, to: 0.56 }],
+        jar: -0.4,
+      },
+      {
+        top: 1.28,
+        maxHeight: 0.3,
         runs: [
-          { from: -0.8, to: -0.15, lean: 0.14 },
-          { from: 0.45, to: 0.78 },
+          { from: -0.56, to: 0.12, lean: 0.14 },
+          { from: 0.32, to: 0.56 },
         ],
+      },
+      {
+        top: 1.66,
+        maxHeight: 0.34,
+        runs: [{ from: -0.56, to: -0.05 }],
       },
     ],
   },

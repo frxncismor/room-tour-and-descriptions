@@ -17,20 +17,14 @@ node scripts/optimize-models.mjs [modelsDir]
 
 Pipeline per model: `dedup → weld → prune (drops unused attributes/textures) →
 [simplify, decor pieces that need it] → resize (≤ 1024 px, table wood 2048 px) → WebP (quality 85) → meshopt (+ quantization)`.
-Models that already use `EXT_meshopt_compression` are skipped, so the script never changes the bytes of sofa, poker_table or bookshelf.
+Models that already use `EXT_meshopt_compression` are skipped, so the script never changes the bytes of the sofa.
 `resample` is not needed (no animations). The scene graph is kept (no flatten/join/simplify)
 so node names used for picking stay intact.
 
-**Bookshelf repair.** The original Sketchfab export has broken geometry: the central divider is
-sheared into a diagonal "crack" (32 triangles with diagonal normals, inner vertices at 16 different
-x values) and its material is `BLEND`, which read as a dark glass box. `optimize-models.mjs` runs
-`repairBookshelf()` on the original before the pipeline: it drops the diagonal triangles,
-snaps the inner vertices to a single central line, closes the 5 cm gaps between the four tiers
-(each tier stretches half a gap up/down, so sides, back and boards meet and the unit reads as one
-closed carcass from any angle, not four loose slabs) and makes the material opaque. It works in
-place on a copy of the original export (it is idempotent: it is skipped on already-optimized output and on a model already marked
-`asset.extras.repaired`, so re-running after a failed pipeline step is safe; it throws on an
-unexpected layout).
+**Bookshelf repair (historical).** The Sketchfab bookshelf and poker table were replaced by CC0 Poly Haven pieces
+(see "Bookshelf and round table" below) and removed from the repo; their originals stay in the git history.
+`optimize-models.mjs` still contains `repairBookshelf()`, which only runs for a folder named `bookshelf`
+(it repaired the broken geometry of that export), so it is dead code for the current models.
 
 Runtime: the viewer registers `MeshoptDecoder` in `ModelLoaderService`
 (`three/examples/jsm/libs/meshopt_decoder.module.js`, bundled by the build). No KTX2 (decision D-05).
@@ -141,19 +135,35 @@ All six are CC0 or public domain: no attribution is legally required (they are c
 | bookshelf   | 4.99 MB    | 0.13 MB     |
 | **Total**   | **~51 MB** | **~2.4 MB** |
 
+`poker_table` and `bookshelf` were later replaced by Poly Haven pieces (below); only the sofa is still a Sketchfab model.
+
 Notes: the sofa has no textures, so its UVs were pruned. Solid-colour textures of the table
 (Beer/Glass normal, Glass base colour) were folded into material factors. The sofa keeps its
 `baseColorFactor`; the final colour assignment belongs to the scene work (F6).
 
 ## Licenses (from each `scene.gltf` `asset.extras`)
 
-| Model                                 | Author       | License            | Source                                                                                               |
-| ------------------------------------- | ------------ | ------------------ | ---------------------------------------------------------------------------------------------------- |
-| SOFA SET                              | FREEDomplant | Sketchfab Standard | https://sketchfab.com/3d-models/sofa-set-2fc4feb7793144f5ae04901082d4d3d2                            |
-| Poker Board Game Table - Downloadable | Lília Mara   | Sketchfab Standard | https://sketchfab.com/3d-models/poker-board-game-table-downloadable-c68dbd76122840b59c8783f623fde050 |
-| BookShelf                             | Twpic        | Sketchfab Standard | https://sketchfab.com/3d-models/bookshelf-ed697dcb7e634c1e92ed0192364588e6                           |
+| Model    | Author       | License            | Source                                                                    |
+| -------- | ------------ | ------------------ | ------------------------------------------------------------------------- |
+| SOFA SET | FREEDomplant | Sketchfab Standard | https://sketchfab.com/3d-models/sofa-set-2fc4feb7793144f5ae04901082d4d3d2 |
 
-Sketchfab Standard license: https://sketchfab.com/licenses (credit the authors in the README).
+Sketchfab Standard license: https://sketchfab.com/licenses (credit the author in the README).
+
+### Bookshelf and round table (CC0, replace two Sketchfab models)
+
+The Sketchfab "BookShelf" and "Poker Board Game Table" were replaced by two CC0 pieces from [Poly Haven](https://polyhaven.com)
+(authors checked in `https://api.polyhaven.com/info/<id>`; license: https://polyhaven.com/license, CC0). The 1k glTF was downloaded outside the repo,
+its `.bin` renamed to `scene.bin` and `node scripts/optimize-models.mjs` run on it (`large: NEVER`, 512 px textures).
+The bookshelf diffuse is tinted in the glTF itself (`baseColorFactor` = sRGB `#9b7a5a`, linear 0.3278 / 0.1946 / 0.1022) so the worn grey-pink
+wood reads as the walnut of the room; the tint is baked, so the second bookcase (`bookcaseLeft`) gets it too.
+
+| Folder (`<id>`)         | Piece (`PieceId`)                          | Author (Poly Haven) | Textures (WebP q85) | Tris (API `polycount`) | Weight on disk |
+| ----------------------- | ------------------------------------------ | ------------------- | ------------------- | ---------------------- | -------------- |
+| `wooden_bookshelf_worn` | `bookshelf` and `bookcaseLeft` (same mesh) | Ulan Cabanilla      | 512 px              | 10 106                 | 216 636 B      |
+| `round_wooden_table_01` | `pokerTable` (now "Round table")           | Ulan Cabanilla      | 512 px              | 8 640                  | 125 091 B      |
+
+The glTF of `round_wooden_table_01` is used at scale 0.95 (1.33 × 1.33 × 0.95 m, same footprint as the old table).
+`src/assets` goes from 5 158 301 B to 4 530 246 B (hard limit 6 815 744 B).
 
 ## Room completion: 9 glTF models and 4 prints (spec 004, F0)
 

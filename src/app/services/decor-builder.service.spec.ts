@@ -35,12 +35,12 @@ const SEAT_TOP = 0.585;
 const FURNITURE: Record<string, Box3> = {
   sofa: SOFA,
   pokerTable: new Box3(
-    new Vector3(3 - 0.652, 0, -3 - 0.652),
-    new Vector3(3 + 0.652, 1.089, -3 + 0.652)
+    new Vector3(3 - 0.665, 0, -3 - 0.665),
+    new Vector3(3 + 0.665, 0.955, -3 + 0.665)
   ),
   bookshelf: new Box3(
-    new Vector3(-0.9145, 0, -7.6 - 0.197),
-    new Vector3(0.9145, 2.134, -7.6 + 0.197)
+    new Vector3(-0.687, 0, -7.69 - 0.291),
+    new Vector3(0.687, 2.063, -7.69 + 0.291)
   ),
   // Altura generosa (cota superior) para jarrón y suculenta.
   vase: new Box3(new Vector3(-2.1, 0, -7.8), new Vector3(-1.6, 1, -7.3)),
