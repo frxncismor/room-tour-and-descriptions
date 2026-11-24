@@ -125,8 +125,8 @@ export const EN = {
     sofa: {
       name: 'Sectional sofa',
       description:
-        'Corner sectional with loose back cushions and a separate ottoman, in a terracotta tone. It anchors the seating area on the left.',
-      details: 'Model: "Sofa Set" by FREEDomplant, via Sketchfab.',
+        'Corner sectional with a chaise, four back cushions and a separate ottoman, in a muted terracotta fabric. It anchors the seating area on the left.',
+      details: 'Model: procedural, built for this project.',
     },
     pokerTable: {
       name: 'Round table',
