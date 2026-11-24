@@ -244,6 +244,9 @@ describe('ViewerComponent', () => {
       await fixture.whenStable();
       await showList(fixture);
       const el = fixture.nativeElement as HTMLElement;
+      // La lista arranca plegada: se abre el grupo para ver las piezas.
+      el.querySelector<HTMLElement>('nav .gh')!.click();
+      await fixture.whenStable();
       expect(names(el)).toEqual(
         [
           'Bookshelf',

@@ -67,9 +67,9 @@ export const PLATE_SEQUENCE: readonly { key: string; title: string }[] = [
     key: 'plate:e',
     title: 'Asplenium Braziliense, S. America, Anna Atkins, 1854',
   },
-  { key: 'plate:f', title: 'Foreign Ferns, Anna Atkins, c. 1850' },
-  { key: 'plate:g', title: 'New Zealand, Anna Atkins, c. 1850' },
-  { key: 'plate:h', title: 'Carex (America), Anna Atkins, c. 1850' },
+  { key: 'plate:f', title: 'Foreign Ferns, Anna Atkins, 1845/1855' },
+  { key: 'plate:g', title: 'New Zealand, Anna Atkins, 1848/1859' },
+  { key: 'plate:h', title: 'Carex (America), Anna Atkins, 1848/1853' },
 ];
 
 /** Dónde cuelga cada lámina nueva (de `pieces.config`). */
@@ -274,7 +274,11 @@ const isFurniture = (id: PieceId): boolean =>
 export function registerProxyPieces(
   interaction: ObjectInteractionService,
   build: PiecesBuild,
-  decor: Readonly<{ clock?: Object3D; vase?: Object3D }>
+  decor: Readonly<{
+    clock?: Object3D;
+    vase?: Object3D;
+    floorLampShade?: Object3D;
+  }>
 ): void {
   for (const piece of PIECES) {
     if (isFurniture(piece.id) || piece.pick !== 'proxy') continue;
@@ -285,9 +289,15 @@ export function registerProxyPieces(
       ...(build.pieces[piece.id]?.visuals ?? []),
       ...(piece.id === 'clock' && decor.clock ? [decor.clock] : []),
       ...(piece.id === 'vase' && decor.vase ? [decor.vase] : []),
+      // Pantalla propia (material único); el resto de la lámpara va fundido.
+      ...(piece.id === 'floorLamp' && decor.floorLampShade
+        ? [decor.floorLampShade]
+        : []),
     ];
     interaction.registerPiece(info, proxies, {
       ...(visuals.length ? { visuals } : {}),
+      // Sin malla propia no hay casco: se dibujan las aristas de la caja.
+      ...(piece.id === 'floorLamp' ? { withProxyEdges: true } : {}),
     });
   }
 }

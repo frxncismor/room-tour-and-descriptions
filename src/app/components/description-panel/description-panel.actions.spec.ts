@@ -40,6 +40,8 @@ describe('DescriptionPanelComponent actions and wall sections', () => {
     });
     await localeReady();
     await TestBed.inject(LocaleService).enablePieces();
+    // La TV arranca encendida (modo arte); estos casos parten de apagada.
+    TestBed.inject(ViewerStateService).patchPiece('tv', { power: false });
   });
 
   async function open(info: unknown) {

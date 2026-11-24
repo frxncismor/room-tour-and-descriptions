@@ -10,7 +10,9 @@ import {
   Box3,
   BoxGeometry,
   Group,
+  Material,
   Mesh,
+  MeshStandardMaterial,
   NeutralToneMapping,
   NoToneMapping,
   Object3D,
@@ -100,6 +102,28 @@ const isPiecesKey = (key: string): boolean =>
 export const RENDER_ON_DEMAND = true;
 
 const SURFACE_SET: ReadonlySet<string> = new Set(SURFACE_IDS);
+
+/** R8-M4: con el tone mapping neutro el terracota del sofá sale naranja; se acerca al tono de la ronda 2. */
+export const SOFA_SATURATION = 0.72;
+export const SOFA_LIGHTNESS = 0.9;
+
+/** Baja saturación y luminosidad del color de los materiales del sofá (solo del sofá). */
+export function tameSofaColor(object: Object3D): void {
+  const seen = new Set<Material>();
+  const hsl = { h: 0, s: 0, l: 0 };
+  object.traverse(child => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh) return;
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of list) {
+      const color = (material as MeshStandardMaterial).color;
+      if (!color || seen.has(material)) continue;
+      seen.add(material);
+      color.getHSL(hsl);
+      color.setHSL(hsl.h, hsl.s * SOFA_SATURATION, hsl.l * SOFA_LIGHTNESS);
+    }
+  });
+}
 
 /** Acción principal de una pieza con acciones (la que dispara el clic). */
 const PRIMARY_ACTION: Readonly<Record<ActionPieceId, ActionId>> = {
@@ -309,6 +333,7 @@ export class SceneService {
           (hover.info.kind === 'surface' ? null : hover.info.id))
         : null;
       if (this.state.hovered() !== id) this.state.hovered.set(id);
+      this.syncSilhouettes();
       this.requestRender();
     };
 
@@ -705,6 +730,7 @@ export class SceneService {
         disposeObject3D(object);
         return;
       }
+      if (id === 'sofa') tameSofaColor(object);
       this.scene.add(object);
       this.models.set(id, { object, info: config.metadata });
       this.objectIds.set(object, id);
@@ -827,6 +853,7 @@ export class SceneService {
         this.decor3?.dispose();
         this.scene.add(build.group);
         this.decor3 = build;
+        this.syncSilhouettes();
         this.artTextures = new Map(
           [...loaded].filter(([key]) => key.startsWith('art:'))
         );
@@ -989,6 +1016,7 @@ export class SceneService {
     mod.registerProxyPieces(this.objectInteractionService, build, {
       clock: this.decorObjects.get('clock'),
       vase: this.decorObjects.get('vase'),
+      floorLampShade: this.decor3?.group.getObjectByName('floorLamp:shade'),
     });
   }
 
@@ -1071,6 +1099,7 @@ export class SceneService {
     if (entry) {
       this.objectInteractionService.selectObject(entry.object);
       this.state.selected.set(entry.info);
+      this.syncSilhouettes();
       this.state.selectedKind.set('furniture');
       this.state.surfaceTramo.set(null);
       this.requestRender();
@@ -1096,6 +1125,7 @@ export class SceneService {
     if (group.length > 0) interaction.selectObject(group[0]);
     else interaction.clearSelection();
     this.state.selected.set({ id: config.id, kind: 'piece' } as SelectedInfo);
+    this.syncSilhouettes();
     this.state.selectedKind.set('piece');
     this.state.surfaceTramo.set(null);
 
@@ -1172,6 +1202,7 @@ export class SceneService {
     const clamped = Math.min(Math.max(1, wanted), id === 'ceiling' ? 1 : count);
     this.objectInteractionService.clearSelection();
     this.state.selected.set({ id, kind: 'surface' });
+    this.syncSilhouettes();
     this.state.selectedKind.set('surface');
     this.state.surfaceTramo.set({
       tramo: clamped,
@@ -1232,9 +1263,24 @@ export class SceneService {
     return proxies;
   }
 
+  /**
+   * R8-M3: los textiles y los libros solo escriben stencil (cuentan como parte
+   * de la silueta de su mueble) cuando ese mueble está seleccionado o con hover;
+   * con otro objeto contorneado recortarían su anillo.
+   */
+  private syncSilhouettes(): void {
+    const build = this.decor3;
+    if (!build) return;
+    const active = (host: 'sofa' | 'bookshelf') =>
+      this.state.selected()?.id === host || this.state.hovered() === host;
+    build.setSilhouette('sofa', active('sofa'));
+    build.setSilhouette('bookshelf', active('bookshelf'));
+  }
+
   clearSelection(): void {
     this.objectInteractionService.clearSelection();
     this.state.selected.set(null);
+    this.syncSilhouettes();
     this.state.selectedKind.set(null);
     this.state.surfaceTramo.set(null);
     this.requestRender();
@@ -1261,6 +1307,7 @@ export class SceneService {
     const info = result.objectInfo;
     if (result.floorPoint) {
       this.state.selected.set(null);
+      this.syncSilhouettes();
       this.state.selectedKind.set(null);
       this.state.surfaceTramo.set(null);
       void this.cameraService.teleportTo(result.floorPoint);
