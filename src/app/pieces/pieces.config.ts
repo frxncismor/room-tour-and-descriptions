@@ -324,9 +324,10 @@ export const PIECES: readonly PieceConfig[] = buildPieces([
     origin: 'new',
     mount: 'wall',
     pick: 'proxy',
-    position: [0, 1.4, 7.96],
+    // 1,50 × 0,86 de marco: ≈ 1,6 m de diagonal útil (16:9 con 4 cm de moldura).
+    position: [0, 1.43, 7.96],
     rotationY: PI,
-    size: [1.26, 0.72, 0.04],
+    size: [1.5, 0.86, 0.04],
   },
   {
     id: 'credenza',
@@ -347,11 +348,11 @@ export const PIECES: readonly PieceConfig[] = buildPieces([
     pick: 'proxy',
     position: [0, AXIS_Y, 7.95],
     rotationY: PI,
-    size: [6.2, 0.89, 0.03],
-    // Dos láminas (E y F) a ±2,75 del centro.
+    size: [4.6, 0.89, 0.03],
+    // Dos láminas (E y F) a ±1,95 del centro, junto a la tele.
     proxies: [
-      { position: [-2.75, AXIS_Y, 7.95], size: [0.69, 0.89, 0.03] },
-      { position: [2.75, AXIS_Y, 7.95], size: [0.69, 0.89, 0.03] },
+      { position: [-1.95, AXIS_Y, 7.95], size: [0.69, 0.89, 0.03] },
+      { position: [1.95, AXIS_Y, 7.95], size: [0.69, 0.89, 0.03] },
     ],
   },
   {
@@ -382,10 +383,11 @@ export const PIECES: readonly PieceConfig[] = buildPieces([
     origin: 'new',
     mount: 'wall',
     pick: 'proxy',
-    // y 1,60 (A.2: 1,45): el espejo va en el eje de 1,60 m (A.1.2).
+    // y 1,60 (A.2: 1,45): va en el eje de 1,60 m (A.1.2). Ya no es un espejo
+    // gris sin reflejo, sino una lámina de arco (5:7 en la ventana): 0,8 × 1,16.
     position: [-5.6, AXIS_Y, 7.96],
     rotationY: PI,
-    size: [0.8, 1.7, 0.03],
+    size: [0.8, 1.16, 0.03],
   },
 
   // ────────────────────── Pared del escritorio ──────────────────────

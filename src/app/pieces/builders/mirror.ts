@@ -26,6 +26,9 @@ export type MirrorFinish = 'env' | 'smoked';
 /** Clave del `envMap` que el servicio pasa en las texturas. */
 export const MIRROR_ENV_KEY = 'mirror:env';
 
+/** Clave de la obra (clon de una lámina) que cuelga del arco. */
+export const MIRROR_ART_KEY = 'mirror:art';
+
 /** Textura 64×64 del vidrio ahumado: azul grisáceo con un velo diagonal. */
 export function smokedGlassTexture(size = 64): DataTexture {
   const data = new Uint8Array(size * size * 4);
@@ -61,15 +64,16 @@ export function smokedGlassTexture(size = 64): DataTexture {
 }
 
 /**
- * Espejo de arco (spec A.2): marco de latón con perfil escalonado y vidrio.
- * Mallas `archMirror:frame` y `archMirror:glass` (ambas `visuals`).
- * Con `finish = 'env'` y un `mirror:env` en las texturas el vidrio refleja la
- * habitación; si no, queda ahumado.
+ * Pieza `archMirror` (spec A.2), hoy una lámina de arco: marco de latón con
+ * perfil escalonado y la obra de `mirror:art` en la ventana (el espejo daba un
+ * panel gris sin reflejo). Mallas `archMirror:frame` y `archMirror:glass`
+ * (ambas `visuals`); `finish` se conserva por compatibilidad y no se usa.
  */
 export function buildArchMirror(
   kit: BuildKit,
   config: PieceConfig,
-  finish: MirrorFinish
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- firma estable
+  _finish: MirrorFinish
 ): void {
   const placer = new Placer(kit, config, 'tvWall');
   const [width, height, depth] = config.size;
@@ -88,27 +92,19 @@ export function buildArchMirror(
     visual: true,
   });
 
-  const env: Texture | null =
-    finish === 'env' ? kit.texture(MIRROR_ENV_KEY) : null;
-  const glass = kit.material('archMirror:glass', () => {
-    if (env) {
-      return new MeshStandardMaterial({
-        color: 0xdad6cd,
-        metalness: 1,
-        roughness: 0.06,
-        envMap: env,
-        envMapIntensity: 1,
-      });
-    }
-    return standard(0xffffff, 0.28, {
-      metalness: 0.55,
-      map: kit.own(smokedGlassTexture()),
-    });
-  });
+  // Lámina de arco: la obra (clon de una de las 8 láminas) recortada, no
+  // estirada, a la ventana del arco; sin obra, un paspartú liso.
+  const art: Texture | null = kit.texture(MIRROR_ART_KEY);
+  const glass = kit.material('archMirror:glass', () =>
+    art
+      ? new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, map: art })
+      : standard(0xd9d4c8, 0.95)
+  );
   const glassOutline = insetOutline(outline, 0.04);
+  const windowH = height - 0.08;
   placer.mesh(
     'archMirror:glass',
-    fanGeometry(glassOutline, 0, [width, height]),
+    fanGeometry(glassOutline, 0, [(windowH * 5) / 7, windowH]),
     glass,
     0,
     y,

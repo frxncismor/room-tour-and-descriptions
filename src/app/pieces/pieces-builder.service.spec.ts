@@ -160,6 +160,18 @@ describe('PiecesBuilderService.build (todas las piezas)', () => {
     expect(build.pieces.archMirror?.visuals.length).toBe(2);
   });
 
+  it('la lámina del arco usa la textura recibida y liberar su clon no toca la original', () => {
+    const original = new DataTexture(new Uint8Array(4), 1, 1);
+    const spyOriginal = vi.spyOn(original, 'dispose');
+    const own = service.build(PIECES, { 'mirror:art': original.clone() });
+    const glass = own.named('archMirror:glass') as Mesh;
+    expect((glass.material as MeshStandardMaterial).map).not.toBeNull();
+    expect((glass.material as MeshStandardMaterial).map).not.toBe(original);
+    own.dispose();
+    expect(spyOriginal).not.toHaveBeenCalled();
+    expect(original.image).toBeDefined();
+  });
+
   it('dispose libera geometrías, materiales y texturas y vacía el grupo', () => {
     const texture = new DataTexture(new Uint8Array(4), 1, 1);
     const spyTexture = vi.spyOn(texture, 'dispose');

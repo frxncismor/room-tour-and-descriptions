@@ -108,7 +108,7 @@ describe('pieces.config: inventory', () => {
     }
   });
 
-  it('keeps prints and the mirror on the 1,60 m axis and the TV at 1,40 m', () => {
+  it('keeps prints and the mirror on the 1,60 m axis and the TV at 1,43 m', () => {
     const axisIds: PieceId[] = [
       'printSpiraea',
       'printFelce',
@@ -123,14 +123,14 @@ describe('pieces.config: inventory', () => {
         expect(Math.abs(proxy.position[1] - AXIS_Y)).toBeLessThanOrEqual(0.02);
       }
     }
-    expect(PIECES_BY_ID.tv.position[1]).toBe(1.4);
+    expect(PIECES_BY_ID.tv.position[1]).toBe(1.43);
     expect(PIECES_BY_ID.tv.position[0]).toBe(0);
   });
 
-  it('puts the TV wall on x = 0 symmetry (prints ±2,75, door/mirror ±5,6)', () => {
+  it('puts the TV wall on x = 0 symmetry (prints ±1,95, door/mirror ±5,6)', () => {
     const [left, right] = PIECES_BY_ID.printsFront.proxies;
     expect(left.position[0]).toBeCloseTo(-right.position[0], 9);
-    expect(Math.abs(right.position[0])).toBe(2.75);
+    expect(Math.abs(right.position[0])).toBe(1.95);
     expect(PIECES_BY_ID.door.position[0]).toBe(5.6);
     expect(PIECES_BY_ID.archMirror.position[0]).toBe(-5.6);
   });
