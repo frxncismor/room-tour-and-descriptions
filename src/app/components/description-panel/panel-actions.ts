@@ -20,22 +20,15 @@ export interface PanelActions {
   workOnScreen(): string | null;
 }
 
-/** Superficie de `SceneService` que usa la ficha (la implementa la pista de escena). */
-interface SceneActions {
-  runAction?(id: ActionPieceId, action: ActionId): PanelActionResult;
-  focusSurfaceTramo?(tramo: number): void;
-  workOnScreen?(): string | null;
-}
-
 export const PANEL_ACTIONS = new InjectionToken<PanelActions>('PANEL_ACTIONS', {
   providedIn: 'root',
   factory: () => {
-    const scene = inject(SceneService) as SceneService & SceneActions;
+    // Tipado contra `SceneService`: un renombrado allí rompe la compilación.
+    const scene = inject(SceneService);
     return {
-      run: (id, action) =>
-        scene.runAction?.(id, action) ?? { changed: false, announcement: null },
-      focusTramo: tramo => scene.focusSurfaceTramo?.(tramo),
-      workOnScreen: () => scene.workOnScreen?.() ?? null,
+      run: (id, action) => scene.runAction(id, action),
+      focusTramo: tramo => scene.focusSurfaceTramo(tramo),
+      workOnScreen: () => scene.workOnScreen(),
     };
   },
 });

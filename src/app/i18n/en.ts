@@ -101,7 +101,7 @@ export const EN = {
       {
         label: 'Keys',
         touchLabel: 'Close',
-        text: 'Esc closes details. Home resets the view.',
+        text: 'Esc closes details. Home resets the view. Page Up and Page Down move between the sections of a framed wall.',
         touchText: 'Tap the cross to close details',
         icon: 'keyboard',
       },

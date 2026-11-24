@@ -78,8 +78,8 @@ rate-limits bursts).
 | ----------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------- |
 | `art/spiraea.webp`      | _Spiraea aruncus (Tyrol)_, Anna Atkins, 1851–54, cyanotype                    | `File:Spiraea aruncus (Tyrol) MET DT5664.jpg` (Met 285421)                | CC0 (Met Open Access)            |
 | `art/felce.webp`        | _Felce_, William Henry Fox Talbot, 1839, salted paper print                   | `File:Felce MET DP202191.jpg` (Met 289193)                                | CC0 (Met Open Access)            |
-| `art/osmunda.webp`      | _Osmunda regalis (Australia)_, Anna Atkins, c. 1850                           | `File:Anna Atkins - Osmunda Rigalis (Australia) - Google Art Project.jpg` | Public domain (author died 1871) |
-| `art/pteris.webp`       | _Pteris aquilina_, Anna Atkins, c. 1850, cyanotype                            | `File:Anna Atkins - Pteris aquilina - Google Art Project.jpg`             | Public domain (author died 1871) |
+| `art/osmunda.webp`      | _Osmunda regalis (Australia)_, Anna Atkins, 1853/54                           | `File:Anna Atkins - Osmunda Rigalis (Australia) - Google Art Project.jpg` | Public domain (author died 1871) |
+| `art/pteris.webp`       | _Pteris aquilina_, Anna Atkins, 1851, cyanotype                               | `File:Anna Atkins - Pteris aquilina - Google Art Project.jpg`             | Public domain (author died 1871) |
 | `fabric/linen.webp`     | `rough_linen`, Poly Haven (photography: colormass; processing: Rico Cilliers) | `https://api.polyhaven.com/files/rough_linen` (`Diffuse`, 1k, jpg)        | CC0                              |
 | `fabric/linen-nor.webp` | same                                                                          | same (`nor_gl`, 1k, jpg)                                                  | CC0                              |
 

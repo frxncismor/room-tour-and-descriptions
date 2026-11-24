@@ -58,12 +58,13 @@ describe('DescriptionPanelComponent actions and wall sections', () => {
   const live = (el: HTMLElement) =>
     el.querySelector('[aria-live="polite"]')?.textContent?.trim();
 
-  it('shows an Actions group with pressed buttons that are at least 44 px tall', async () => {
+  it('shows an Actions group with verb buttons that are at least 44 px tall', async () => {
     const { el } = await open({ id: 'tv', kind: 'piece' });
     const group = el.querySelector('[role="group"]') as HTMLElement;
     expect(group.getAttribute('aria-label')).toBe('Actions');
     const [power, next] = buttons(el);
-    expect(power.getAttribute('aria-pressed')).toBe('false');
+    // R9-I4: el verbo cambia con el estado, así que no hay `aria-pressed`.
+    expect(power.hasAttribute('aria-pressed')).toBe(false);
     expect(power.textContent).toContain('Turn on');
     expect(next.hasAttribute('aria-pressed')).toBe(false);
     expect(next.getAttribute('aria-disabled')).toBe('true');
@@ -81,12 +82,13 @@ describe('DescriptionPanelComponent actions and wall sections', () => {
     expect(live(el)).toBe('Television on. On screen: A fern.');
   });
 
-  it('reflects the state: pressed, label and status line with the work on screen', async () => {
+  it('reflects the state: label, visual state and status line with the work on screen', async () => {
     const state = TestBed.inject(ViewerStateService);
     state.patchPiece('tv', { power: true });
     const { el } = await open({ id: 'tv', kind: 'piece' });
     const [power, next] = buttons(el);
-    expect(power.getAttribute('aria-pressed')).toBe('true');
+    expect(power.hasAttribute('aria-pressed')).toBe(false);
+    expect(power.classList.contains('on')).toBe(true);
     expect(power.textContent).toContain('Turn off');
     expect(next.hasAttribute('aria-disabled')).toBe(false);
     expect(el.textContent).toContain('Showing: A fern, Anna Atkins, c. 1850');
@@ -99,7 +101,7 @@ describe('DescriptionPanelComponent actions and wall sections', () => {
     expect(el.textContent).not.toContain('Showing');
   });
 
-  it('keeps "Next" out of aria-pressed and runs it when the TV is on', async () => {
+  it('runs "Next" when the TV is on and it when the TV is on', async () => {
     TestBed.inject(ViewerStateService).patchPiece('tv', { power: true });
     const { fixture, el } = await open({ id: 'tv', kind: 'piece' });
     buttons(el)[1].click();
@@ -126,9 +128,53 @@ describe('DescriptionPanelComponent actions and wall sections', () => {
 
     TestBed.inject(ViewerStateService).patchPiece('turntable', { spin: true });
     await fixture.whenStable();
-    expect(spin.getAttribute('aria-pressed')).toBe('true');
+    expect(spin.hasAttribute('aria-pressed')).toBe(false);
+    expect(spin.classList.contains('on')).toBe(true);
     expect(el.textContent).toContain('Platter: spinning');
     expect(sound.hasAttribute('aria-disabled')).toBe(false);
+  });
+
+  describe('sound unavailable (R9-I3)', () => {
+    const hint = (el: HTMLElement) =>
+      el.querySelector<HTMLElement>('[data-audio-notice]');
+
+    async function openSpinning() {
+      const state = TestBed.inject(ViewerStateService);
+      state.patchPiece('turntable', { spin: true });
+      return { state, ...(await open({ id: 'turntable', kind: 'piece' })) };
+    }
+
+    it('shows nothing while sound has not failed', async () => {
+      const { el } = await openSpinning();
+      expect(hint(el)).toBeNull();
+    });
+
+    it('shows and announces the notice when the sound falls back to off', async () => {
+      const { state, fixture, el } = await openSpinning();
+      state.audioError.set('audio-unavailable');
+      await fixture.whenStable();
+      expect(hint(el)?.textContent?.trim()).toBe(
+        'Sound is not available in this browser.'
+      );
+      expect(live(el)).toBe('Sound is not available in this browser.');
+      expect(buttons(el)[1].getAttribute('aria-describedby')).toBe(
+        hint(el)!.id
+      );
+    });
+
+    it('is translated to Spanish and hides when the user tries the sound again', async () => {
+      const { state, fixture, el } = await openSpinning();
+      state.audioError.set('audio-unavailable');
+      await TestBed.inject(LocaleService).setLocale('es');
+      await fixture.whenStable();
+      expect(hint(el)?.textContent?.trim()).toBe(
+        ES.errors.messages['audio-unavailable']
+      );
+      buttons(el)[1].click();
+      await fixture.whenStable();
+      expect(state.audioError()).toBeNull();
+      expect(hint(el)).toBeNull();
+    });
   });
 
   it('shows no Actions group for a piece without actions', async () => {

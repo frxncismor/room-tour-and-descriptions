@@ -9,8 +9,10 @@ import {
   input,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { LocaleService } from '../../i18n/locale.service';
+import type { SurfaceId } from '../../pieces/piece-ids';
 
 export interface ObjectListItem {
   id: string;
@@ -25,7 +27,7 @@ export interface ObjectListGroup {
   name: string;
   items: ObjectListItem[];
   /** Pared o techo que encuadra la fila «Ver pared»; sin él no hay fila. */
-  surfaceId?: string;
+  surfaceId?: SurfaceId;
 }
 
 /** Móvil y paisaje bajo: la lista pasa a tira de dos niveles. */
@@ -548,7 +550,7 @@ export class ObjectListComponent {
   readonly groups = input<ObjectListGroup[]>([]);
   readonly selectedId = input<string | null>(null);
   readonly selectItem = output<string>();
-  readonly viewSurface = output<string>();
+  readonly viewSurface = output<SurfaceId>();
   readonly resetView = output<void>();
   private readonly i18n = inject(LocaleService);
   protected readonly text = computed(() => this.i18n.messages().list);
@@ -598,11 +600,13 @@ export class ObjectListComponent {
       );
     }
 
-    // El grupo de la selección se abre solo.
+    // El grupo de la selección se abre solo, solo cuando cambia la selección:
+    // recalcular los grupos (encender una lámpara, cambiar de idioma) no debe
+    // reabrir uno que el usuario plegó a mano.
     effect(() => {
       const id = this.selectedId();
       if (id === null) return;
-      const group = this.groups().find(
+      const group = untracked(this.groups).find(
         g => g.surfaceId === id || g.items.some(item => item.id === id)
       );
       if (group) this.openGroup.set(group.id);

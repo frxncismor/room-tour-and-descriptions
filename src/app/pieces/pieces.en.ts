@@ -205,7 +205,7 @@ const PIECES_EN = {
       description:
         'Two cyanotype plates side by side in matching frames, on the desk wall.',
       details:
-        '"Osmunda regalis (Australia)" and "Pteris aquilina", Anna Atkins, c. 1850. Public domain.',
+        '"Osmunda regalis (Australia)", 1853/54, and "Pteris aquilina", 1851, Anna Atkins. Public domain.',
     },
     tallCabinet: {
       name: 'Painted armoire',

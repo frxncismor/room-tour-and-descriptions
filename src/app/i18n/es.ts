@@ -103,7 +103,7 @@ const ES = {
       {
         label: 'Teclas',
         touchLabel: 'Cerrar',
-        text: 'Esc cierra los detalles. Inicio restablece la vista.',
+        text: 'Esc cierra los detalles. Inicio restablece la vista. Re Pág y Av Pág recorren los tramos de una pared encuadrada.',
         touchText: 'Toca la cruz para cerrar los detalles',
         icon: 'keyboard',
       },

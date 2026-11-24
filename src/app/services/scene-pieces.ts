@@ -60,9 +60,9 @@ export const PLATE_SEQUENCE: readonly { key: string; title: string }[] = [
   { key: 'art:felce', title: 'Felce, William Henry Fox Talbot, 1839' },
   {
     key: 'art:osmunda',
-    title: 'Osmunda regalis (Australia), Anna Atkins, c. 1850',
+    title: 'Osmunda regalis (Australia), Anna Atkins, 1853/54',
   },
-  { key: 'art:pteris', title: 'Pteris aquilina, Anna Atkins, c. 1850' },
+  { key: 'art:pteris', title: 'Pteris aquilina, Anna Atkins, 1851' },
   {
     key: 'plate:e',
     title: 'Asplenium Braziliense, S. America, Anna Atkins, 1854',

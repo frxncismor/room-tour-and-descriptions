@@ -15,6 +15,7 @@ import {
   GROUP_IDS,
   GroupId,
 } from '../../i18n/messages';
+import type { SurfaceId } from '../../pieces/piece-ids';
 import type { PieceConfig } from '../../pieces/pieces.config';
 import { SceneService } from '../../services/scene.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
@@ -25,7 +26,7 @@ import {
 } from './object-list.component';
 
 /** Pared o techo que encuadra la fila «Ver pared» de cada grupo (el suelo no tiene). */
-const GROUP_SURFACE: Partial<Record<GroupId, string>> = {
+const GROUP_SURFACE: Partial<Record<GroupId, SurfaceId>> = {
   greenWall: 'wallGreen',
   windowWall: 'wallWindow',
   tvWall: 'wallTv',
@@ -59,7 +60,7 @@ const GROUP_SURFACE: Partial<Record<GroupId, string>> = {
 })
 export class ObjectListPanelComponent {
   readonly selectItem = output<string>();
-  readonly viewSurface = output<string>();
+  readonly viewSurface = output<SurfaceId>();
   readonly resetView = output<void>();
 
   protected readonly state = inject(ViewerStateService);
