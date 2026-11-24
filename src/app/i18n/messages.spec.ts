@@ -1,6 +1,12 @@
 import { EN } from './en';
 import ES from './es';
-import { FURNITURE_IDS, Locale, LOCALES, Messages } from './messages';
+import {
+  FURNITURE_IDS,
+  Locale,
+  LOCALE_OPTIONS,
+  LOCALES,
+  Messages,
+} from './messages';
 
 const DICTS: Record<Locale, Messages> = { en: EN, es: ES };
 
@@ -116,5 +122,16 @@ describe.each(LOCALES)('messages: copy rules (%s)', locale => {
     expect(dict.language.announce).toContain(
       locale === 'en' ? 'English' : 'español'
     );
+  });
+
+  it('accessible names start with the visible text (WCAG 2.5.3)', () => {
+    const pairs: [string, string][] = [
+      [dict.list.resetView, dict.list.resetViewLabel],
+      [dict.help.open, dict.help.openLabel],
+      ...LOCALE_OPTIONS.map((o): [string, string] => [o.short, o.label]),
+    ];
+    for (const [visible, name] of pairs) {
+      expect(name.toLowerCase().startsWith(visible.toLowerCase())).toBe(true);
+    }
   });
 });

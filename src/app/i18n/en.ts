@@ -42,7 +42,7 @@ export const EN = {
   help: {
     title: 'Controls',
     open: 'Controls',
-    openLabel: 'Show the controls',
+    openLabel: 'Controls, show the panel',
     gotIt: 'Close',
     controls: [
       {

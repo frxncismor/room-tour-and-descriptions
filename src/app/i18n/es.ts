@@ -39,12 +39,12 @@ const ES = {
   list: {
     title: 'Piezas',
     resetView: 'Restablecer vista',
-    resetViewLabel: 'Volver a la posición inicial de la vista',
+    resetViewLabel: 'Restablecer vista a la posición inicial',
   },
   help: {
     title: 'Controles',
     open: 'Controles',
-    openLabel: 'Mostrar los controles',
+    openLabel: 'Controles, mostrar el panel',
     gotIt: 'Cerrar',
     controls: [
       {
