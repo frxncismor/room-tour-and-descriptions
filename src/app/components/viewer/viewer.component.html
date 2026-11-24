@@ -8,12 +8,15 @@
       <app-brand-label />
     </div>
     <app-help-panel [suppressed]="!!state.selected()" [seen]="interacted()" />
-    <app-object-list
-      [items]="objects()"
-      [selectedId]="state.selected()?.id ?? null"
-      (selectItem)="selectObject($event)"
-      (resetView)="resetView()"
-    />
+    <!-- La lista va en un chunk propio: la carga inicial no la paga y la
+         pantalla de carga la cubre hasta que llega. -->
+    @defer (on idle) {
+      <app-object-list-panel
+        (selectItem)="selectObject($event)"
+        (viewSurface)="viewSurface($event)"
+        (resetView)="resetView()"
+      />
+    }
   }
 
   <canvas
