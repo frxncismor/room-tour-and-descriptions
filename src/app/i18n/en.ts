@@ -129,16 +129,18 @@ export const EN = {
       details: 'Model: "Sofa Set" by FREEDomplant, via Sketchfab.',
     },
     pokerTable: {
-      name: 'Poker table',
+      name: 'Round table',
       description:
-        'Card table with a felt playing surface, a padded rail and a wooden frame. It stands on the right, opposite the sofa.',
-      details: 'Model: "Poker Board Game Table" by Lília Mara, via Sketchfab.',
+        'Round pedestal table in dark stained wood, with a turned column and four curved legs. It stands on the right, opposite the sofa.',
+      details:
+        'Model: "Round Wooden Table 01" by Ulan Cabanilla, Poly Haven (CC0).',
     },
     bookshelf: {
       name: 'Bookshelf',
       description:
-        'Open shelving in four tiers, in dark wood. It stands against the back wall, centered between the painting and the clock.',
-      details: 'Model: "BookShelf" by Twpic, via Sketchfab.',
+        'Open bookcase with five shelves, in aged dark wood. It stands against the back wall, centered between the painting and the clock.',
+      details:
+        'Model: "Wooden Bookshelf Worn" by Ulan Cabanilla, Poly Haven (CC0).',
     },
     landscapePainting: {
       name: 'Landscape painting',

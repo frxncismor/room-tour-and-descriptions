@@ -50,7 +50,7 @@ The interface is available in English and Spanish ([Languages](#languages)); her
 - **Cozy, finished room**: sage accent wall, eight wall prints, curtains, lamps, a TV lounge, a reading corner, a desk and soft textiles, with warm light and soft shadows.
 - **English and Spanish**: detected from the browser and switchable with the EN | ES selector.
 - **Loading and error states**: a progress screen while models download, and clear messages (with a retry button) if WebGL is unavailable, the context is lost or a model fails to load.
-- **Light assets**: the three original models were reduced from about 51 MB to about 2.4 MB, and the whole `src/assets` folder (sixteen models, textures, fonts, social image) weighs about 5.2 MB (see [Performance](#performance)).
+- **Light assets**: the Sketchfab sofa was reduced from about 9.9 MB to about 1.5 MB, and the whole `src/assets` folder (sixteen models, textures, fonts, social image) weighs about 4.5 MB (see [Performance](#performance)).
 
 ## Controls
 
@@ -158,7 +158,7 @@ src/app/
 ├── i18n/         EN and ES dictionaries and the locale service
 └── interfaces/   shared types
 src/assets/
-├── models/       sixteen optimized glTF models (sofa, poker_table, bookshelf, four decor pieces and nine Poly Haven pieces)
+├── models/       sixteen optimized glTF models (the sofa, four decor pieces and eleven Poly Haven pieces)
 ├── textures/     floor, rug, the eight wall prints and linen textures (WebP)
 ├── fonts/        Fraunces and Hanken Grotesk (WOFF2) and their OFL license
 └── brand/        favicon, touch icon and social preview image
@@ -184,12 +184,12 @@ Measured on a production build (`npm run build`) of the full room:
 | ------------------------------ | ------------------------------------------ |
 | Initial JavaScript bundle      | 886.57 kB raw, about 206.43 kB transferred |
 | Renders while the room is idle | 0 (render on demand)                       |
-| 3D models (all sixteen)        | 3,897,720 B (about 3.9 MB)                 |
+| 3D models (all sixteen)        | 3,269,665 B (about 3.3 MB)                 |
 | Textures (room, prints, linen) | 1,003,256 B (about 1.0 MB)                 |
 | Fonts                          | 106,659 B (about 0.1 MB)                   |
-| `src/assets` in total          | 5,158,301 B (about 5.2 MB)                 |
+| `src/assets` in total          | 4,530,246 B (about 4.5 MB)                 |
 
-The three original models went from about 51 MB to about 2.4 MB. The nine Poly Haven models of the full room weigh 797,619 B in total and the four new prints 315,868 B. Per-model sizes before and after are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
+The sofa went from about 9.9 MB to about 1.5 MB. The nine Poly Haven models of the full room weigh 797,619 B in total, the bookshelf and the round table that replaced two Sketchfab models weigh 341,727 B, and the four new prints 315,868 B. Per-model sizes before and after are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
 
 The piece builders and models of the full room (`scene-pieces`, 46.20 kB raw, 15.56 kB transferred), the decor builder (11.39 kB) and the English and Spanish piece text (8.58 kB and 9.69 kB) load as separate chunks; the Spanish interface dictionary (4.39 kB) loads only when needed.
 
@@ -210,21 +210,19 @@ Models are optimized in place with `scripts/optimize-models.mjs` (`@gltf-transfo
 
 ## Credits and licenses
 
-### Sketchfab models (sofa, poker table, bookshelf)
+### Sketchfab model (sofa)
 
-The three furniture models come from [Sketchfab](https://sketchfab.com/) and are used under the Sketchfab Standard license. Credit to their authors:
+The sofa comes from [Sketchfab](https://sketchfab.com/) and is used under the Sketchfab Standard license. Credit to its author:
 
-| Model                                 | Author       | Source                                                                                                            |
-| ------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| SOFA SET                              | FREEDomplant | [Sketchfab](https://sketchfab.com/3d-models/sofa-set-2fc4feb7793144f5ae04901082d4d3d2)                            |
-| Poker Board Game Table - Downloadable | Lília Mara   | [Sketchfab](https://sketchfab.com/3d-models/poker-board-game-table-downloadable-c68dbd76122840b59c8783f623fde050) |
-| BookShelf                             | Twpic        | [Sketchfab](https://sketchfab.com/3d-models/bookshelf-ed697dcb7e634c1e92ed0192364588e6)                           |
+| Model    | Author       | Source                                                                                 |
+| -------- | ------------ | -------------------------------------------------------------------------------------- |
+| SOFA SET | FREEDomplant | [Sketchfab](https://sketchfab.com/3d-models/sofa-set-2fc4feb7793144f5ae04901082d4d3d2) |
 
 License terms: <https://sketchfab.com/licenses>. The models were resized, texture-compressed and quantized for the web; the geometry and design are the authors' work.
 
 ### Poly Haven (models and room textures)
 
-The thirteen glTF models other than the three Sketchfab ones, and the floor and rug textures, come from [Poly Haven](https://polyhaven.com/) and are released under CC0. CC0 does not require attribution; they are credited here as a courtesy. Nine of the models belong to the full room; the other four were added earlier as decor.
+The fifteen glTF models other than the Sketchfab sofa, and the floor and rug textures, come from [Poly Haven](https://polyhaven.com/) and are released under CC0. CC0 does not require attribution; they are credited here as a courtesy. Eleven of the models belong to the full room (they include the bookshelf and the round table); the other four were added earlier as decor.
 
 | Piece                     | Used for                       | Author                            | Source                                                          | License |
 | ------------------------- | ------------------------------ | --------------------------------- | --------------------------------------------------------------- | ------- |
@@ -235,6 +233,8 @@ The thirteen glTF models other than the three Sketchfab ones, and the floor and 
 | Vintage Wooden Drawer 01  | Sideboard with records         | James Ray Cock                    | [Poly Haven](https://polyhaven.com/a/vintage_wooden_drawer_01)  | CC0     |
 | Painted Wooden Chair 02   | Desk chair                     | Kirill Sannikov                   | [Poly Haven](https://polyhaven.com/a/painted_wooden_chair_02)   | CC0     |
 | Wooden Display Shelves 01 | Display shelves                | James Ray Cock                    | [Poly Haven](https://polyhaven.com/a/wooden_display_shelves_01) | CC0     |
+| Wooden Bookshelf Worn     | Bookshelf (and the twin)       | Ulan Cabanilla                    | [Poly Haven](https://polyhaven.com/a/wooden_bookshelf_worn)     | CC0     |
+| Round Wooden Table 01     | Round table                    | Ulan Cabanilla                    | [Poly Haven](https://polyhaven.com/a/round_wooden_table_01)     | CC0     |
 | Painted Wooden Cabinet 02 | Tall cabinet                   | Kirill Sannikov                   | [Poly Haven](https://polyhaven.com/a/painted_wooden_cabinet_02) | CC0     |
 | Modern Ceiling Lamp 01    | Pendant lamp                   | James Ray Cock                    | [Poly Haven](https://polyhaven.com/a/modern_ceiling_lamp_01)    | CC0     |
 | Fancy Picture Frame 01    | Landscape painting frame       | Rob Tuytel, Rico Cilliers         | [Poly Haven](https://polyhaven.com/a/fancy_picture_frame_01)    | CC0     |

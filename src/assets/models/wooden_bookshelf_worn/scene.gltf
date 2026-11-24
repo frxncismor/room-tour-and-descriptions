@@ -1,19 +1,13 @@
 {
   "asset": {
     "generator": "glTF-Transform v4.5.1",
-    "version": "2.0",
-    "extras": {
-      "author": "Twpic (https://sketchfab.com/TWPIC)",
-      "license": "SKETCHFAB Standard (https://sketchfab.com/licenses)",
-      "source": "https://sketchfab.com/3d-models/bookshelf-ed697dcb7e634c1e92ed0192364588e6",
-      "title": "BookShelf"
-    }
+    "version": "2.0"
   },
   "accessors": [
     {
       "type": "SCALAR",
       "componentType": 5123,
-      "count": 576,
+      "count": 30318,
       "normalized": false,
       "byteOffset": 0,
       "bufferView": 0
@@ -21,130 +15,104 @@
     {
       "type": "VEC3",
       "componentType": 5120,
-      "count": 320,
+      "count": 6479,
       "normalized": true,
       "byteOffset": 0,
       "bufferView": 1
     },
     {
-      "type": "VEC4",
-      "componentType": 5120,
-      "count": 320,
+      "type": "VEC3",
+      "componentType": 5122,
+      "count": 6479,
+      "max": [
+        21818,
+        32767,
+        9233
+      ],
+      "min": [
+        -21818,
+        -32767,
+        -9233
+      ],
       "normalized": true,
       "byteOffset": 0,
       "bufferView": 2
     },
     {
-      "type": "VEC3",
-      "componentType": 5122,
-      "count": 320,
-      "max": [
-        28087,
-        6044,
-        32767
-      ],
-      "min": [
-        -28087,
-        -6044,
-        -32767
-      ],
+      "type": "VEC2",
+      "componentType": 5123,
+      "count": 6479,
       "normalized": true,
       "byteOffset": 0,
       "bufferView": 3
-    },
-    {
-      "type": "VEC2",
-      "componentType": 5123,
-      "count": 320,
-      "normalized": true,
-      "byteOffset": 0,
-      "bufferView": 4
     }
   ],
   "bufferViews": [
     {
       "buffer": 1,
       "byteOffset": 0,
-      "byteLength": 1152,
+      "byteLength": 60636,
       "target": 34963,
       "extensions": {
         "EXT_meshopt_compression": {
           "buffer": 0,
           "byteOffset": 0,
-          "byteLength": 209,
+          "byteLength": 11410,
           "mode": "TRIANGLES",
           "byteStride": 2,
-          "count": 576
+          "count": 30318
         }
       }
     },
     {
       "buffer": 1,
-      "byteOffset": 1152,
-      "byteLength": 1280,
+      "byteOffset": 60636,
+      "byteLength": 25916,
       "target": 34962,
       "byteStride": 4,
       "extensions": {
         "EXT_meshopt_compression": {
           "buffer": 0,
-          "byteOffset": 212,
-          "byteLength": 216,
+          "byteOffset": 11412,
+          "byteLength": 10486,
           "mode": "ATTRIBUTES",
           "filter": "OCTAHEDRAL",
           "byteStride": 4,
-          "count": 320
+          "count": 6479
         }
       }
     },
     {
       "buffer": 1,
-      "byteOffset": 2432,
-      "byteLength": 1280,
-      "target": 34962,
-      "byteStride": 4,
-      "extensions": {
-        "EXT_meshopt_compression": {
-          "buffer": 0,
-          "byteOffset": 428,
-          "byteLength": 170,
-          "mode": "ATTRIBUTES",
-          "filter": "OCTAHEDRAL",
-          "byteStride": 4,
-          "count": 320
-        }
-      }
-    },
-    {
-      "buffer": 1,
-      "byteOffset": 3712,
-      "byteLength": 2560,
+      "byteOffset": 86552,
+      "byteLength": 51832,
       "target": 34962,
       "byteStride": 8,
       "extensions": {
         "EXT_meshopt_compression": {
           "buffer": 0,
-          "byteOffset": 600,
-          "byteLength": 1312,
+          "byteOffset": 21900,
+          "byteLength": 24024,
           "mode": "ATTRIBUTES",
           "byteStride": 8,
-          "count": 320
+          "count": 6479
         }
       }
     },
     {
       "buffer": 1,
-      "byteOffset": 6272,
-      "byteLength": 1280,
+      "byteOffset": 138384,
+      "byteLength": 25916,
       "target": 34962,
       "byteStride": 4,
       "extensions": {
         "EXT_meshopt_compression": {
           "buffer": 0,
-          "byteOffset": 1912,
-          "byteLength": 1174,
+          "byteOffset": 45924,
+          "byteLength": 16691,
           "mode": "ATTRIBUTES",
           "byteStride": 4,
-          "count": 320
+          "count": 6479
         }
       }
     }
@@ -162,6 +130,14 @@
       "sampler": 0,
       "extensions": {
         "EXT_texture_webp": {
+          "source": 1
+        }
+      }
+    },
+    {
+      "sampler": 0,
+      "extensions": {
+        "EXT_texture_webp": {
           "source": 0
         }
       }
@@ -173,37 +149,32 @@
           "source": 2
         }
       }
-    },
-    {
-      "sampler": 0,
-      "extensions": {
-        "EXT_texture_webp": {
-          "source": 1
-        }
-      }
     }
   ],
   "images": [
     {
+      "name": "wooden_bookshelf_worn_nor_gl",
       "mimeType": "image/webp",
-      "uri": "textures/Cabinet04_baseColor.webp"
+      "uri": "textures/wooden_bookshelf_worn_nor_gl_1k.webp"
     },
     {
+      "name": "wooden_bookshelf_worn_diff",
       "mimeType": "image/webp",
-      "uri": "textures/Cabinet04_metallicRoughness.webp"
+      "uri": "textures/wooden_bookshelf_worn_diff_1k.webp"
     },
     {
+      "name": "wooden_bookshelf_worn_metal-wooden_bookshelf_worn_rough",
       "mimeType": "image/webp",
-      "uri": "textures/Cabinet04_normal.webp"
+      "uri": "textures/wooden_bookshelf_worn_arm_1k.webp"
     }
   ],
   "buffers": [
     {
       "uri": "scene.bin",
-      "byteLength": 3088
+      "byteLength": 62616
     },
     {
-      "byteLength": 7552,
+      "byteLength": 164300,
       "extensions": {
         "EXT_meshopt_compression": {
           "fallback": true
@@ -213,9 +184,15 @@
   ],
   "materials": [
     {
-      "name": "Cabinet04",
+      "name": "wooden_bookshelf_worn",
       "doubleSided": true,
       "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.3278,
+          0.1946,
+          0.1022,
+          1
+        ],
         "baseColorTexture": {
           "index": 0
         },
@@ -225,24 +202,18 @@
       },
       "normalTexture": {
         "index": 1
-      },
-      "extensions": {
-        "KHR_materials_specular": {
-          "specularFactor": 0.12038131925735392
-        }
       }
     }
   ],
   "meshes": [
     {
-      "name": "Cabinet04_Cabinet04_0",
+      "name": "Cube.009",
       "primitives": [
         {
           "attributes": {
             "NORMAL": 1,
-            "TANGENT": 2,
-            "POSITION": 3,
-            "TEXCOORD_0": 4
+            "POSITION": 2,
+            "TEXCOORD_0": 3
           },
           "mode": 4,
           "material": 0,
@@ -253,75 +224,23 @@
   ],
   "nodes": [
     {
-      "name": "Sketchfab_model",
-      "rotation": [
-        -0.7071067811865475,
-        0,
-        0,
-        0.7071067811865476
-      ],
-      "children": [
-        1
-      ]
-    },
-    {
-      "name": "Cabinet04.fbx",
-      "rotation": [
-        0.7071067811865475,
-        0,
-        0,
-        0.7071067811865476
-      ],
-      "scale": [
-        0.009999999776482582,
-        0.009999999776482582,
-        0.009999999776482582
-      ],
-      "children": [
-        2
-      ]
-    },
-    {
-      "name": "RootNode",
-      "children": [
-        3
-      ]
-    },
-    {
-      "name": "Cabinet04",
-      "rotation": [
-        -0.7071068809345475,
-        0,
-        0,
-        0.7071066814385333
-      ],
-      "scale": [
-        100,
-        100.00000000000001,
-        100.00000000000001
-      ],
-      "children": [
-        4
-      ]
-    },
-    {
-      "name": "Cabinet04_Cabinet04_0",
+      "name": "wooden_bookshelf_worn",
       "translation": [
         0,
-        0,
-        1.0667999982833862
+        1.0317209661006927,
+        -1.4901161193847656e-8
       ],
       "scale": [
-        1.0667999982833862,
-        1.0667999982833862,
-        1.0667999982833862
+        1.0317210257053375,
+        1.0317210257053375,
+        1.0317210257053375
       ],
       "mesh": 0
     }
   ],
   "scenes": [
     {
-      "name": "Sketchfab_Scene",
+      "name": "Scene",
       "nodes": [
         0
       ]
@@ -331,7 +250,6 @@
   "extensionsUsed": [
     "EXT_meshopt_compression",
     "EXT_texture_webp",
-    "KHR_materials_specular",
     "KHR_mesh_quantization"
   ],
   "extensionsRequired": [

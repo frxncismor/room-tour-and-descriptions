@@ -39,7 +39,7 @@ const LARGE_TEXTURE = /wood/i;
 // WebP quality for every texture (`gltf-transform webp --quality`).
 const WEBP_QUALITY = 85;
 // Per-model texture resolution for the decor pieces (spec 002). Models not listed here
-// (sofa, poker_table, bookshelf) use the defaults above. `large` names the textures that
+// (sofa) use the defaults above. `large` names the textures that
 // get `largeSize`; every other texture is capped at `size`.
 // Matches nothing: used as `large` to disable the wood rule for a model.
 const NEVER = /(?!)/;
@@ -62,6 +62,9 @@ const TEXTURE_POLICY = {
   wooden_display_shelves_01: { large: NEVER, size: 256 },
   painted_wooden_cabinet_02: { large: NEVER, size: 256 },
   modern_ceiling_lamp_01: { large: NEVER, size: 256 },
+  // Poly Haven CC0 replacements for the Sketchfab bookshelf and poker table (R9-I5).
+  wooden_bookshelf_worn: { large: NEVER, size: 512 },
+  round_wooden_table_01: { large: NEVER, size: 512 },
 };
 
 function gt(...args) {

@@ -251,7 +251,7 @@ describe('ViewerComponent', () => {
         [
           'Bookshelf',
           'Landscape painting',
-          'Poker table',
+          'Round table',
           'Potted succulent',
           'Sectional sofa',
         ].sort((a, b) => a.localeCompare(b, 'en'))
@@ -262,7 +262,7 @@ describe('ViewerComponent', () => {
       expect(names(el)).toEqual([
         'Cuadro de paisaje',
         'Estantería',
-        'Mesa de póker',
+        'Mesa redonda',
         'Sofá rinconera',
         'Suculenta en maceta',
       ]);

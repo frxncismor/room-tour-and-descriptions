@@ -131,17 +131,18 @@ const ES = {
       details: 'Modelo: «Sofa Set», de FREEDomplant, vía Sketchfab.',
     },
     pokerTable: {
-      name: 'Mesa de póker',
+      name: 'Mesa redonda',
       description:
-        'Mesa de cartas con tapete de fieltro, borde acolchado y estructura de madera. Está a la derecha, frente al sofá.',
+        'Mesa redonda de pie central en madera oscura barnizada, con columna torneada y cuatro patas curvas. Está a la derecha, frente al sofá.',
       details:
-        'Modelo: «Poker Board Game Table», de Lília Mara, vía Sketchfab.',
+        'Modelo: «Round Wooden Table 01», de Ulan Cabanilla, Poly Haven (CC0).',
     },
     bookshelf: {
       name: 'Estantería',
       description:
-        'Estantería abierta de cuatro baldas, en madera oscura. Está contra la pared del fondo, centrada entre el cuadro y el reloj.',
-      details: 'Modelo: «BookShelf», de Twpic, vía Sketchfab.',
+        'Estantería abierta de cinco baldas, en madera oscura envejecida. Está contra la pared del fondo, centrada entre el cuadro y el reloj.',
+      details:
+        'Modelo: «Wooden Bookshelf Worn», de Ulan Cabanilla, Poly Haven (CC0).',
     },
     landscapePainting: {
       name: 'Cuadro de paisaje',

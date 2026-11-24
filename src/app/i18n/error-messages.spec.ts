@@ -46,10 +46,10 @@ describe('errorText', () => {
       params: { names: ['pokerTable', 'prints'] },
     };
     expect(errorText(EN, 'en', error)).toBe(
-      'Could not load: poker table and wall prints.'
+      'Could not load: round table and wall prints.'
     );
     expect(errorText(ES, 'es', error)).toBe(
-      'No se pudo cargar lo siguiente: mesa de póker y láminas.'
+      'No se pudo cargar lo siguiente: mesa redonda y láminas.'
     );
   });
 
