@@ -12,6 +12,7 @@ import {
   DEFAULT_SCENE_CONFIG,
   MODEL_CONFIGURATIONS,
 } from '../config/scene.config';
+import { PIECES } from '../pieces/pieces.config';
 import { CameraService } from './camera.service';
 
 describe('CameraService', () => {
@@ -947,5 +948,79 @@ describe('CameraService', () => {
         vi.unstubAllGlobals();
       }
     });
+  });
+  describe('every piece framed from the front (fx9)', () => {
+    const MAX_PITCH_DEG = 35; // tope de focusOn (30°) + holgura del clamp a la sala
+    const viewports = [
+      { name: '16:10', aspect: 1280 / 800 },
+      { name: '390x844', aspect: 390 / 844 },
+    ];
+
+    /** Caja de la pieza (unión de sus proxies), como la que encuadra SceneService. */
+    function pieceBox(config: (typeof PIECES)[number]): Box3 {
+      const union = new Box3();
+      for (const proxy of config.proxies) {
+        const [w, h, d] = proxy.size;
+        const cos = Math.abs(Math.cos(proxy.rotationY));
+        const sin = Math.abs(Math.sin(proxy.rotationY));
+        const half = new Vector3(
+          (w * cos + d * sin) / 2,
+          h / 2,
+          (w * sin + d * cos) / 2
+        );
+        const center = new Vector3(...proxy.position);
+        union.union(
+          new Box3(center.clone().sub(half), center.clone().add(half))
+        );
+      }
+      return union;
+    }
+
+    for (const viewport of viewports) {
+      for (const config of PIECES) {
+        it(`${config.id} at ${viewport.name}: not from above and fully in view`, async () => {
+          service.setAspect(viewport.aspect);
+          service.getCamera().position.set(0, 1.7, 4.5);
+          const box = pieceBox(config);
+          const center = box.getCenter(new Vector3());
+          const mesh = new Mesh(
+            new BoxGeometry(
+              box.max.x - box.min.x,
+              box.max.y - box.min.y,
+              box.max.z - box.min.z
+            ),
+            new MeshBasicMaterial()
+          );
+          mesh.position.copy(center);
+          mesh.updateMatrixWorld(true);
+
+          const done = service.focusOn(mesh, [], new Vector3(...config.facing));
+          service.update(5000);
+          await expect(done).resolves.toBe(true);
+
+          const camera = service.getCamera();
+          const horizontal = Math.hypot(
+            camera.position.x - center.x,
+            camera.position.z - center.z
+          );
+          const pitch =
+            (Math.atan2(camera.position.y - center.y, horizontal) * 180) /
+            Math.PI;
+          expect(pitch).toBeLessThanOrEqual(MAX_PITCH_DEG);
+
+          camera.lookAt(service.getTarget());
+          camera.updateMatrixWorld(true);
+          camera.updateProjectionMatrix();
+          for (const x of [box.min.x, box.max.x])
+            for (const y of [box.min.y, box.max.y])
+              for (const z of [box.min.z, box.max.z]) {
+                const ndc = new Vector3(x, y, z).project(camera);
+                expect(Math.abs(ndc.x)).toBeLessThanOrEqual(1);
+                expect(Math.abs(ndc.y)).toBeLessThanOrEqual(1);
+                expect(ndc.z).toBeLessThan(1);
+              }
+        });
+      }
+    }
   });
 });

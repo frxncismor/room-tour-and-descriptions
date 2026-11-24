@@ -83,6 +83,8 @@ interface PieceInput {
   size: Vec3;
   proxies?: readonly Partial<PieceProxy>[];
   cluster?: string;
+  /** Frente de encuadre si no es el de `rotationY` (piezas simétricas en una esquina). */
+  facing?: Vec3;
 }
 
 /**
@@ -117,7 +119,7 @@ const buildPieces = (inputs: readonly PieceInput[]): PieceConfig[] => {
       position: input.position,
       rotationY: input.rotationY,
       size: input.size,
-      facing: facingOf(input.rotationY),
+      facing: input.facing ?? facingOf(input.rotationY),
       proxies,
       actions: actionsOf[input.id] ?? [],
       ...(input.cluster ? { cluster: input.cluster } : {}),
@@ -363,6 +365,9 @@ export const PIECES: readonly PieceConfig[] = buildPieces([
     pick: 'proxy',
     position: [-3.8, 0.88, 7.3],
     rotationY: 0,
+    // La planta es simétrica y está junto a la pared del fondo (+z): se
+    // encuadra desde la sala, de frente, no desde detrás.
+    facing: [0, 0, -1],
     size: [0.9, 1.75, 0.9],
   },
   {
@@ -538,6 +543,8 @@ export const PIECES: readonly PieceConfig[] = buildPieces([
     pick: 'object',
     position: [0.15, 3.52, 5.9],
     rotationY: 0,
+    // Simétrico y cerca de la pared del fondo: se encuadra desde la sala.
+    facing: [0, 0, -1],
     size: [0.43, 0.95, 0.43],
   },
 ]);

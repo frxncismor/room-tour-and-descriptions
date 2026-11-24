@@ -136,13 +136,21 @@ describe('pieces.config: inventory', () => {
   });
 
   it('faces are unit horizontal vectors that follow the rotation', () => {
-    for (const piece of PIECES) {
+    // El ficus y el colgante (simétricos, junto a la pared del fondo) fijan su frente a mano: hacia la sala.
+    for (const piece of PIECES.filter(
+      p => p.id !== 'plantFicus' && p.id !== 'pendant'
+    )) {
       const [x, y, z] = piece.facing;
       expect(y).toBe(0);
       expect(Math.hypot(x, z)).toBeCloseTo(1, 9);
       expect(x).toBeCloseTo(Math.sin(piece.rotationY), 9);
       expect(z).toBeCloseTo(Math.cos(piece.rotationY), 9);
     }
+  });
+
+  it('frames the ficus from inside the room, facing away from the back wall', () => {
+    expect(PIECES_BY_ID.plantFicus.facing).toEqual([0, 0, -1]);
+    expect(PIECES_BY_ID.pendant.facing).toEqual([0, 0, -1]);
   });
 
   it('wall pieces face away from the wall they hang on', () => {

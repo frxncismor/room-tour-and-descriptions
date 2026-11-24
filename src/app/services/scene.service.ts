@@ -8,8 +8,10 @@ import {
 import {
   ACESFilmicToneMapping,
   Box3,
+  Frustum,
   BoxGeometry,
   Group,
+  Matrix4,
   Material,
   Mesh,
   MeshStandardMaterial,
@@ -435,6 +437,22 @@ export class SceneService {
       this.onFrameError(error);
     }
   };
+
+  private readonly viewFrustum = new Frustum();
+  private readonly viewMatrix = new Matrix4();
+
+  /** ¿Entra la pantalla de la TV en el frustum de la cámara? (sin ella, sí: no se pausa). */
+  private isTvInView(screen: Object3D | undefined): boolean {
+    if (!screen) return true;
+    const camera = this.cameraService.getCamera();
+    camera.updateMatrixWorld();
+    this.viewMatrix.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse
+    );
+    this.viewFrustum.setFromProjectionMatrix(this.viewMatrix);
+    return this.viewFrustum.intersectsBox(new Box3().setFromObject(screen));
+  }
 
   /** Pide un frame (y, con `shadows`, recalcular las sombras estáticas). */
   private requestRender(shadows = false): void {
@@ -1004,6 +1022,7 @@ export class SceneService {
       // El `AudioContext` se crea dentro del gesto (`start()`); el chunk ya está cargado.
       audio: new mod.TurntableAudio(),
       onWake: () => this.requestRender(),
+      tvVisible: () => this.isTvInView(build.named('tv:screen')),
       onAudioError: error => console.warn('Audio unavailable:', error.code),
     });
     runtime.attach(build.group);
