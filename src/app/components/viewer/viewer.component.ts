@@ -74,12 +74,7 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
     return this.state.hovered() ? 'pointer' : 'grab';
   });
 
-  protected readonly panelInfo = computed(() => {
-    const selected = this.state.selected();
-    return selected && selected.kind !== 'piece' && selected.kind !== 'surface'
-      ? selected
-      : null;
-  });
+  protected readonly panelInfo = computed(() => this.state.selected());
 
   protected readonly blockingError = computed(() => {
     const error = this.state.error();
