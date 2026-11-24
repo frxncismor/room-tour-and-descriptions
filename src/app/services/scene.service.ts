@@ -427,8 +427,10 @@ export class SceneService {
 
       this.cameraService.update(delta);
       this.objectInteractionService.update(time);
-      if (this.runtime?.animating) this.runtime.update(delta / 1000);
-      if (this.shouldRender()) {
+      // R9-M2: `update` apaga `animating` en el último paso; ese paso también se dibuja.
+      const wasAnimating = this.runtime?.animating === true;
+      if (wasAnimating) this.runtime?.update(delta / 1000);
+      if (this.shouldRender(wasAnimating)) {
         this.renderer?.render(this.scene, this.cameraService.getCamera());
         this.needsRender = false;
       }
@@ -461,7 +463,7 @@ export class SceneService {
   }
 
   /** ¿Hay algo que dibujar? En reposo no se renderiza (R8-I1). */
-  private shouldRender(): boolean {
+  private shouldRender(wasAnimating = false): boolean {
     if (!RENDER_ON_DEMAND) return true;
     const camera = this.cameraService.getCamera();
     const moved =
@@ -479,9 +481,10 @@ export class SceneService {
       moved ||
       stateChanged ||
       this.cameraService.isAnimating() ||
+      wasAnimating ||
       this.runtime?.animating === true ||
-      // El contorno de la selección pulsa.
-      this.objectInteractionService.getSelected() !== null
+      // El contorno de la selección pulsa (~12 s; luego queda fijo).
+      this.objectInteractionService.isPulsing()
     );
   }
 

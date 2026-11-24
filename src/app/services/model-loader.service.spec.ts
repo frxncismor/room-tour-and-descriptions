@@ -18,6 +18,7 @@ import {
   ModelLoaderService,
   TEXTURE_ANISOTROPY,
   applyMaterialOverride,
+  cacheUnlessRejected,
   disableRaycast,
   disposeObject3D,
   freezeMatrices,
@@ -316,5 +317,26 @@ describe('freezeMatrices', () => {
     } as never);
     const model = await TestBed.inject(ModelLoaderService).loadModel(config());
     expect(model.matrixAutoUpdate).toBe(false);
+  });
+});
+
+describe('cacheUnlessRejected (R9-M1)', () => {
+  it('caches a resolved load and calls the loader once', async () => {
+    const load = vi.fn().mockResolvedValue('decoder');
+    const get = cacheUnlessRejected(load);
+    expect(await get()).toBe('decoder');
+    expect(await get()).toBe('decoder');
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets a rejected load so a retry can succeed', async () => {
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('chunk failed'))
+      .mockResolvedValueOnce('decoder');
+    const get = cacheUnlessRejected(load);
+    await expect(get()).rejects.toThrow('chunk failed');
+    expect(await get()).toBe('decoder');
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });
