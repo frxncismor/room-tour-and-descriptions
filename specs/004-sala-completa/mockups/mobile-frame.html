@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Mobile frame (390x844)</title>
+<!-- Envuelve ui.html en un viewport real de 390×844. Uso: ?s=list|tv&lang=en|es -->
+<style>
+  html,
+  body {
+    margin: 0;
+    background: #222;
+  }
+  iframe {
+    display: block;
+    width: 390px;
+    height: 844px;
+    border: 0;
+  }
+</style>
+<iframe id="f" title="mobile mockup"></iframe>
+<script>
+  const p = new URLSearchParams(location.search);
+  document.getElementById('f').src =
+    'ui.html?lang=' + (p.get('lang') || 'en') + '&s=' + (p.get('s') || 'list');
+</script>
