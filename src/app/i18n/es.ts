@@ -32,6 +32,7 @@ const ES = {
       'locale-load-failed': 'Could not load Spanish. Staying in English.',
       'pieces-load-failed':
         'No se pudieron cargar los detalles de las piezas. Inténtalo de nuevo.',
+      'audio-unavailable': 'El sonido no está disponible en este navegador.',
     },
   },
   panel: {
@@ -67,9 +68,6 @@ const ES = {
     open: 'Controles',
     openLabel: 'Controles, mostrar el panel',
     gotIt: 'Cerrar',
-    wallClick:
-      'Haz clic en una pared vacía para encuadrarla; los detalles siguen abiertos.',
-    zoomCursor: 'El zoom va hacia el puntero, hasta leer una lámina de cerca.',
     controls: [
       {
         label: 'Orbitar',
@@ -85,7 +83,7 @@ const ES = {
       },
       {
         label: 'Zoom',
-        text: 'Gira la rueda del ratón',
+        text: 'Gira la rueda; el zoom va hacia el puntero',
         touchText: 'Pellizca con dos dedos',
         icon: 'zoom',
       },
@@ -97,8 +95,9 @@ const ES = {
       },
       {
         label: 'Inspeccionar',
-        text: 'Haz clic en una pieza para leer sobre ella',
-        touchText: 'Toca una pieza para leer sobre ella',
+        text: 'Haz clic en una pieza para leer sobre ella o activarla; en una pared, para encuadrarla',
+        touchText:
+          'Toca una pieza para leer sobre ella o activarla; toca una pared para encuadrarla',
         icon: 'inspect',
       },
       {

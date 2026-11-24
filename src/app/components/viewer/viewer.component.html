@@ -37,14 +37,21 @@
   ></canvas>
 
   @if (blockingError(); as error) {
-    <app-error-overlay [error]="error" />
+    <!-- Los avisos y la ficha van en chunks propios: el inicial no los paga. -->
+    @defer (on idle) {
+      <app-error-overlay [error]="error" />
+    } @placeholder {}
   } @else {
     <app-loading-screen />
 
     @if (bannerError(); as error) {
-      <app-error-banner [error]="error" (retry)="retry()" />
+      @defer (on idle) {
+        <app-error-banner [error]="error" (retry)="retry()" />
+      } @placeholder {}
     }
 
-    <app-description-panel [info]="panelInfo()" (closed)="closePanel()" />
+    @defer (on idle) {
+      <app-description-panel [info]="panelInfo()" (closed)="closePanel()" />
+    } @placeholder {}
   }
 </div>

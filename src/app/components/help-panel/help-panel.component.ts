@@ -94,7 +94,7 @@ function writeDismissed(value: boolean): void {
       bottom: var(--space-4);
       z-index: 20;
       width: min(92vw, 380px);
-      max-height: 60dvh;
+      max-height: 70dvh;
       padding: var(--space-5);
       overflow: auto;
       background: var(--paper);
@@ -166,15 +166,19 @@ function writeDismissed(value: boolean): void {
         bottom: 0;
         left: 0;
         width: auto;
-        max-height: 40dvh;
-        padding: var(--space-4) var(--space-4) 0;
+        max-height: 56dvh;
+        padding: var(--space-3) var(--space-4) 0;
         border-width: 1px 0 0;
         border-radius: var(--radius-2) var(--radius-2) 0 0;
       }
       dl {
         grid-template-columns: minmax(4.5rem, max-content) 1fr;
         gap: var(--space-2) var(--space-3);
-        margin: var(--space-3) 0 var(--space-2);
+        margin: var(--space-2) 0 var(--space-1);
+        font-size: var(--fs-small);
+      }
+      h2 {
+        margin: 0;
       }
       .footer {
         position: sticky;
@@ -244,9 +248,12 @@ export class HelpPanelComponent {
   protected dismiss(): void {
     this.open.set(false);
     writeDismissed(true);
-    afterNextRender(() => this.reopenButton()?.nativeElement.focus(), {
-      injector: this.injector,
-    });
+    afterNextRender(
+      () => this.reopenButton()?.nativeElement.focus({ preventScroll: true }),
+      {
+        injector: this.injector,
+      }
+    );
   }
 
   protected reopen(): void {

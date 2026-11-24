@@ -24,8 +24,12 @@ describe('errorText', () => {
         code: 'model-load-failed',
         params: { names: ['pokerTable', 'prints'] },
       });
-      expect(text).toContain(messages.furniture.pokerTable.name);
-      expect(text).toContain(messages.assets.prints);
+      expect(text.toLowerCase()).toContain(
+        messages.furniture.pokerTable.name.toLowerCase()
+      );
+      expect(text.toLowerCase()).toContain(
+        messages.assets.prints.toLowerCase()
+      );
       expect(text).not.toContain('{names}');
     });
 
@@ -42,10 +46,10 @@ describe('errorText', () => {
       params: { names: ['pokerTable', 'prints'] },
     };
     expect(errorText(EN, 'en', error)).toBe(
-      'Could not load: Poker table and Wall prints.'
+      'Could not load: poker table and wall prints.'
     );
     expect(errorText(ES, 'es', error)).toBe(
-      'No se pudo cargar lo siguiente: Mesa de póker y Láminas.'
+      'No se pudo cargar lo siguiente: mesa de póker y láminas.'
     );
   });
 

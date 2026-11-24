@@ -177,3 +177,42 @@ describe('HelpPanelComponent live language change', () => {
     localStorage.clear();
   });
 });
+
+describe('HelpPanelComponent focus and wording', () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    TestBed.configureTestingModule({ providers: [provideLocale('en')] });
+    await localeReady();
+  });
+  afterEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('focuses the reopen button without scrolling the page', async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    const fixture = TestBed.createComponent(HelpPanelComponent);
+    document.body.appendChild(fixture.nativeElement);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.primary') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    fixture.nativeElement.remove();
+  });
+
+  it.each([
+    ['en', EN],
+    ['es', ES],
+  ] as const)(
+    'explains click-to-activate, wall framing and zoom to the pointer (%s)',
+    (_locale, dict) => {
+      const [, , zoom, , inspect] = dict.help.controls;
+      for (const text of [inspect.text, inspect.touchText]) {
+        expect(text).toMatch(/pared|wall/i);
+        expect(text).toMatch(/activarla|switch it on/i);
+      }
+      expect(zoom.text).toMatch(/puntero|pointer/i);
+    }
+  );
+});

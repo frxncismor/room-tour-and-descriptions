@@ -54,7 +54,8 @@ export type ViewerErrorCode =
   | 'render-failed'
   | 'model-load-failed'
   | 'locale-load-failed'
-  | 'pieces-load-failed';
+  | 'pieces-load-failed'
+  | 'audio-unavailable';
 
 /** Los 6 grupos de la lista de piezas (spec D). */
 export type GroupId =
@@ -138,10 +139,6 @@ export interface Messages {
     open: string;
     openLabel: string;
     gotIt: string;
-    /** Qué hace pulsar una pared (la ficha no se cierra). */
-    wallClick: string;
-    /** El zoom va hacia el puntero y llega hasta leer una lámina. */
-    zoomCursor: string;
     /** Tupla: también cuenta el número de controles. */
     controls: readonly [
       ControlText,

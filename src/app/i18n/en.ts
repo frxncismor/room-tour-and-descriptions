@@ -30,6 +30,7 @@ export const EN = {
       'model-load-failed': 'Could not load: {names}.',
       'locale-load-failed': 'Could not load Spanish. Staying in English.',
       'pieces-load-failed': 'Could not load the piece details. Try again.',
+      'audio-unavailable': 'Sound is not available in this browser.',
     },
   },
   panel: {
@@ -65,8 +66,6 @@ export const EN = {
     open: 'Controls',
     openLabel: 'Controls, show the panel',
     gotIt: 'Close',
-    wallClick: 'Click an empty wall to frame it; the details stay open.',
-    zoomCursor: 'Zoom goes toward the pointer, close enough to read a print.',
     controls: [
       {
         label: 'Orbit',
@@ -82,7 +81,7 @@ export const EN = {
       },
       {
         label: 'Zoom',
-        text: 'Scroll the wheel',
+        text: 'Scroll the wheel; it zooms toward the pointer',
         touchText: 'Pinch with two fingers',
         icon: 'zoom',
       },
@@ -94,8 +93,9 @@ export const EN = {
       },
       {
         label: 'Inspect',
-        text: 'Click a piece to read about it',
-        touchText: 'Tap a piece to read about it',
+        text: 'Click a piece to read about it or switch it on; click a wall to frame it',
+        touchText:
+          'Tap a piece to read about it or switch it on; tap a wall to frame it',
         icon: 'inspect',
       },
       {

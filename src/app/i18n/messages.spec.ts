@@ -99,8 +99,6 @@ describe.each(LOCALES)('messages: spec 004 strings (%s)', locale => {
       dict.list.viewWall,
       dict.list.stateOn,
       dict.panel.actions,
-      dict.help.wallClick,
-      dict.help.zoomCursor,
     ]) {
       expect(s).not.toMatch(/[{}]/);
       expect(s.length).toBeGreaterThanOrEqual(2);
