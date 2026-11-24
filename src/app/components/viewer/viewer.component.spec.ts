@@ -55,8 +55,9 @@ describe('ViewerComponent', () => {
 
   afterEach(() => localStorage.removeItem('room-tour.help-dismissed'));
 
-  /** La lista va en un `@defer (on idle)`: se fuerza a mostrarse. */
+  /** Lista, ficha y avisos van en `@defer (on idle)`: se fuerza a mostrarlos. */
   async function showList(fixture: ComponentFixture<ViewerComponent>) {
+    await fixture.whenStable();
     for (const block of await fixture.getDeferBlocks()) {
       await block.render(DeferBlockState.Complete);
     }
@@ -135,7 +136,7 @@ describe('ViewerComponent', () => {
       id: 'sofa',
     });
     await localeReady();
-    await fixture.whenStable();
+    await showList(fixture);
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[role="dialog"]')).not.toBeNull();
 
@@ -148,7 +149,7 @@ describe('ViewerComponent', () => {
     const retry = vi.fn();
     state.error.set({ code: 'model-load-failed', retry });
     const fixture = TestBed.createComponent(ViewerComponent);
-    await fixture.whenStable();
+    await showList(fixture);
     const button = (fixture.nativeElement as HTMLElement).querySelector(
       'app-error-banner button'
     ) as HTMLButtonElement;
@@ -161,7 +162,7 @@ describe('ViewerComponent', () => {
     state.loadStatus.set('error');
     state.error.set({ code: 'webgl-unavailable' });
     const fixture = TestBed.createComponent(ViewerComponent);
-    await fixture.whenStable();
+    await showList(fixture);
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('app-error-overlay')
     ).not.toBeNull();
@@ -298,7 +299,7 @@ describe('ViewerComponent', () => {
         id: 'sofa',
       });
       const fixture = TestBed.createComponent(ViewerComponent);
-      await fixture.whenStable();
+      await showList(fixture);
       const el = fixture.nativeElement as HTMLElement;
       const close = el.querySelector('button.close') as HTMLButtonElement;
       close.focus();

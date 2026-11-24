@@ -31,15 +31,21 @@ const EMPTY_CODES: Record<ViewerErrorCode, true> = {
   'model-load-failed': true,
   'locale-load-failed': true,
   'pieces-load-failed': true,
+  'audio-unavailable': true,
 };
 
+/** Primera letra en minúscula: los nombres van dentro de una frase. */
+function inSentence(name: string, locale: Locale): string {
+  return name.charAt(0).toLocaleLowerCase(locale) + name.slice(1);
+}
+
 /** Un id de `params.names` → su nombre (activo o mueble); si no es un id, tal cual. */
-function nameOf(messages: Messages, id: string): string {
+function nameOf(messages: Messages, locale: Locale, id: string): string {
   if (Object.hasOwn(messages.assets, id)) {
-    return messages.assets[id as AssetLabelId];
+    return inSentence(messages.assets[id as AssetLabelId], locale);
   }
   if ((FURNITURE_IDS as readonly string[]).includes(id)) {
-    return messages.furniture[id as FurnitureId].name;
+    return inSentence(messages.furniture[id as FurnitureId].name, locale);
   }
   return id;
 }
@@ -62,7 +68,7 @@ export function errorText(
     if (names?.length) {
       return fill(template, {
         names: list(
-          names.map(id => nameOf(messages, id)),
+          names.map(id => nameOf(messages, locale, id)),
           locale
         ),
       });

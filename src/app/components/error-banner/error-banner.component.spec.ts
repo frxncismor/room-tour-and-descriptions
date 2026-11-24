@@ -59,8 +59,8 @@ describe.each(LOCALES)('ErrorBannerComponent (%s)', locale => {
     } as ViewerError);
     await fixture.whenStable();
     const text = messageOf(fixture.nativeElement);
-    expect(text).toContain(messages.assets.rug);
-    expect(text).toContain(messages.assets.clock);
+    expect(text).toContain(messages.assets.rug.toLowerCase());
+    expect(text).toContain(messages.assets.clock.toLowerCase());
   });
 
   it('falls back to the generic text for an unknown code', async () => {
