@@ -349,6 +349,105 @@ describe('LocaleService: piece dictionaries (T-422)', () => {
   });
 });
 
+describe('LocaleService: carrera y límite de arranque (R8-I2, R8-M2)', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    vi.useRealTimers();
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('ES con el chunk en vuelo y luego EN termina en EN sin guardar ES', async () => {
+    let resolveEs!: (messages: Messages) => void;
+    const service = setup({
+      loader: () => new Promise<Messages>(resolve => (resolveEs = resolve)),
+    });
+    await service.init();
+    const first = service.setLocale('es');
+    const second = service.setLocale('en');
+    await second;
+    resolveEs(ES);
+    await first;
+    expect(service.locale()).toBe('en');
+    expect(service.messages()).toBe(EN);
+    expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
+    expect(service.announcement()).toBe(EN.language.announce);
+    expect(document.documentElement.lang).toBe('en');
+  });
+
+  it('un fallo del chunk ES ya obsoleto no muestra el aviso', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let rejectEs!: (reason: Error) => void;
+    const service = setup({
+      loader: () => new Promise<Messages>((_, reject) => (rejectEs = reject)),
+    });
+    await service.init();
+    const first = service.setLocale('es');
+    await service.setLocale('en');
+    rejectEs(new Error('offline'));
+    await first;
+    expect(service.locale()).toBe('en');
+    expect(TestBed.inject(ViewerStateService).error()).toBeNull();
+  });
+
+  it('con piezas: ES con sus textos en vuelo y luego EN termina en EN', async () => {
+    let resolveEsPieces!: (pieces: PieceMessages) => void;
+    const service = setup({
+      pieceLoader: locale =>
+        locale === 'es'
+          ? new Promise<PieceMessages>(resolve => (resolveEsPieces = resolve))
+          : Promise.resolve(PIECES_EN),
+    });
+    await service.init();
+    await service.enablePieces();
+    const first = service.setLocale('es');
+    await vi.waitFor(() => expect(resolveEsPieces).toBeDefined());
+    await service.setLocale('en');
+    resolveEsPieces(PIECES_ES);
+    await first;
+    expect(service.locale()).toBe('en');
+    expect(service.messages()).toBe(EN);
+    expect(service.pieceMessages()).toBe(PIECES_EN);
+    expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
+  });
+
+  it('si el chunk ES no llega en 4 s, el arranque sigue en EN con el aviso', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let resolveEs!: (messages: Messages) => void;
+    const service = setup({
+      languages: ['es-ES'],
+      loader: () => new Promise<Messages>(resolve => (resolveEs = resolve)),
+    });
+    let done = false;
+    void service.init().then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(3900);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(done).toBe(true);
+    expect(service.locale()).toBe('en');
+    const state = TestBed.inject(ViewerStateService);
+    expect(state.error()?.code).toBe('locale-load-failed');
+    // Si el chunk llega tarde no cambia el idioma por sorpresa.
+    resolveEs(ES);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(service.locale()).toBe('en');
+    // El reintento del aviso sí lo carga.
+    state.error()?.retry?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(service.locale()).toBe('es');
+  });
+
+  it('un arranque normal no deja el temporizador pendiente', async () => {
+    vi.useFakeTimers();
+    const service = setup({ languages: ['es-ES'] });
+    const before = vi.getTimerCount();
+    await service.init();
+    expect(service.locale()).toBe('es');
+    expect(vi.getTimerCount()).toBe(before);
+  });
+});
+
 describe('provideLocale (test helper)', () => {
   it.each(['en', 'es'] as const)(
     'boots in %s without storage',

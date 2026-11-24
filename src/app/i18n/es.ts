@@ -23,12 +23,11 @@ const ES = {
       'Este visor necesita WebGL. Usa una versión reciente de Chrome, Edge, Firefox o Safari, con la aceleración por hardware activada.',
     retry: 'Reintentar',
     messages: {
-      'context-lost':
-        'Se perdió el contexto 3D. Se recuperará automáticamente.',
+      'context-lost': 'Se perdió el contexto gráfico 3D. Se recuperará solo.',
       'webgl-unavailable':
         'Tu navegador o dispositivo no puede ejecutar el visor 3D (WebGL).',
       'render-failed': 'La vista 3D dejó de funcionar. Inténtalo de nuevo.',
-      'model-load-failed': 'No se pudo cargar: {names}.',
+      'model-load-failed': 'No se pudo cargar lo siguiente: {names}.',
       // Solo se muestra cuando falta el ES: se queda en inglés a propósito.
       'locale-load-failed': 'Could not load Spanish. Staying in English.',
       'pieces-load-failed':
@@ -80,7 +79,7 @@ const ES = {
       },
       {
         label: 'Desplazar',
-        text: 'Arrastra con el botón derecho; también valen las flechas del teclado',
+        text: 'Arrastra con el botón derecho o usa las flechas del teclado',
         touchText: 'Arrastra con dos dedos',
         icon: 'pan',
       },
@@ -92,8 +91,8 @@ const ES = {
       },
       {
         label: 'Moverse',
-        text: 'Haz clic en el suelo para ir allí',
-        touchText: 'Toca el suelo para ir allí',
+        text: 'Haz clic en el suelo para ir a ese punto',
+        touchText: 'Toca el suelo para ir a ese punto',
         icon: 'walk',
       },
       {
@@ -130,34 +129,34 @@ const ES = {
       name: 'Sofá rinconera',
       description:
         'Sofá rinconera con cojines sueltos en el respaldo y un puf independiente, en tono terracota. Define la zona de estar a la izquierda.',
-      details: 'Modelo: "Sofa Set", de FREEDomplant, vía Sketchfab.',
+      details: 'Modelo: «Sofa Set», de FREEDomplant, vía Sketchfab.',
     },
     pokerTable: {
       name: 'Mesa de póker',
       description:
-        'Mesa de cartas con superficie de juego de fieltro, borde acolchado y estructura de madera. Está a la derecha, frente al sofá.',
+        'Mesa de cartas con tapete de fieltro, borde acolchado y estructura de madera. Está a la derecha, frente al sofá.',
       details:
-        'Modelo: "Poker Board Game Table", de Lília Mara, vía Sketchfab.',
+        'Modelo: «Poker Board Game Table», de Lília Mara, vía Sketchfab.',
     },
     bookshelf: {
       name: 'Estantería',
       description:
         'Estantería abierta de cuatro baldas, en madera oscura. Está contra la pared del fondo, centrada entre el cuadro y el reloj.',
-      details: 'Modelo: "BookShelf", de Twpic, vía Sketchfab.',
+      details: 'Modelo: «BookShelf», de Twpic, vía Sketchfab.',
     },
     landscapePainting: {
       name: 'Cuadro de paisaje',
       description:
         'Paisaje al óleo con un molino y un río, en marco dorado con moldura de perlas. Cuelga en la pared del fondo, iluminado por un foco.',
       details:
-        'Modelo: "Fancy Picture Frame 01", de Rob Tuytel y Rico Cilliers, Poly Haven (CC0).',
+        'Modelo: «Fancy Picture Frame 01», de Rob Tuytel y Rico Cilliers, Poly Haven (CC0).',
     },
     succulent: {
       name: 'Suculenta en maceta',
       description:
         'Haworthia cebra en una maceta de cerámica desgastada, junto a la estantería.',
       details:
-        'Modelo: "Potted Plant 04", de James Ray Cock, Poly Haven (CC0).',
+        'Modelo: «Potted Plant 04», de James Ray Cock, Poly Haven (CC0).',
     },
   },
 } satisfies Messages;
