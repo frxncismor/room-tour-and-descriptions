@@ -1228,6 +1228,14 @@ describe('SceneService', () => {
       expect(result.changed).toBe(true);
       expect(state.pieceState().monitor.power).toBe(true);
     });
+
+    it('workOnScreen is null before the pieces load and names the plate with the TV on', async () => {
+      expect(service.workOnScreen()).toBeNull();
+      service.initialize(canvas);
+      await service.loadAll();
+      service.runPieceAction('tv', 'power');
+      expect(service.workOnScreen()).toEqual(expect.any(String));
+    });
   });
 
   describe('static shadows and frozen matrices (R8-I1, T-490)', () => {

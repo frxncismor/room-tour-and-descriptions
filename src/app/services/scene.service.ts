@@ -1193,6 +1193,11 @@ export class SceneService {
     if (current) this.focusSurfaceTramo(current.tramo + delta);
   }
 
+  /** Obra que muestra la TV ahora (línea «En pantalla» de la ficha); `null` si no hay. */
+  workOnScreen(): string | null {
+    return this.runtime?.workOnScreen ?? null;
+  }
+
   /** Alias de `runPieceAction` para la ficha. */
   runAction(id: ActionPieceId, action: ActionId): ActionResult {
     return this.runPieceAction(id, action);
