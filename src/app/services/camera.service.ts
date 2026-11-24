@@ -32,6 +32,12 @@ const FOCUS_DURATION_MS = 900;
 const FOCUS_YAW_OFFSETS = [0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9, Math.PI];
 /** Altura extra (m) sobre la de ojos para ver por encima de lo que tapa. */
 const FOCUS_RAISED_EXTRA = 1;
+/** Puntos de oclusión que cuesta cada radián fuera del frente al elegir la pose. */
+const FOCUS_OFF_AXIS_PENALTY = 4;
+/** Múltiplos de la distancia de ajuste probados al enfocar (el 1.º es el de siempre). */
+const FOCUS_BACKOFF_SCALES = [1, 1.5, 2.2];
+/** Puntos de oclusión que cuesta cada escalón de distancia extra. */
+const FOCUS_BACKOFF_PENALTY = 0.5;
 /** Holgura (m) con la que se encoge la caja del mueble al muestrear su oclusión. */
 const OCCLUSION_INSET = 0.05;
 /** Margen (fracción de NDC) alrededor del mueble enfocado. */
@@ -636,28 +642,43 @@ export class CameraService {
             desiredY,
             corners
           );
-        const distance = this.fitDistance(
+        const fitted = this.fitDistance(
           d => at(d).overflow,
           range.baseDistance,
           range.maxDistance
         );
-        const pose = at(distance);
-        const raw = pose.position.clone();
-        this.clampPoint(pose.position);
-        // El candidato por defecto conserva su clamp de siempre; el resto
-        // se descarta si la sala los obliga a moverse.
-        if (!isDefault && pose.position.distanceToSquared(raw) > 1e-4) continue;
+        // Con un obstáculo delante (la silla del monitor) se prueba también
+        // más lejos: de frente y algo más atrás gana a de canto (R9-I2).
+        for (let step = 0; step < FOCUS_BACKOFF_SCALES.length; step++) {
+          const distance = Math.min(
+            range.maxDistance,
+            fitted * FOCUS_BACKOFF_SCALES[step]
+          );
+          if (step > 0 && distance <= fitted + 1e-6) break;
+          const pose = at(distance);
+          const raw = pose.position.clone();
+          this.clampPoint(pose.position);
+          // El candidato por defecto conserva su clamp de siempre; el resto
+          // se descarta si la sala los obliga a moverse.
+          if (
+            !(isDefault && step === 0) &&
+            pose.position.distanceToSquared(raw) > 1e-4
+          )
+            continue;
 
-        const score = this.occlusionScore(
-          pose.position,
-          samples,
-          obstacleBoxes
-        );
-        if (score < bestScore) {
-          best = pose;
-          bestScore = score;
+          // La oclusión manda, pero un ángulo fuera de eje y la lejanía
+          // también cuestan (R9-I2): mejor el monitor de frente con la silla
+          // delante que de canto.
+          const score =
+            this.occlusionScore(pose.position, samples, obstacleBoxes) +
+            Math.abs(yaw) * FOCUS_OFF_AXIS_PENALTY +
+            step * FOCUS_BACKOFF_PENALTY;
+          if (score < bestScore) {
+            best = pose;
+            bestScore = score;
+          }
+          if (score === 0) return pose;
         }
-        if (score === 0) return pose;
       }
     }
     return (

@@ -140,12 +140,32 @@ export function freezeMatrices(
   });
 }
 
+/**
+ * Carga perezosa y cacheada de una promesa. Si falla, se olvida (R9-M1): una
+ * promesa rechazada cacheada impediría que «Reintentar» funcione nunca.
+ */
+export function cacheUnlessRejected<T>(
+  load: () => Promise<T>
+): () => Promise<T> {
+  let cached: Promise<T> | null = null;
+  return () => {
+    if (!cached) {
+      const attempt: Promise<T> = load().catch((error: unknown) => {
+        if (cached === attempt) cached = null;
+        throw error;
+      });
+      cached = attempt;
+    }
+    return cached;
+  };
+}
+
 /** Decodificador meshopt: chunk perezoso (R8-M5), cargado una vez. */
-let meshoptDecoder: Promise<unknown> | null = null;
-const loadMeshoptDecoder = (): Promise<unknown> =>
-  (meshoptDecoder ??= import(
-    'three/addons/libs/meshopt_decoder.module.js'
-  ).then(module => module.MeshoptDecoder));
+const loadMeshoptDecoder = cacheUnlessRejected<unknown>(() =>
+  import('three/addons/libs/meshopt_decoder.module.js').then(
+    module => module.MeshoptDecoder
+  )
+);
 
 /** Anisotropía pedida a las texturas (la GPU la limita a su máximo). */
 export const TEXTURE_ANISOTROPY = 8;

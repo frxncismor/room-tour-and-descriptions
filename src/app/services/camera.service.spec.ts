@@ -950,6 +950,7 @@ describe('CameraService', () => {
     });
   });
   describe('every piece framed from the front (fx9)', () => {
+    const MAX_OFF_AXIS_DEG = 45; // tope de ángulo respecto al frente (R9-I2)
     const MAX_PITCH_DEG = 35; // tope de focusOn (30°) + holgura del clamp a la sala
     const viewports = [
       { name: '16:10', aspect: 1280 / 800 },
@@ -994,11 +995,44 @@ describe('CameraService', () => {
           mesh.position.copy(center);
           mesh.updateMatrixWorld(true);
 
-          const done = service.focusOn(mesh, [], new Vector3(...config.facing));
+          // Las demás piezas tapan, como en la escena (la silla delante del monitor).
+          const obstacles = PIECES.filter(
+            other => other.id !== config.id
+          ).flatMap(other =>
+            other.proxies.map(proxy => {
+              const b = pieceBox({ ...other, proxies: [proxy] });
+              const m = new Mesh(
+                new BoxGeometry(
+                  b.max.x - b.min.x,
+                  b.max.y - b.min.y,
+                  b.max.z - b.min.z
+                ),
+                new MeshBasicMaterial()
+              );
+              b.getCenter(m.position);
+              m.updateMatrixWorld(true);
+              return m;
+            })
+          );
+          const done = service.focusOn(
+            mesh,
+            obstacles,
+            new Vector3(...config.facing)
+          );
           service.update(5000);
           await expect(done).resolves.toBe(true);
 
           const camera = service.getCamera();
+          // R9-I2: la cámara queda cerca del eje del frente (no de canto ni por detrás).
+          const off = new Vector3(
+            camera.position.x - center.x,
+            0,
+            camera.position.z - center.z
+          ).normalize();
+          const front = new Vector3(...config.facing).setY(0).normalize();
+          const angle =
+            (Math.acos(Math.min(1, off.dot(front))) * 180) / Math.PI;
+          expect(angle).toBeLessThanOrEqual(MAX_OFF_AXIS_DEG);
           const horizontal = Math.hypot(
             camera.position.x - center.x,
             camera.position.z - center.z

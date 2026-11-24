@@ -1390,6 +1390,24 @@ describe('SceneService', () => {
       expect(renderer.render).toHaveBeenCalledTimes(2);
     });
 
+    it('draws the last step of a fade that ends in this frame (R9-M2)', () => {
+      service.initialize(canvas);
+      idle();
+      const fake = {
+        animating: true,
+        dispose: () => undefined,
+        update() {
+          this.animating = false; // el último paso termina la animación
+        },
+      };
+      (service as unknown as { runtime: unknown }).runtime = fake;
+      runFrame(100);
+      expect(fake.animating).toBe(false);
+      expect(renderer.render).toHaveBeenCalledTimes(1);
+      runFrame(116);
+      expect(renderer.render).toHaveBeenCalledTimes(1);
+    });
+
     it('renders on hover changes, resize and piece state changes', async () => {
       service.initialize(canvas);
       await service.loadAll();
@@ -1441,7 +1459,7 @@ describe('SceneService', () => {
       });
     });
 
-    it('keeps drawing while something is selected (the outline pulses)', async () => {
+    it('keeps drawing while the outline pulses, then returns to 0 renders at idle after ~12 s (R9-M12)', async () => {
       service.initialize(canvas);
       await service.loadAll();
       vi.spyOn(camera(), 'focusOn').mockResolvedValue(true);
@@ -1450,10 +1468,16 @@ describe('SceneService', () => {
       runFrame(100);
       runFrame(116);
       expect(renderer.render).toHaveBeenCalledTimes(2);
+      runFrame(5000);
+      expect(renderer.render).toHaveBeenCalledTimes(3);
+      runFrame(100 + 12000); // fija el contorno: último frame dibujado
+      expect(renderer.render).toHaveBeenCalledTimes(4);
+      for (let i = 1; i <= 30; i++) runFrame(100 + 12000 + i * 16);
+      expect(renderer.render).toHaveBeenCalledTimes(4); // ya en reposo
       service.clearSelection();
-      runFrame(132);
+      runFrame(13000);
       renderer.render.mockClear();
-      runFrame(148);
+      runFrame(13016);
       expect(renderer.render).not.toHaveBeenCalled();
     });
   });

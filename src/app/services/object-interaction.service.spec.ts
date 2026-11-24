@@ -21,7 +21,9 @@ import {
   ensureOutlineNormals,
   isTranslucent,
   ObjectInteractionService,
+  OUTLINE_COLOR,
   OUTLINE_DEPTH_PUSH,
+  OUTLINE_PULSE_DURATION_MS,
   OUTLINE_POLYGON_OFFSET,
   OUTLINE_NORMAL_ATTRIBUTE,
   OUTLINE_THICKNESS_PX,
@@ -206,6 +208,45 @@ describe('ObjectInteractionService', () => {
     const a = material.color.getHex();
     service.update(Math.PI / 2 / 0.003);
     expect(material.color.getHex()).not.toBe(a);
+  });
+
+  it('stops pulsing ~12 s after selecting, leaving a fixed outline, and restarts on new selection/hover (R9-M12)', async () => {
+    await click(100, 100);
+    const material = (furniture.children[0].children[0] as Mesh)
+      .material as MeshBasicMaterial;
+    service.update(1000);
+    expect(service.isPulsing()).toBe(true);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS - 1);
+    expect(service.isPulsing()).toBe(true);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS);
+    expect(service.isPulsing()).toBe(true); // un frame más para dibujar el contorno fijo
+    expect(material.color.getHex()).toBe(OUTLINE_COLOR);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS + 16);
+    expect(service.isPulsing()).toBe(false);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS + 1234);
+    expect(material.color.getHex()).toBe(OUTLINE_COLOR);
+
+    // Un hover nuevo reinicia el pulso.
+    service.setContext(camera, scene);
+    service.setHover({ x: 0, y: 0 });
+    service.update(20000);
+    service.setHover({ x: 0.99, y: 0.99 });
+    service.update(20016);
+    service.setHover({ x: 0, y: 0 });
+    service.update(20032);
+    expect(service.isPulsing()).toBe(true);
+
+    // Y una selección nueva también.
+    service.update(20048);
+    service.update(20048 + OUTLINE_PULSE_DURATION_MS + 100);
+    service.update(20048 + OUTLINE_PULSE_DURATION_MS + 116);
+    expect(service.isPulsing()).toBe(false);
+    service.clearSelection();
+    await click(100, 100);
+    service.update(40000);
+    expect(service.isPulsing()).toBe(true);
+    service.clearSelection();
+    expect(service.isPulsing()).toBe(false);
   });
 
   it('skips transparent meshes (glass, cups) so their hull is not seen through', () => {
@@ -428,6 +469,34 @@ describe('ObjectInteractionService', () => {
     service.update(32);
     expect(material.stencilWrite).toBe(false);
     expect(snapshot(material)).toEqual(before);
+  });
+
+  it('keeps stencil consistent when two pieces share a material (R9-I1)', async () => {
+    const shared = furniture.material as MeshStandardMaterial;
+    const other = new Mesh(new BoxGeometry(1, 1, 1), shared);
+    other.position.set(-2, 0.5, 0);
+    scene.add(other);
+    service.addObject(other, { id: 'floorLamp', kind: 'piece' });
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    const ndc = other.getWorldPosition(new Vector3()).project(camera);
+    const px = ((ndc.x + 1) / 2) * 200;
+    const py = ((1 - ndc.y) / 2) * 200;
+
+    await click(100, 100); // A seleccionada
+    expect(service.getSelected()).toBe(furniture);
+    service.setContext(camera, scene);
+    service.setHover({ x: ndc.x, y: ndc.y });
+    service.update(16); // hover en B (mismo material)
+    await click(px, py); // clic en B
+    expect(service.getSelected()).toBe(other);
+    service.clearSelection();
+    service.setHover(null);
+    service.update(64);
+    expect(shared.stencilWrite).toBe(false);
+    expect(shared.stencilRef).toBe(0);
+    expect(shared.stencilFunc).toBe(AlwaysStencilFunc);
+    expect(shared.stencilZPass).toBe(KeepStencilOp);
   });
 
   it('uses a pixel-space stroke direction so thickness is isotropic', async () => {

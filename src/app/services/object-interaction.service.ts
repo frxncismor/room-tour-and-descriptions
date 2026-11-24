@@ -94,10 +94,12 @@ type Pick =
   | { type: 'floor'; point: Vector3 };
 
 const OUTLINE_NAME = '__selection-outline';
-const OUTLINE_COLOR = 0x2f8fa8;
+export const OUTLINE_COLOR = 0x2f8fa8;
 const OUTLINE_PULSE_COLOR = 0x8fe3f5;
 const OUTLINE_PULSE_AMPLITUDE = 0.5;
 const OUTLINE_PULSE_SPEED = 0.003;
+/** Tras estos ms el pulso se detiene y queda el contorno fijo (R9-M12). */
+export const OUTLINE_PULSE_DURATION_MS = 12000;
 /** Grosor del contorno en px CSS: constante en pantalla, sea cual sea el mueble o la distancia. */
 export const OUTLINE_THICKNESS_PX = 3;
 /**
@@ -135,15 +137,28 @@ export function isTranslucent(mesh: Mesh): boolean {
 }
 
 /** Valores de stencil de un material, para restaurarlos al quitar el contorno. */
-type StencilBackup = Map<
+interface StencilOriginal {
+  stencilWrite: boolean;
+  stencilRef: number;
+  stencilFunc: number;
+  stencilZPass: number;
+}
+
+/**
+ * Registro único de originales por material, con contador de referencias
+ * (R9-I1). Selección y hover pueden tocar el mismo material (las piezas
+ * comparten `kit.material(...)`): el original se guarda una sola vez, con la
+ * primera referencia, y se restaura al soltar la última. Así ningún orden de
+ * restauración deja un material escribiendo stencil. Se prefiere esto a clonar
+ * materiales porque las acciones (luz, pantalla) mutan el material original.
+ */
+const stencilOriginals = new WeakMap<
   Material,
-  {
-    stencilWrite: boolean;
-    stencilRef: number;
-    stencilFunc: number;
-    stencilZPass: number;
-  }
->;
+  { original: StencilOriginal; refs: number }
+>();
+
+/** Materiales retenidos por un contorno (selección o hover). */
+type StencilBackup = Set<Material>;
 
 /** Referencia de stencil que marca la silueta del mueble. */
 export const OUTLINE_STENCIL_REF = 1;
@@ -153,7 +168,7 @@ export const OUTLINE_RENDER_ORDER = 10;
 /** Los materiales opacos del objeto escriben stencil=1 donde se dibujan. No toca color/emissive/map. */
 function writeStencil(
   root: Object3D,
-  backup: StencilBackup = new Map()
+  backup: StencilBackup = new Set()
 ): StencilBackup {
   root.traverse(child => {
     const mesh = child as Mesh;
@@ -166,11 +181,20 @@ function writeStencil(
     const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of list) {
       if (isTranslucentMaterial(m) || backup.has(m)) continue;
-      backup.set(m, {
-        stencilWrite: m.stencilWrite,
-        stencilRef: m.stencilRef,
-        stencilFunc: m.stencilFunc,
-        stencilZPass: m.stencilZPass,
+      backup.add(m);
+      const entry = stencilOriginals.get(m);
+      if (entry) {
+        entry.refs++;
+        continue;
+      }
+      stencilOriginals.set(m, {
+        original: {
+          stencilWrite: m.stencilWrite,
+          stencilRef: m.stencilRef,
+          stencilFunc: m.stencilFunc,
+          stencilZPass: m.stencilZPass,
+        },
+        refs: 1,
       });
       m.stencilWrite = true;
       m.stencilRef = OUTLINE_STENCIL_REF;
@@ -182,7 +206,13 @@ function writeStencil(
 }
 
 function restoreStencil(backup: StencilBackup | null): void {
-  backup?.forEach((saved, m) => Object.assign(m, saved));
+  backup?.forEach(m => {
+    const entry = stencilOriginals.get(m);
+    if (!entry) return;
+    if (--entry.refs > 0) return;
+    Object.assign(m, entry.original);
+    stencilOriginals.delete(m);
+  });
 }
 
 /** Grupos de geometría opacos de un material array (null = toda la malla). */
@@ -294,6 +324,11 @@ export class ObjectInteractionService {
   private hoverDirty = false;
   private hovered: HoverTarget | null = null;
   private readonly pulseColor = new Color(OUTLINE_PULSE_COLOR);
+  /** Instante (ms del bucle) en que empezó el pulso actual; null = empieza en el próximo frame. */
+  private pulseStart: number | null = null;
+  private pulseSettled = false;
+  /** Un frame más tras fijar el color, para dibujar el contorno ya quieto. */
+  private pulseSettleFrame = false;
 
   /** Notificación opcional de cambios de hover (F4b la conecta a señales). */
   onHoverChange: ((target: HoverTarget | null) => void) | null = null;
@@ -476,7 +511,18 @@ export class ObjectInteractionService {
 
   /** Llamar una vez por frame desde el bucle de F4b (sin rAF propio). */
   update(timeMs: number): void {
-    if (this.outlineMaterial) {
+    this.pulseSettleFrame = false;
+    if (this.outlineMaterial && !this.pulseSettled) {
+      this.pulseStart ??= timeMs;
+      if (timeMs - this.pulseStart >= OUTLINE_PULSE_DURATION_MS) {
+        // Contorno fijo en su color, y el bucle puede volver a reposo.
+        this.pulseSettled = true;
+        this.pulseSettleFrame = true;
+        this.outlineMaterial.color.setHex(OUTLINE_COLOR);
+        this.edgeMaterial?.color.setHex(OUTLINE_COLOR);
+      }
+    }
+    if (this.outlineMaterial && !this.pulseSettled) {
       // Pulso de color (el contorno es opaco: sin velo translúcido sobre el objeto).
       const t =
         ((Math.sin(timeMs * OUTLINE_PULSE_SPEED) + 1) / 2) *
@@ -488,6 +534,19 @@ export class ObjectInteractionService {
       this.hoverDirty = false;
       this.resolveHover();
     }
+  }
+
+  /** ¿Hay que seguir dibujando por el pulso? Falso en reposo, tras fijarse el contorno. */
+  isPulsing(): boolean {
+    return (
+      this.selected !== null && (!this.pulseSettled || this.pulseSettleFrame)
+    );
+  }
+
+  private restartPulse(): void {
+    this.pulseStart = null;
+    this.pulseSettled = false;
+    this.pulseSettleFrame = false;
   }
 
   getHovered(): HoverTarget | null {
@@ -511,6 +570,7 @@ export class ObjectInteractionService {
     this.edgeMaterial?.dispose();
     this.edgeMaterial = null;
     this.selected = null;
+    this.restartPulse();
     this.hoverDirty = true; // re-evalúa el hover (el objeto ya no está seleccionado)
   }
 
@@ -678,6 +738,7 @@ export class ObjectInteractionService {
 
   private select(root: Object3D, info?: SelectedInfo): void {
     this.selected = root;
+    this.restartPulse();
     this.ensureCanvasSize();
     // Al seleccionar, el contorno de hover se retira (el de selección lo sustituye).
     this.removeHoverOutline();
@@ -687,7 +748,7 @@ export class ObjectInteractionService {
       'selection-outline'
     );
     this.edgeMaterial = this.createEdgeMaterial({ color: OUTLINE_COLOR });
-    const stencil: StencilBackup = new Map();
+    const stencil: StencilBackup = new Set();
     for (const target of this.outlineRoots(root, info)) {
       writeStencil(target, stencil);
       this.outlines.push(
@@ -898,7 +959,7 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
         color: HOVER_OUTLINE_COLOR,
         opacity: HOVER_OUTLINE_OPACITY,
       });
-      const stencil: StencilBackup = new Map();
+      const stencil: StencilBackup = new Set();
       for (const root of this.outlineRoots(target.object, target.info)) {
         writeStencil(root, stencil);
         this.hoverOutlines.push(
@@ -912,7 +973,10 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
       }
       this.hoverStencil = stencil;
     }
-    if (!same) this.onHoverChange?.(target);
+    if (!same) {
+      this.restartPulse();
+      this.onHoverChange?.(target);
+    }
   }
 
   private removeHoverOutline(): void {
