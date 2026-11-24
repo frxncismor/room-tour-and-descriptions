@@ -26,8 +26,8 @@ describe('LanguageSwitcherComponent', () => {
     expect(buttons.map(b => b.textContent?.trim())).toEqual(['EN', 'ES']);
     expect(buttons.map(b => b.getAttribute('lang'))).toEqual(['en', 'es']);
     expect(buttons.map(b => b.getAttribute('aria-label'))).toEqual([
-      'English (EN)',
-      'Español (ES)',
+      'EN, English',
+      'ES, Español',
     ]);
     expect(buttons.every(b => b.type === 'button')).toBe(true);
     expect(buttons.map(b => b.getAttribute('aria-pressed'))).toEqual([

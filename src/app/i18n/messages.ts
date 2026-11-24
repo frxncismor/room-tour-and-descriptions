@@ -11,8 +11,8 @@ export const LOCALE_OPTIONS: readonly {
   short: string;
   label: string;
 }[] = [
-  { locale: 'en', short: 'EN', label: 'English (EN)' },
-  { locale: 'es', short: 'ES', label: 'Español (ES)' },
+  { locale: 'en', short: 'EN', label: 'EN, English' },
+  { locale: 'es', short: 'ES', label: 'ES, Español' },
 ];
 
 /** Ids de los muebles interactivos (claves de `MODEL_CONFIGURATIONS`). */
