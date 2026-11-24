@@ -29,21 +29,44 @@ export const EN = {
       'render-failed': 'The 3D view stopped working. Try again.',
       'model-load-failed': 'Could not load: {names}.',
       'locale-load-failed': 'Could not load Spanish. Staying in English.',
+      'pieces-load-failed': 'Could not load the piece details. Try again.',
     },
   },
   panel: {
     close: 'Close details',
+    actions: 'Actions',
   },
   list: {
     title: 'Pieces',
     resetView: 'Reset view',
     resetViewLabel: 'Reset view to the initial position',
+    search: 'Search pieces',
+    searchEmpty: 'No pieces found',
+    viewWall: 'View wall',
+    stateOn: 'On',
+    groups: {
+      greenWall: 'Green wall',
+      windowWall: 'Window wall',
+      tvWall: 'TV wall',
+      deskWall: 'Desk wall',
+      floor: 'Floor & seating',
+      ceiling: 'Ceiling',
+    },
+  },
+  wall: {
+    nav: {
+      previous: 'Previous section',
+      next: 'Next section',
+      section: 'Section {n} of {m}',
+    },
   },
   help: {
     title: 'Controls',
     open: 'Controls',
     openLabel: 'Controls, show the panel',
     gotIt: 'Close',
+    wallClick: 'Click an empty wall to frame it; the details stay open.',
+    zoomCursor: 'Zoom goes toward the pointer, close enough to read a print.',
     controls: [
       {
         label: 'Orbit',

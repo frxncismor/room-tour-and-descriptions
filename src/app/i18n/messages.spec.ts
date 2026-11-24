@@ -2,6 +2,7 @@ import { EN } from './en';
 import ES from './es';
 import {
   FURNITURE_IDS,
+  GROUP_IDS,
   Locale,
   LOCALE_OPTIONS,
   LOCALES,
@@ -72,6 +73,37 @@ describe('messages: parity', () => {
       expect(ES.errors.messages[code].includes('{names}')).toBe(
         EN.errors.messages[code].includes('{names}')
       );
+    }
+  });
+});
+
+describe.each(LOCALES)('messages: spec 004 strings (%s)', locale => {
+  const dict = DICTS[locale];
+
+  it('has a name for each of the 6 list groups', () => {
+    expect(GROUP_IDS.length).toBe(6);
+    expect(Object.keys(dict.list.groups).sort()).toEqual([...GROUP_IDS].sort());
+  });
+
+  it('the wall section template keeps {n} and {m}', () => {
+    expect(dict.wall.nav.section).toContain('{n}');
+    expect(dict.wall.nav.section).toContain('{m}');
+    expect(dict.wall.nav.previous).toBeTruthy();
+    expect(dict.wall.nav.next).toBeTruthy();
+  });
+
+  it('the other new strings carry no placeholders', () => {
+    for (const s of [
+      dict.list.search,
+      dict.list.searchEmpty,
+      dict.list.viewWall,
+      dict.list.stateOn,
+      dict.panel.actions,
+      dict.help.wallClick,
+      dict.help.zoomCursor,
+    ]) {
+      expect(s).not.toMatch(/[{}]/);
+      expect(s.length).toBeGreaterThanOrEqual(2);
     }
   });
 });

@@ -31,21 +31,46 @@ const ES = {
       'model-load-failed': 'No se pudo cargar: {names}.',
       // Solo se muestra cuando falta el ES: se queda en inglés a propósito.
       'locale-load-failed': 'Could not load Spanish. Staying in English.',
+      'pieces-load-failed':
+        'No se pudieron cargar los detalles de las piezas. Inténtalo de nuevo.',
     },
   },
   panel: {
     close: 'Cerrar detalles',
+    actions: 'Acciones',
   },
   list: {
     title: 'Piezas',
     resetView: 'Restablecer vista',
     resetViewLabel: 'Restablecer vista a la posición inicial',
+    search: 'Buscar piezas',
+    searchEmpty: 'No hay piezas que coincidan',
+    viewWall: 'Ver pared',
+    stateOn: 'Encendida',
+    groups: {
+      greenWall: 'Pared verde',
+      windowWall: 'Pared de la ventana',
+      tvWall: 'Pared de la tele',
+      deskWall: 'Pared del escritorio',
+      floor: 'Suelo y asientos',
+      ceiling: 'Techo',
+    },
+  },
+  wall: {
+    nav: {
+      previous: 'Tramo anterior',
+      next: 'Tramo siguiente',
+      section: 'Tramo {n} de {m}',
+    },
   },
   help: {
     title: 'Controles',
     open: 'Controles',
     openLabel: 'Controles, mostrar el panel',
     gotIt: 'Cerrar',
+    wallClick:
+      'Haz clic en una pared vacía para encuadrarla; los detalles siguen abiertos.',
+    zoomCursor: 'El zoom va hacia el puntero, hasta leer una lámina de cerca.',
     controls: [
       {
         label: 'Orbitar',

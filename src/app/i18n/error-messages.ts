@@ -30,6 +30,7 @@ const EMPTY_CODES: Record<ViewerErrorCode, true> = {
   'render-failed': true,
   'model-load-failed': true,
   'locale-load-failed': true,
+  'pieces-load-failed': true,
 };
 
 /** Un id de `params.names` → su nombre (activo o mueble); si no es un id, tal cual. */

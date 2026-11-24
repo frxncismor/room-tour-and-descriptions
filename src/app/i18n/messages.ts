@@ -1,3 +1,10 @@
+import type {
+  ActionId,
+  ActionPieceId,
+  PieceId,
+  SurfaceId,
+} from '../pieces/piece-ids';
+
 /** Idiomas de la interfaz. */
 export type Locale = 'en' | 'es';
 
@@ -46,7 +53,26 @@ export type ViewerErrorCode =
   | 'webgl-unavailable'
   | 'render-failed'
   | 'model-load-failed'
-  | 'locale-load-failed';
+  | 'locale-load-failed'
+  | 'pieces-load-failed';
+
+/** Los 6 grupos de la lista de piezas (spec D). */
+export type GroupId =
+  | 'greenWall'
+  | 'windowWall'
+  | 'tvWall'
+  | 'deskWall'
+  | 'floor'
+  | 'ceiling';
+
+export const GROUP_IDS: readonly GroupId[] = [
+  'greenWall',
+  'windowWall',
+  'tvWall',
+  'deskWall',
+  'floor',
+  'ceiling',
+];
 
 export interface FurnitureText {
   name: string;
@@ -79,13 +105,43 @@ export interface Messages {
     /** Plantillas por código; `{names}` se sustituye por la lista. */
     messages: Record<ViewerErrorCode, string>;
   };
-  panel: { close: string };
-  list: { title: string; resetView: string; resetViewLabel: string };
+  panel: {
+    close: string;
+    /** Título accesible de la sección de acciones de la ficha. */
+    actions: string;
+  };
+  list: {
+    title: string;
+    resetView: string;
+    resetViewLabel: string;
+    /** Etiqueta del buscador (y su `aria-label`). */
+    search: string;
+    /** Aviso cuando la búsqueda no encuentra nada. */
+    searchEmpty: string;
+    /** Primera fila de cada grupo: encuadra la pared (o el techo). */
+    viewWall: string;
+    /** Marca de la pieza con su acción activa (p. ej. «On»). */
+    stateOn: string;
+    groups: Record<GroupId, string>;
+  };
+  /** Navegación por tramos de una pared que no cabe entera (spec C.2). */
+  wall: {
+    nav: {
+      previous: string;
+      next: string;
+      /** Plantilla: `{n}` y `{m}`. */
+      section: string;
+    };
+  };
   help: {
     title: string;
     open: string;
     openLabel: string;
     gotIt: string;
+    /** Qué hace pulsar una pared (la ficha no se cierra). */
+    wallClick: string;
+    /** El zoom va hacia el puntero y llega hasta leer una lámina. */
+    zoomCursor: string;
     /** Tupla: también cuenta el número de controles. */
     controls: readonly [
       ControlText,
@@ -100,4 +156,46 @@ export interface Messages {
   canvasLabel: string;
   assets: Record<AssetLabelId, string>;
   furniture: Record<FurnitureId, FurnitureText>;
+}
+
+/** Qué dice cada acción (spec B.4 y B.6). Las plantillas admiten `{work}`. */
+export interface ActionText {
+  /** Etiqueta del botón mientras el estado está apagado (p. ej. «Turn on»). */
+  whenOff: string;
+  /** Etiqueta mientras está activo; si falta, la de `whenOff` (acciones sin estado). */
+  whenOn?: string;
+  /** Anuncio `aria-live` al activar / desactivar. */
+  announceOn?: string;
+  announceOff?: string;
+  /** Línea de estado visible de la ficha, apagada / encendida. */
+  stateOff?: string;
+  stateOn?: string;
+  /** Pista del botón deshabilitado (`aria-disabled`). */
+  disabledHint?: string;
+}
+
+/** Texto de una pieza del chunk perezoso: la ficha de `FurnitureText` más sus acciones. */
+export interface PieceText extends FurnitureText {
+  actions?: Partial<Record<ActionId, ActionText>>;
+}
+
+/** Pieza con acciones: obliga a declararlas todas (las de `PIECE_IDS_WITH_ACTIONS`). */
+export type ActionPieceText = PieceText & {
+  actions: Partial<Record<ActionId, ActionText>>;
+};
+
+/** Texto de una pared o del techo. */
+export interface SurfaceText {
+  name: string;
+  description: string;
+}
+
+/**
+ * Diccionario perezoso de las piezas (`pieces.<locale>`): 35 piezas y 5
+ * superficies. Se carga con `LocaleService`, no va en el bundle inicial.
+ */
+export interface PieceMessages {
+  pieces: Record<Exclude<PieceId, ActionPieceId>, PieceText> &
+    Record<ActionPieceId, ActionPieceText>;
+  surfaces: Record<SurfaceId, SurfaceText>;
 }

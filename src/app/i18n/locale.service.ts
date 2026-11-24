@@ -9,7 +9,13 @@ import {
 } from '@angular/core';
 import { ViewerStateService } from '../services/viewer-state.service';
 import { EN } from './en';
-import { DEFAULT_LOCALE, Locale, LOCALES, Messages } from './messages';
+import {
+  DEFAULT_LOCALE,
+  Locale,
+  LOCALES,
+  Messages,
+  PieceMessages,
+} from './messages';
 
 /** Clave de `localStorage` con el idioma elegido por el usuario. */
 export const LOCALE_STORAGE_KEY = 'room-tour.locale';
@@ -25,6 +31,20 @@ export const ES_MESSAGES_LOADER = new InjectionToken<() => Promise<Messages>>(
     factory: () => () => import('./es').then(module => module.default),
   }
 );
+
+/**
+ * Carga del diccionario de piezas (`pieces.<locale>`, chunk perezoso aparte:
+ * nada del bundle inicial lo importa de forma estática). Los tests la sustituyen.
+ */
+export const PIECE_MESSAGES_LOADER = new InjectionToken<
+  (locale: Locale) => Promise<PieceMessages>
+>('PIECE_MESSAGES_LOADER', {
+  providedIn: 'root',
+  factory: () => (locale: Locale) =>
+    locale === 'es'
+      ? import('../pieces/pieces.es').then(module => module.default)
+      : import('../pieces/pieces.en').then(module => module.default),
+});
 
 const isLocale = (value: unknown): value is Locale =>
   typeof value === 'string' && (LOCALES as readonly string[]).includes(value);
@@ -63,20 +83,28 @@ function writeStored(locale: Locale): void {
 /**
  * Idioma activo y sus textos (señales). El EN va en el bundle inicial;
  * el ES se importa bajo demanda y, si no carga, la app sigue en inglés
- * con un aviso no bloqueante.
+ * con un aviso no bloqueante. Los textos de las piezas (`pieceMessages`) son
+ * otro diccionario perezoso: solo se piden cuando el chunk de piezas está
+ * presente (`enablePieces`) y se recargan al cambiar de idioma.
  */
 @Injectable({ providedIn: 'root' })
 export class LocaleService {
   private readonly doc = inject(DOCUMENT);
   private readonly state = inject(ViewerStateService);
   private readonly loadEs = inject(ES_MESSAGES_LOADER);
+  private readonly loadPieces = inject(PIECE_MESSAGES_LOADER);
 
   private readonly active = signal<Locale>(DEFAULT_LOCALE);
   private readonly dictionary = signal<Messages>(EN);
   private spanish: Messages | null = null;
+  private readonly pieces = signal<PieceMessages | null>(null);
+  private readonly pieceCache: Partial<Record<Locale, PieceMessages>> = {};
+  private piecesEnabled = false;
 
   readonly locale = this.active.asReadonly();
   readonly messages = computed(() => this.dictionary());
+  /** Textos de piezas y superficies; `null` hasta que se pidan con `enablePieces`. */
+  readonly pieceMessages = this.pieces.asReadonly();
   /** Texto para el lector de pantalla; solo cambia tras elegir un idioma. */
   readonly announcement = signal('');
 
@@ -114,11 +142,67 @@ export class LocaleService {
       this.notifyLoadFailure();
       return;
     }
+    // Con el chunk de piezas presente, el idioma no cambia hasta tener
+    // también sus textos: así no se mezclan idiomas en la ficha.
+    let pieces: PieceMessages | null = null;
+    if (this.piecesEnabled) {
+      pieces = await this.piecesFor(locale);
+      if (!pieces) {
+        this.notifyPiecesFailure(() => void this.use(locale, options));
+        return;
+      }
+    }
+    if (pieces) this.pieces.set(pieces);
     this.dictionary.set(dictionary);
     this.active.set(locale);
     this.applyToDocument(locale, dictionary);
     if (options.persist) writeStored(locale);
     if (options.announce) this.announcement.set(dictionary.language.announce);
+  }
+
+  /**
+   * Avisa de que el chunk de piezas está presente y carga sus textos en el
+   * idioma activo; desde entonces cada cambio de idioma los recarga.
+   * Devuelve `false` (con aviso y reintento) si no cargan.
+   */
+  async enablePieces(): Promise<boolean> {
+    let locale = this.active();
+    let pieces = await this.piecesFor(locale);
+    // Si el idioma cambió mientras cargaba, se pide el del idioma actual.
+    while (pieces && locale !== this.active()) {
+      locale = this.active();
+      pieces = await this.piecesFor(locale);
+    }
+    if (!pieces) {
+      this.notifyPiecesFailure(() => void this.enablePieces());
+      return false;
+    }
+    this.piecesEnabled = true;
+    this.pieces.set(pieces);
+    return true;
+  }
+
+  private async piecesFor(locale: Locale): Promise<PieceMessages | null> {
+    const cached = this.pieceCache[locale];
+    if (cached) return cached;
+    try {
+      const loaded = await this.loadPieces(locale);
+      this.pieceCache[locale] = loaded;
+      return loaded;
+    } catch (error) {
+      console.warn(`Could not load the ${locale} piece messages`, error);
+      return null;
+    }
+  }
+
+  private notifyPiecesFailure(retry: () => void): void {
+    this.state.error.set({
+      code: 'pieces-load-failed',
+      retry: () => {
+        this.state.error.set(null);
+        retry();
+      },
+    });
   }
 
   private async dictionaryFor(locale: Locale): Promise<Messages | null> {
