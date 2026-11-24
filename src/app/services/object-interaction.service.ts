@@ -22,8 +22,33 @@ import {
 import {
   InteractionResult,
   ObjectInfo,
+  PieceInfo,
   RoomLimits,
+  SelectableId,
+  SelectedInfo,
+  SurfaceInfo,
 } from '../interfaces/scene.interface';
+import type { SurfaceId } from '../pieces/piece-ids';
+
+/**
+ * Resultado de `handleClick`: como `InteractionResult`, pero `objectInfo` puede
+ * ser una pieza o una superficie (`kind`) y las paredes/techo devuelven el
+ * punto de impacto.
+ */
+export interface PickResult extends Omit<InteractionResult, 'objectInfo'> {
+  objectInfo: SelectedInfo | null;
+  /** Punto de impacto en un clic de pared o techo. */
+  surfacePoint?: Vector3;
+}
+
+/** Opciones de `registerPiece`. */
+export interface PieceRegistration {
+  /**
+   * Objetos que se contornean en lugar de los proxies (las mallas visibles de
+   * una pieza procedural). Por defecto se contornean los propios proxies.
+   */
+  visuals?: Object3D[];
+}
 
 /** Mínimo que necesita el servicio de un evento de puntero/ratón. */
 export interface PointerLike {
@@ -51,8 +76,14 @@ const TOLERANCE_RAYS = 8;
 /** Objeto bajo el cursor; `name` sirve de id para el cursor/UI. */
 export interface HoverTarget {
   object: Object3D;
-  info: ObjectInfo;
+  info: SelectedInfo;
 }
+
+/** Impacto ya resuelto: pieza/mueble, superficie o suelo. */
+type Pick =
+  | { type: 'item'; root: Object3D; info: ObjectInfo | PieceInfo }
+  | { type: 'surface'; root: Object3D; info: SurfaceInfo; point: Vector3 }
+  | { type: 'floor'; point: Vector3 };
 
 const OUTLINE_NAME = '__selection-outline';
 const OUTLINE_COLOR = 0x2f8fa8;
@@ -112,8 +143,10 @@ export const OUTLINE_STENCIL_REF = 1;
 export const OUTLINE_RENDER_ORDER = 10;
 
 /** Los materiales opacos del objeto escriben stencil=1 donde se dibujan. No toca color/emissive/map. */
-function writeStencil(root: Object3D): StencilBackup {
-  const backup: StencilBackup = new Map();
+function writeStencil(
+  root: Object3D,
+  backup: StencilBackup = new Map()
+): StencilBackup {
   root.traverse(child => {
     const mesh = child as Mesh;
     if (
@@ -209,7 +242,16 @@ export function ensureOutlineNormals(geometry: BufferGeometry): void {
 })
 export class ObjectInteractionService {
   private readonly raycaster = new Raycaster();
-  private readonly objects = new Map<Object3D, ObjectInfo>();
+  /** Objetos registrados (muebles, proxies de piezas y superficies) y su info. */
+  private readonly objects = new Map<Object3D, SelectedInfo>();
+  /** Lo que recibe el rayo: registrados + suelo (el rayo no recorre la escena). */
+  private readonly pickables = new Set<Object3D>();
+  private pickableList: Object3D[] | null = null;
+  /** Objetos de cada id (una pieza puede tener varias cajas). */
+  private readonly groups = new Map<SelectableId, Set<Object3D>>();
+  /** Objetos a contornear por id cuando no son los propios proxies. */
+  private readonly visuals = new Map<SelectableId, Object3D[]>();
+  private floorMesh: Object3D | null = null;
   private roomLimits: RoomLimits = {
     minX: -8,
     maxX: 8,
@@ -221,11 +263,11 @@ export class ObjectInteractionService {
   private camera: PerspectiveCamera | null = null;
   private scene: Scene | null = null;
 
-  private outline: Group | null = null;
+  private outlines: Group[] = [];
   private outlineMaterial: MeshBasicMaterial | null = null;
   /** Desplazamiento del contorno en NDC (se actualiza con el tamaño del canvas). */
   private readonly outlineOffset = { value: new Vector2(0.01, 0.01) };
-  private hoverOutline: Group | null = null;
+  private hoverOutlines: Group[] = [];
   private hoverMaterial: MeshBasicMaterial | null = null;
   /** Estado de stencil original de los materiales del objeto (seleccionado / hover). */
   private selectedStencil: StencilBackup | null = null;
@@ -279,42 +321,31 @@ export class ObjectInteractionService {
     camera: PerspectiveCamera,
     scene: Scene,
     options: ClickOptions = {}
-  ): Promise<InteractionResult> {
+  ): Promise<PickResult> {
     try {
       this.setContext(camera, scene);
       const ndc = this.getMousePosition(event);
-      const intersects = this.intersect(ndc, camera, scene);
+      const hits = this.intersect(ndc, camera, scene);
 
       this.clearSelection();
 
+      // Prioridad pieza > pared > suelo. Con toque se suman los impactos de los
+      // rayos del anillo: una pieza cercana gana a lo que haya bajo el dedo.
       const tolerance = this.tolerancePx(event, options);
-      if (tolerance > 0 && !this.hitsFurnitureFirst(intersects)) {
-        const near = this.nearbyFurniture(event, tolerance, camera, scene);
-        if (near) {
-          this.select(near.root);
-          return { objectInfo: near.info, success: true, object: near.root };
-        }
+      if (tolerance > 0 && this.firstPick(hits)?.type !== 'item') {
+        const near = this.nearbyPiece(event, tolerance, camera, scene);
+        if (near) return this.pickResult(near);
       }
 
-      for (const intersect of intersects) {
-        const object = intersect.object;
-
-        if (this.isFloorClick(object)) {
-          const floorPoint = this.validateTeleportationPosition(
-            intersect.point
-          );
+      for (const pick of this.picks(hits)) {
+        if (pick.type === 'floor') {
+          const floorPoint = this.validateTeleportationPosition(pick.point);
           if (floorPoint) {
             return { objectInfo: null, success: true, floorPoint };
           }
           continue;
         }
-
-        const root = this.findRootObject(object);
-        const objectInfo = root ? this.objects.get(root) : undefined;
-        if (root && objectInfo) {
-          this.select(root);
-          return { objectInfo, success: true, object: root };
-        }
+        return this.pickResult(pick);
       }
 
       return { objectInfo: null, success: true };
@@ -327,6 +358,23 @@ export class ObjectInteractionService {
     }
   }
 
+  /** Selecciona (si es pieza o mueble) y compone el resultado del clic. */
+  private pickResult(pick: Pick): PickResult {
+    if (pick.type === 'floor') {
+      return { objectInfo: null, success: true, floorPoint: pick.point };
+    }
+    if (pick.type === 'surface') {
+      return {
+        objectInfo: pick.info,
+        success: true,
+        object: pick.root,
+        surfacePoint: pick.point,
+      };
+    }
+    this.select(pick.root, pick.info);
+    return { objectInfo: pick.info, success: true, object: pick.root };
+  }
+
   /** Toque (o tolerancia explícita) → radio en px CSS; ratón/lápiz → 0. */
   private tolerancePx(event: PointerLike, options: ClickOptions): number {
     if (options.tolerancePx !== undefined)
@@ -335,33 +383,42 @@ export class ObjectInteractionService {
     return type === 'touch' ? TOUCH_TOLERANCE_PX : 0;
   }
 
-  /** ¿El primer impacto relevante (mueble o suelo) es un mueble? */
-  private hitsFurnitureFirst(
-    hits: ReturnType<ObjectInteractionService['intersect']>
-  ): boolean {
-    return this.firstFurniture(hits) !== null;
+  /** Impactos registrados (pieza, superficie, suelo) en orden de distancia. */
+  private *picks(hits: ReturnType<ObjectInteractionService['intersect']>) {
+    for (const hit of hits) {
+      const pick = this.resolvePick(hit);
+      if (pick) yield pick;
+    }
   }
 
-  /** Mueble alcanzado antes que el suelo (las paredes no bloquean, como en el clic). */
-  private firstFurniture(
+  /** Primer impacto registrado: el que decide el clic. */
+  private firstPick(
     hits: ReturnType<ObjectInteractionService['intersect']>
-  ): { root: Object3D; info: ObjectInfo } | null {
-    for (const hit of hits) {
-      if (this.isFloorClick(hit.object)) return null;
-      const root = this.findRootObject(hit.object);
-      const info = root ? this.objects.get(root) : undefined;
-      if (root && info) return { root, info };
-    }
+  ): Pick | null {
+    for (const pick of this.picks(hits)) return pick;
     return null;
   }
 
-  /** Anillos de rayos alrededor del punto; gana el mueble del anillo más cercano. */
-  private nearbyFurniture(
+  private resolvePick(hit: { object: Object3D; point: Vector3 }): Pick | null {
+    if (this.isFloorClick(hit.object)) {
+      return { type: 'floor', point: hit.point };
+    }
+    const root = this.findRootObject(hit.object);
+    const info = root ? this.objects.get(root) : undefined;
+    if (!root || !info) return null;
+    if (info.kind === 'surface') {
+      return { type: 'surface', root, info, point: hit.point };
+    }
+    return { type: 'item', root, info };
+  }
+
+  /** Anillos de rayos alrededor del punto; gana la pieza del anillo más cercano. */
+  private nearbyPiece(
     event: PointerLike,
     tolerancePx: number,
     camera: PerspectiveCamera,
     scene: Scene
-  ): { root: Object3D; info: ObjectInfo } | null {
+  ): Pick | null {
     const base = this.getMousePosition(event);
     const element = this.canvas ?? (event.currentTarget as HTMLElement);
     const rect = element.getBoundingClientRect();
@@ -373,8 +430,8 @@ export class ObjectInteractionService {
           base.x + ((Math.cos(angle) * radius) / rect.width) * 2,
           base.y - ((Math.sin(angle) * radius) / rect.height) * 2
         );
-        const found = this.firstFurniture(this.intersect(ndc, camera, scene));
-        if (found) return found;
+        const found = this.firstPick(this.intersect(ndc, camera, scene));
+        if (found?.type === 'item') return found;
       }
     }
     return null;
@@ -430,13 +487,8 @@ export class ObjectInteractionService {
 
   /** Quita el contorno actual y libera su material. */
   removeOutline(): void {
-    if (this.outline) {
-      // La geometría es compartida con el original: solo se liberan los clones.
-      this.outline.removeFromParent();
-      this.disposeHullGeometries(this.outline);
-      this.outline.clear();
-      this.outline = null;
-    }
+    this.disposeOutlines(this.outlines);
+    this.outlines = [];
     restoreStencil(this.selectedStencil);
     this.selectedStencil = null;
     if (this.outlineMaterial) {
@@ -451,24 +503,88 @@ export class ObjectInteractionService {
     this.removeOutline();
   }
 
-  /** Selecciona un objeto por código: sustituye el contorno anterior. */
+  /** Selecciona un objeto por código: sustituye el contorno anterior (y resalta todo su grupo). */
   selectObject(object: Object3D): void {
+    const info = this.objects.get(object);
     this.removeOutline();
-    this.select(object);
+    if (info && info.kind !== 'surface') this.select(object, info);
+    else this.select(object);
   }
 
-  addObject(object: Object3D, info: ObjectInfo): void {
+  /** Registra un mueble (o una superficie ya con `kind`) como seleccionable. */
+  addObject(object: Object3D, info: SelectedInfo): void {
     this.objects.set(object, info);
+    let group = this.groups.get(info.id);
+    if (!group) this.groups.set(info.id, (group = new Set()));
+    group.add(object);
+    this.addPickable(object);
+  }
+
+  /**
+   * Registra una pieza con una o varias cajas proxy (invisibles: reciben el
+   * rayo aunque `visible = false`). Se resaltan todas a la vez.
+   */
+  registerPiece(
+    info: PieceInfo | ObjectInfo,
+    proxies: Object3D[],
+    options: PieceRegistration = {}
+  ): void {
+    for (const proxy of proxies) this.addObject(proxy, info);
+    if (options.visuals) this.visuals.set(info.id, options.visuals);
+  }
+
+  /** Registra una pared o el techo (`kind: 'surface'`). */
+  registerSurface(object: Object3D, id: SurfaceId): void {
+    this.addObject(object, { id, kind: 'surface' });
+  }
+
+  /** Añade un objeto al conjunto que recibe el rayo (p. ej. el suelo). */
+  addPickable(object: Object3D): void {
+    this.pickables.add(object);
+    this.pickableList = null;
+    if (object.name === 'floor') this.floorMesh = object;
+  }
+
+  removePickable(object: Object3D): void {
+    this.pickables.delete(object);
+    this.pickableList = null;
+    if (this.floorMesh === object) this.floorMesh = null;
+  }
+
+  /** Todos los objetos (cajas) de una pieza; vacío si no está registrada. */
+  groupOf(id: SelectableId): Object3D[] {
+    return [...(this.groups.get(id) ?? [])];
   }
 
   removeObject(object: Object3D): void {
+    const info = this.objects.get(object);
+    const wasSelected = this.selected === object || this.outlinedBy(object);
     this.objects.delete(object);
-    if (this.selected === object) this.removeOutline();
-    if (this.hovered?.object === object) this.applyHover(null);
+    this.removePickable(object);
+    if (info) {
+      const group = this.groups.get(info.id);
+      group?.delete(object);
+      if (group?.size === 0) {
+        this.groups.delete(info.id);
+        this.visuals.delete(info.id);
+      }
+    }
+    if (wasSelected) this.removeOutline();
+    if (
+      this.hovered &&
+      (this.hovered.object === object || this.hovered.info.id === info?.id)
+    )
+      this.applyHover(null);
   }
 
-  getObjectInfo(object: Object3D): ObjectInfo | undefined {
+  getObjectInfo(object: Object3D): SelectedInfo | undefined {
     return this.objects.get(object);
+  }
+
+  /** ¿Pertenece el objeto al grupo de lo seleccionado? */
+  private outlinedBy(object: Object3D): boolean {
+    const id = this.selected ? this.objects.get(this.selected)?.id : undefined;
+    return id !== undefined && this.groups.get(id)?.has(object) === true;
   }
 
   dispose(): void {
@@ -481,6 +597,11 @@ export class ObjectInteractionService {
     this.hoverDirty = false;
     this.onHoverChange = null;
     this.objects.clear();
+    this.pickables.clear();
+    this.pickableList = null;
+    this.groups.clear();
+    this.visuals.clear();
+    this.floorMesh = null;
     this.canvas = null;
     this.camera = null;
     this.scene = null;
@@ -493,8 +614,20 @@ export class ObjectInteractionService {
     camera.updateMatrixWorld();
     this.raycaster.setFromCamera(ndc, camera);
     return this.raycaster
-      .intersectObjects(scene.children, true)
+      .intersectObjects(this.pickTargets(scene), true)
       .filter(hit => !this.isOutline(hit.object));
+  }
+
+  /** Objetos que reciben el rayo; el suelo se busca una vez si nadie lo registró. */
+  private pickTargets(scene: Scene): Object3D[] {
+    if (!this.floorMesh) {
+      const floor = scene.getObjectByName('floor');
+      if (floor) this.floorMesh = floor;
+    }
+    this.pickableList ??= [...this.pickables];
+    return this.floorMesh && !this.pickables.has(this.floorMesh)
+      ? [...this.pickableList, this.floorMesh]
+      : this.pickableList;
   }
 
   private isOutline(object: Object3D): boolean {
@@ -511,7 +644,16 @@ export class ObjectInteractionService {
     return object.name === 'floor';
   }
 
-  private select(root: Object3D): void {
+  /** Objetos que se contornean para `info`: sus `visuals` o todas las cajas del grupo. */
+  private outlineRoots(root: Object3D, info?: SelectedInfo): Object3D[] {
+    if (!info) return [root];
+    const visuals = this.visuals.get(info.id);
+    if (visuals?.length) return visuals;
+    const group = this.groups.get(info.id);
+    return group && group.size > 0 ? [...group] : [root];
+  }
+
+  private select(root: Object3D, info?: SelectedInfo): void {
     this.selected = root;
     this.ensureCanvasSize();
     // Al seleccionar, el contorno de hover se retira (el de selección lo sustituye).
@@ -521,8 +663,14 @@ export class ObjectInteractionService {
       this.outlineOffset,
       'selection-outline'
     );
-    this.selectedStencil = writeStencil(root);
-    this.outline = this.buildOutline(root, this.outlineMaterial, OUTLINE_NAME);
+    const stencil: StencilBackup = new Map();
+    for (const target of this.outlineRoots(root, info)) {
+      writeStencil(target, stencil);
+      this.outlines.push(
+        this.buildOutline(target, this.outlineMaterial, OUTLINE_NAME)
+      );
+    }
+    this.selectedStencil = stencil;
   }
 
   /** Grupo de cascos (uno por malla opaca) como hijo de `root`: hereda su transformación. */
@@ -533,8 +681,12 @@ export class ObjectInteractionService {
   ): Group {
     const outline = new Group();
     outline.name = name;
+    // Los hijos de un objeto invisible (caja proxy) no se dibujan: el casco
+    // cuelga entonces de su padre.
+    const container = root.visible ? root : (root.parent ?? root);
     root.updateMatrixWorld(true);
-    const rootInverse = root.matrixWorld.clone().invert();
+    container.updateMatrixWorld(true);
+    const rootInverse = container.matrixWorld.clone().invert();
     const meshes: Mesh[] = [];
     root.traverse(child => {
       if (
@@ -571,7 +723,7 @@ export class ObjectInteractionService {
       outline.add(clone);
     }
     outline.raycast = () => undefined;
-    root.add(outline);
+    container.add(outline);
     return outline;
   }
 
@@ -593,6 +745,8 @@ export class ObjectInteractionService {
       // el borde se ve completo aunque la pared lo tape (mueble pegado a ella).
       depthTest: false,
       depthWrite: false,
+      // Color de marca exacto: sin tone mapping (Neutral 1,1 lo desviaría).
+      toneMapped: false,
       side: BackSide,
       polygonOffset: true,
       polygonOffsetFactor: OUTLINE_POLYGON_OFFSET,
@@ -642,30 +796,30 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
       return;
     }
     const hits = this.intersect(this.pendingHover, this.camera, this.scene);
-    for (const hit of hits) {
-      if (this.isFloorClick(hit.object)) break;
-      const root = this.findRootObject(hit.object);
-      const info = root ? this.objects.get(root) : undefined;
-      if (root && info) {
-        this.applyHover({ object: root, info });
-        return;
-      }
+    const pick = this.firstPick(hits);
+    if (pick && pick.type !== 'floor') {
+      this.applyHover({ object: pick.root, info: pick.info });
+      return;
     }
     this.applyHover(null);
   }
 
   private applyHover(target: HoverTarget | null): void {
-    const same = this.hovered?.object === target?.object;
+    const same = this.hovered?.info.id === target?.info.id;
+    const isSelected = (t: HoverTarget) =>
+      this.selected !== null &&
+      this.objects.get(this.selected)?.id === t.info.id;
     // Mismo objeto: nada que hacer, salvo que haya perdido su contorno al deseleccionarse.
     if (
       same &&
-      (!target || this.hoverOutline || target.object === this.selected)
+      (!target || this.hoverOutlines.length > 0 || isSelected(target))
     )
       return;
     this.removeHoverOutline();
     this.hovered = target;
-    // El seleccionado ya tiene su contorno; el hover nunca toca los materiales.
-    if (target && target.object !== this.selected) {
+    // El seleccionado ya tiene su contorno; el hover nunca toca los materiales;
+    // las paredes y el techo no se contornean (solo cambian el cursor).
+    if (target && !isSelected(target) && target.info.kind !== 'surface') {
       this.ensureCanvasSize();
       // Un único material de hover, reutilizado entre objetos.
       this.hoverMaterial ??= this.createOutlineMaterial(
@@ -673,12 +827,14 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
         this.hoverOffset,
         'hover-outline'
       );
-      this.hoverStencil = writeStencil(target.object);
-      this.hoverOutline = this.buildOutline(
-        target.object,
-        this.hoverMaterial,
-        HOVER_OUTLINE_NAME
-      );
+      const stencil: StencilBackup = new Map();
+      for (const root of this.outlineRoots(target.object, target.info)) {
+        writeStencil(root, stencil);
+        this.hoverOutlines.push(
+          this.buildOutline(root, this.hoverMaterial, HOVER_OUTLINE_NAME)
+        );
+      }
+      this.hoverStencil = stencil;
     }
     if (!same) this.onHoverChange?.(target);
   }
@@ -686,11 +842,16 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
   private removeHoverOutline(): void {
     restoreStencil(this.hoverStencil);
     this.hoverStencil = null;
-    if (this.hoverOutline) {
-      this.hoverOutline.removeFromParent();
-      this.disposeHullGeometries(this.hoverOutline);
-      this.hoverOutline.clear();
-      this.hoverOutline = null;
+    this.disposeOutlines(this.hoverOutlines);
+    this.hoverOutlines = [];
+  }
+
+  /** Quita los contornos de la escena; la geometría compartida con el original no se libera. */
+  private disposeOutlines(outlines: Group[]): void {
+    for (const outline of outlines) {
+      outline.removeFromParent();
+      this.disposeHullGeometries(outline);
+      outline.clear();
     }
   }
 
