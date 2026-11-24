@@ -255,4 +255,31 @@ describe('RoomBuilderService', () => {
       expect(dispose).toHaveBeenCalled();
     });
   });
+
+  it('names the four walls and the ceiling and finds them by surface id', () => {
+    const found = service.surfaces(scene);
+    expect(Object.keys(found).sort()).toEqual(
+      ['ceiling', 'wallDesk', 'wallGreen', 'wallTv', 'wallWindow'].sort()
+    );
+    expect(found.wallGreen!.name).toBe('wall-back');
+    expect(found.wallGreen!.position.z).toBe(-room.depth / 2);
+    expect(found.wallWindow!.position.x).toBe(-room.width / 2);
+    expect(found.wallTv!.position.z).toBe(room.depth / 2);
+    expect(found.wallDesk!.position.x).toBe(room.width / 2);
+  });
+
+  it('rugTextures is empty before loading and clones with repeat 1 after', async () => {
+    expect(service.rugTextures()).toEqual({});
+    vi.spyOn(TextureLoader.prototype, 'loadAsync').mockImplementation(
+      async () => new Texture()
+    );
+    await service.loadTextures('rug');
+    const copies = service.rugTextures();
+    const original = (scene.getObjectByName('rug') as Mesh)
+      .material as MeshStandardMaterial;
+    expect(copies['rug:diffuse']).toBeDefined();
+    expect(copies['rug:diffuse']).not.toBe(original.map);
+    expect(copies['rug:diffuse']!.repeat.x).toBe(1);
+    expect(original.map!.repeat.x).toBeGreaterThan(1);
+  });
 });

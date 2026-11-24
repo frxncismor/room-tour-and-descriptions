@@ -239,4 +239,6 @@ export interface MaterialOverride {
   color?: number;
   roughness?: number;
   metalness?: number;
+  /** Quita la textura de color (`map`) para que mande `color` (armario, silla). */
+  clearMap?: boolean;
 }

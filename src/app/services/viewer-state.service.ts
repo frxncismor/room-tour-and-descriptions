@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { ObjectInfo, ObjectKind } from '../interfaces/scene.interface';
+import { ObjectKind, SelectedInfo } from '../interfaces/scene.interface';
 import { ActionPieceId, PIECE_IDS_WITH_ACTIONS } from '../pieces/piece-ids';
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -51,9 +51,11 @@ export class ViewerStateService {
   readonly loadProgress = signal(0);
   readonly loadStatus = signal<LoadStatus>('idle');
   readonly error = signal<ViewerError | null>(null);
-  readonly selected = signal<ObjectInfo | null>(null);
+  readonly selected = signal<SelectedInfo | null>(null);
   /** Tipo de lo seleccionado (mueble, pieza o superficie), o null. */
   readonly selectedKind = signal<ObjectKind | null>(null);
+  /** Pared encuadrada: tramo actual y nº de tramos (null si no hay pared seleccionada). */
+  readonly surfaceTramo = signal<{ tramo: number; count: number } | null>(null);
   /**
    * Estado de las piezas con acciones. Lo escribe el runtime de acciones solo
    * en eventos discretos (clic, temporizador de la TV): sin `effect` ni
@@ -79,6 +81,7 @@ export class ViewerStateService {
     this.error.set(null);
     this.selected.set(null);
     this.selectedKind.set(null);
+    this.surfaceTramo.set(null);
     this.pieceState.set(initialPieceState());
     this.hovered.set(null);
     this.sceneReady.set(false);

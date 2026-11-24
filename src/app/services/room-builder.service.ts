@@ -34,7 +34,17 @@ import {
   RoomColors,
   RoomConfiguration,
 } from '../interfaces/scene.interface';
+import type { SurfaceId } from '../pieces/piece-ids';
 import { TEXTURE_ANISOTROPY } from './model-loader.service';
+
+/** Nombre en la escena de cada superficie seleccionable (paredes y techo). */
+export const SURFACE_NAMES = {
+  wallGreen: 'wall-back',
+  wallWindow: 'wall-left',
+  wallTv: 'wall-front',
+  wallDesk: 'wall-right',
+  ceiling: 'ceiling',
+} as const;
 
 /** Conjuntos de texturas de la sala que se cargan de forma asíncrona. */
 export type RoomTextureSet = 'floor' | 'rug';
@@ -63,6 +73,36 @@ export class RoomBuilderService {
     this.createTrim(scene, config);
     this.setupLighting(scene, lighting);
     this.built.push(...scene.children.filter(c => !before.has(c)));
+  }
+
+  /** Paredes y techo por id de superficie (para registrarlos como seleccionables). */
+  surfaces(scene: Scene): Partial<Record<SurfaceId, Object3D>> {
+    const result: Partial<Record<SurfaceId, Object3D>> = {};
+    for (const [id, name] of Object.entries(SURFACE_NAMES)) {
+      const object = scene.getObjectByName(name);
+      if (object) result[id as SurfaceId] = object;
+    }
+    return result;
+  }
+
+  /**
+   * Copias de la textura de la alfombra para las alfombras nuevas (comparten
+   * imagen y GPU); repetición 1: sus UV ya van en metros. Vacío si no cargó.
+   */
+  rugTextures(): { 'rug:diffuse'?: Texture; 'rug:normal'?: Texture } {
+    const material = this.rugMaterial;
+    const result: { 'rug:diffuse'?: Texture; 'rug:normal'?: Texture } = {};
+    const copy = (source: Texture | null): Texture | undefined => {
+      if (!source) return undefined;
+      const clone = source.clone();
+      clone.repeat.set(1, 1);
+      return clone;
+    };
+    const diffuse = copy(material?.map ?? null);
+    const normal = copy(material?.normalMap ?? null);
+    if (diffuse) result['rug:diffuse'] = diffuse;
+    if (normal) result['rug:normal'] = normal;
+    return result;
   }
 
   /** Quita de la escena lo construido y libera geometrías y materiales. */
@@ -189,6 +229,7 @@ export class RoomBuilderService {
     const ceilingGeometry = new PlaneGeometry(config.width, config.depth);
     const ceiling = new Mesh(ceilingGeometry, ceilingMaterial);
 
+    ceiling.name = SURFACE_NAMES.ceiling;
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = config.height;
     ceiling.receiveShadow = true;
@@ -289,6 +330,7 @@ export class RoomBuilderService {
     const wallGeometry = new PlaneGeometry(config.width, config.height);
     const wall = new Mesh(wallGeometry, wallMaterial);
 
+    wall.name = SURFACE_NAMES.wallGreen;
     wall.position.z = -config.depth / 2;
     wall.position.y = config.height / 2;
     wall.receiveShadow = true;
@@ -300,6 +342,7 @@ export class RoomBuilderService {
     const wallGeometry = new PlaneGeometry(config.width, config.height);
     const wall = new Mesh(wallGeometry, wallMaterial);
 
+    wall.name = SURFACE_NAMES.wallTv;
     wall.position.z = config.depth / 2;
     wall.position.y = config.height / 2;
     wall.rotation.y = Math.PI;
@@ -312,6 +355,7 @@ export class RoomBuilderService {
     const wallGeometry = new PlaneGeometry(config.depth, config.height);
     const wall = new Mesh(wallGeometry, wallMaterial);
 
+    wall.name = SURFACE_NAMES.wallWindow;
     wall.position.x = -config.width / 2;
     wall.position.y = config.height / 2;
     wall.rotation.y = Math.PI / 2;
@@ -324,6 +368,7 @@ export class RoomBuilderService {
     const wallGeometry = new PlaneGeometry(config.depth, config.height);
     const wall = new Mesh(wallGeometry, wallMaterial);
 
+    wall.name = SURFACE_NAMES.wallDesk;
     wall.position.x = config.width / 2;
     wall.position.y = config.height / 2;
     wall.rotation.y = -Math.PI / 2;

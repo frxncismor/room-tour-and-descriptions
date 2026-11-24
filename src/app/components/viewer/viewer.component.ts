@@ -75,7 +75,10 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   });
 
   protected readonly panelInfo = computed(() => {
-    return this.state.selected();
+    const selected = this.state.selected();
+    return selected && selected.kind !== 'piece' && selected.kind !== 'surface'
+      ? selected
+      : null;
   });
 
   protected readonly blockingError = computed(() => {

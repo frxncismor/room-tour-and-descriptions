@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 import {
   ACESFilmicToneMapping,
+  Box3,
   BoxGeometry,
   Group,
   Mesh,
@@ -14,6 +15,7 @@ import {
   NoToneMapping,
   Object3D,
   PerspectiveCamera,
+  Quaternion,
   Scene,
   Texture,
   TextureLoader,
@@ -26,23 +28,36 @@ import {
   DEFAULT_SCENE_CONFIG,
   MODEL_CONFIGURATIONS,
 } from '../config/scene.config';
+import { LocaleService } from '../i18n/locale.service';
 import {
   ModelConfiguration,
   ObjectInfo,
   ScreenPoint,
+  SelectedInfo,
 } from '../interfaces/scene.interface';
+import type { SelectableId as SelectableIdOf } from '../interfaces/scene.interface';
+import {
+  ActionId,
+  ActionPieceId,
+  PIECE_IDS,
+  SURFACE_IDS,
+  SurfaceId,
+} from '../pieces/piece-ids';
+import type { ActionResult } from '../pieces/piece-actions.runtime';
 import { CameraService } from './camera.service';
 import type { DecorBuild, DecorBuilderService } from './decor-builder.service';
 import {
   ModelLoaderService,
   disableRaycast,
   disposeObject3D,
+  freezeMatrices,
 } from './model-loader.service';
 import {
   ObjectInteractionService,
   PointerLike,
 } from './object-interaction.service';
 import { RoomBuilderService, RoomTextureSet } from './room-builder.service';
+import type * as ScenePieces from './scene-pieces';
 import { ViewerStateService } from './viewer-state.service';
 
 /** Global de Angular: el build de producción lo fija a false y elimina el bloque. */
@@ -64,6 +79,37 @@ export const DECOR3_KEYS: readonly string[] = [
   'fabric:linen',
   'fabric:linen-nor',
 ];
+
+/** Claves de carga de las piezas (láminas E–H, glTF y construcción). */
+export const PIECES_KEYS: readonly string[] = [
+  'plate:e',
+  'plate:f',
+  'plate:g',
+  'plate:h',
+  'pieces:models',
+  'pieces:build',
+];
+const isPiecesKey = (key: string): boolean =>
+  key.startsWith('plate:') || key.startsWith('pieces:');
+
+/**
+ * Render bajo demanda (R8-I1): solo se dibuja con cámara en movimiento,
+ * tween, contorno, animación del runtime o cambios. Si diera problemas, poner
+ * `false`: se dibuja cada frame como antes.
+ */
+export const RENDER_ON_DEMAND = true;
+
+const SURFACE_SET: ReadonlySet<string> = new Set(SURFACE_IDS);
+
+/** Acción principal de una pieza con acciones (la que dispara el clic). */
+const PRIMARY_ACTION: Readonly<Record<ActionPieceId, ActionId>> = {
+  tv: 'power',
+  monitor: 'power',
+  deskLamp: 'power',
+  readingLamp: 'power',
+  floorLamp: 'power',
+  turntable: 'spin',
+};
 
 const TONE_MAPPING = {
   neutral: NeutralToneMapping,
@@ -151,6 +197,24 @@ export class SceneService {
   private readonly failed = new Map<string, unknown>();
   private readonly pending = new Map<string, Promise<void>>();
 
+  /** Texturas de las láminas A–D (del builder de decoración 3). */
+  private artTextures = new Map<string, Texture>();
+  private readonly decorObjects = new Map<DecorId, Object3D>();
+  private plateTextures: Partial<Record<ScenePieces.PlateKey, Texture>> = {};
+  private readonly piecesLoaded = new Set<string>();
+  private pieceModels: Record<string, Object3D> = {};
+  private pieceSpecs: ScenePieces.PieceModelSpec[] = [];
+  private piecesBuild: ScenePieces.PiecesBuild | null = null;
+  private plateFrames: { group: Group; dispose: () => void } | null = null;
+  private runtime: ScenePieces.PieceActionsRuntime | null = null;
+  private pieceConfigs: typeof ScenePieces.PIECES | null = null;
+
+  // Render bajo demanda.
+  private needsRender = true;
+  private readonly lastCameraPosition = new Vector3(Infinity, 0, 0);
+  private readonly lastCameraQuaternion = new Quaternion();
+  private lastPieceState: unknown = null;
+
   private readonly zone = inject(NgZone);
   private readonly injector = inject(Injector);
   private readonly rendererFactory = inject(RENDERER_FACTORY);
@@ -159,6 +223,7 @@ export class SceneService {
   private readonly objectInteractionService = inject(ObjectInteractionService);
   private readonly roomBuilderService = inject(RoomBuilderService);
   private readonly state = inject(ViewerStateService);
+  private readonly locale = inject(LocaleService);
 
   // Referencias estables para poder quitar los listeners en dispose().
   private readonly onWindowResize = () => this.handleResize();
@@ -166,6 +231,7 @@ export class SceneService {
     if (document.hidden) {
       this.stopLoop();
     } else {
+      this.requestRender();
       this.startLoop();
     }
   };
@@ -182,6 +248,7 @@ export class SceneService {
       this.state.error.set(null);
     }
     this.state.sceneReady.set(this.state.loadStatus() !== 'loading');
+    this.requestRender(true);
     this.startLoop();
   };
 
@@ -204,6 +271,8 @@ export class SceneService {
       return;
     }
 
+    // Sombras estáticas (R8-I1): se recalculan solo con `needsUpdate`.
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.toneMapping =
       TONE_MAPPING[DEFAULT_SCENE_CONFIG.renderer.toneMapping];
     this.renderer.toneMappingExposure = DEFAULT_SCENE_CONFIG.renderer.exposure;
@@ -223,14 +292,30 @@ export class SceneService {
     const interaction = this.objectInteractionService;
     interaction.setCanvas(canvas);
     interaction.setContext(this.cameraService.getCamera(), this.scene);
+    // Paredes y techo: seleccionables desde el primer frame.
+    const surfaces = this.roomBuilderService.surfaces(this.scene);
+    for (const id of SURFACE_IDS) {
+      const object = surfaces[id];
+      if (object) interaction.registerSurface(object, id);
+    }
+    // La sala es estática: matrices congeladas (las luces siguen igual).
+    freezeMatrices(
+      this.scene,
+      object => !(object as Mesh).isMesh && !(object as Group).isGroup
+    );
     interaction.onHoverChange = hover => {
-      const id = hover ? (this.objectIds.get(hover.object) ?? null) : null;
+      const id = hover
+        ? (this.objectIds.get(hover.object) ??
+          (hover.info.kind === 'surface' ? null : hover.info.id))
+        : null;
       if (this.state.hovered() !== id) this.state.hovered.set(id);
+      this.requestRender();
     };
 
     this.applySize();
     this.addListeners(canvas);
     this.isInitialized = true;
+    this.requestRender(true);
     if (typeof ngDevMode !== 'undefined' && ngDevMode) {
       Object.assign(window, { __rtad: { stats: () => this.getRenderStats() } });
     }
@@ -255,10 +340,13 @@ export class SceneService {
 
     // El builder es dueño de sus texturas: se liberan aquí, una sola vez, y
     // antes de recorrer la escena (el grupo queda vacío).
+    this.disposePieces();
     this.decor3?.group.removeFromParent();
     this.decor3?.dispose();
     this.decor3 = null;
     this.decor3Loaded.clear();
+    this.artTextures = new Map();
+    this.decorObjects.clear();
     if (this.scene) {
       this.roomBuilderService.dispose(this.scene);
       disposeObject3D(this.scene);
@@ -312,12 +400,47 @@ export class SceneService {
 
       this.cameraService.update(delta);
       this.objectInteractionService.update(time);
-      this.renderer?.render(this.scene, this.cameraService.getCamera());
+      if (this.runtime?.animating) this.runtime.update(delta / 1000);
+      if (this.shouldRender()) {
+        this.renderer?.render(this.scene, this.cameraService.getCamera());
+        this.needsRender = false;
+      }
       this.frameFailures = 0;
     } catch (error) {
       this.onFrameError(error);
     }
   };
+
+  /** Pide un frame (y, con `shadows`, recalcular las sombras estáticas). */
+  private requestRender(shadows = false): void {
+    this.needsRender = true;
+    if (shadows && this.renderer) this.renderer.shadowMap.needsUpdate = true;
+  }
+
+  /** ¿Hay algo que dibujar? En reposo no se renderiza (R8-I1). */
+  private shouldRender(): boolean {
+    if (!RENDER_ON_DEMAND) return true;
+    const camera = this.cameraService.getCamera();
+    const moved =
+      !camera.position.equals(this.lastCameraPosition) ||
+      !camera.quaternion.equals(this.lastCameraQuaternion);
+    if (moved) {
+      this.lastCameraPosition.copy(camera.position);
+      this.lastCameraQuaternion.copy(camera.quaternion);
+    }
+    const pieceState = this.state.pieceState();
+    const stateChanged = pieceState !== this.lastPieceState;
+    this.lastPieceState = pieceState;
+    return (
+      this.needsRender ||
+      moved ||
+      stateChanged ||
+      this.cameraService.isAnimating() ||
+      this.runtime?.animating === true ||
+      // El contorno de la selección pulsa.
+      this.objectInteractionService.getSelected() !== null
+    );
+  }
 
   /** Tolera fallos puntuales; tras N seguidos para el bucle y ofrece reintentar. */
   private onFrameError(error: unknown): void {
@@ -343,6 +466,7 @@ export class SceneService {
     if (this.state.error()?.code === 'render-failed')
       this.state.error.set(null);
     this.state.sceneReady.set(this.state.loadStatus() !== 'loading');
+    this.requestRender();
     this.startLoop();
   }
 
@@ -395,6 +519,7 @@ export class SceneService {
     this.renderer.setSize(width, height, false);
     this.cameraService.setAspect(height > 0 ? width / height : 1);
     this.objectInteractionService.setCanvasSize(width, height);
+    this.requestRender();
   }
 
   private handleResize(): void {
@@ -422,6 +547,7 @@ export class SceneService {
       ...this.decorIds().map(id => `decor:${id}`),
       ...this.textureSets().map(set => `tex:${set}`),
       ...DECOR3_KEYS,
+      ...PIECES_KEYS,
     ];
   }
 
@@ -433,6 +559,7 @@ export class SceneService {
       return this.texturesLoaded.has(key.slice(4) as RoomTextureSet);
     }
     if (isDecor3Key(key)) return this.decor3Loaded.has(key);
+    if (isPiecesKey(key)) return this.piecesLoaded.has(key);
     return this.models.has(key as ModelId);
   }
 
@@ -483,7 +610,8 @@ export class SceneService {
 
   /** Solo borra errores de carga: un `render-failed` o de WebGL sigue vigente. */
   private clearLoadError(): void {
-    if (this.state.error()?.code === 'model-load-failed') {
+    const code = this.state.error()?.code;
+    if (code === 'model-load-failed' || code === 'pieces-load-failed') {
       this.state.error.set(null);
     }
   }
@@ -499,26 +627,37 @@ export class SceneService {
     const decor = keys.filter(k => k.startsWith('decor:'));
     const textures = keys.filter(k => k.startsWith('tex:'));
     const decor3 = keys.filter(isDecor3Key);
+    const pieces = keys.filter(isPiecesKey);
     const models = keys.filter(k => !k.includes(':'));
     await Promise.allSettled([
       ...models.map(key => this.loadOne(key as ModelId)),
       this.loadDecor(decor),
       this.loadTextures(textures),
       this.loadDecor3(decor3),
+      // Después de los anteriores: espera su decoración (jarrón, láminas, alfombra).
+      pieces.length > 0 ? this.loadPieces() : Promise.resolve(),
     ]);
     if (generation !== this.generation) return;
 
     this.publishProgress();
     if (this.failed.size > 0) {
       const failedKeys = [...this.failed.keys()];
+      const assets = failedKeys.filter(key => !isPiecesKey(key));
       this.state.loadStatus.set('error');
-      this.state.error.set({
-        code: 'model-load-failed',
-        params: {
-          names: [...new Set(failedKeys.map(key => this.assetId(key)))],
-        },
-        retry: () => void this.retryLoad(),
-      });
+      this.state.error.set(
+        assets.length > 0
+          ? {
+              code: 'model-load-failed',
+              params: {
+                names: [...new Set(assets.map(key => this.assetId(key)))],
+              },
+              retry: () => void this.retryLoad(),
+            }
+          : {
+              code: 'pieces-load-failed',
+              retry: () => void this.retryLoad(),
+            }
+      );
     } else {
       this.state.loadStatus.set('ready');
     }
@@ -571,6 +710,7 @@ export class SceneService {
       this.objectIds.set(object, id);
       this.objectInteractionService.addObject(object, config.metadata);
       this.modelProgress.set(id, 1);
+      this.requestRender(true);
     });
   }
 
@@ -592,8 +732,10 @@ export class SceneService {
       disableRaycast(object);
       this.decorGroup ??= this.createDecorGroup();
       this.decorGroup.add(object);
+      this.decorObjects.set(id, object);
       this.decorLoaded.add(id);
       this.modelProgress.set(key, 1);
+      this.requestRender(true);
     });
   }
 
@@ -614,6 +756,7 @@ export class SceneService {
       if (generation !== this.generation) return;
       this.texturesLoaded.add(set);
       this.modelProgress.set(key, 1);
+      this.requestRender();
     });
   }
 
@@ -684,6 +827,10 @@ export class SceneService {
         this.decor3?.dispose();
         this.scene.add(build.group);
         this.decor3 = build;
+        this.artTextures = new Map(
+          [...loaded].filter(([key]) => key.startsWith('art:'))
+        );
+        this.requestRender(true);
         this.decor3Loaded.clear();
         loaded.forEach((_, key) => {
           this.decor3Loaded.add(key);
@@ -695,6 +842,195 @@ export class SceneService {
         fail(error, all);
       }
     });
+  }
+
+  /** Chunk perezoso de las piezas; aparte para poder sustituirlo en los tests. */
+  private importPieces(): Promise<typeof ScenePieces> {
+    return import('./scene-pieces');
+  }
+
+  /**
+   * Piezas: importa el chunk (builders, runtime, audio), carga las láminas E–H
+   * y los glTF nuevos, construye lo procedural, lo registra en la interacción y
+   * engancha el runtime de acciones. Un fallo no tumba la escena: queda el
+   * aviso con reintento (constitución V) y se usa lo que sí cargó.
+   */
+  async loadPieces(): Promise<void> {
+    if (!this.isInitialized || PIECES_KEYS.every(k => this.piecesLoaded.has(k)))
+      return;
+    await this.once('pieces', async generation => {
+      const fail = (key: string, reason: unknown) => {
+        console.error(`Error loading ${key}:`, reason);
+        if (generation === this.generation) this.failed.set(key, reason);
+      };
+      PIECES_KEYS.forEach(key => this.failed.delete(key));
+      let mod: typeof ScenePieces;
+      try {
+        mod = await this.importPieces();
+        await this.locale.enablePieces();
+      } catch (error) {
+        PIECES_KEYS.forEach(key => fail(key, error));
+        return;
+      }
+      if (generation !== this.generation) return;
+      this.pieceConfigs = mod.PIECES;
+
+      // Láminas E–H (progreso por clave: nunca retrocede).
+      const missingPlates = (
+        Object.keys(mod.PLATE_TEXTURES) as ScenePieces.PlateKey[]
+      ).filter(key => !this.plateTextures[key]);
+      if (missingPlates.length > 0) {
+        const plates = await mod.loadPlateTextures((key, fraction) =>
+          this.setProgress(key, generation, fraction)
+        );
+        if (generation !== this.generation) {
+          Object.values(plates.textures).forEach(t => t?.dispose());
+          return;
+        }
+        Object.assign(this.plateTextures, plates.textures);
+        for (const key of Object.keys(plates.textures)) {
+          this.piecesLoaded.add(key);
+          this.modelProgress.set(key, 1);
+        }
+        plates.failed.forEach((key, i) => fail(key, plates.reasons[i]));
+      }
+
+      // glTF nuevos (solo los que faltan al reintentar).
+      const builder = this.injector.get(mod.PiecesBuilderService);
+      this.pieceSpecs = mod.allModelSpecs();
+      const todo = this.pieceSpecs.filter(spec => !this.pieceModels[spec.id]);
+      if (todo.length > 0) {
+        const result = await builder.loadModels(
+          this.modelLoaderService,
+          todo,
+          (loaded, total) =>
+            this.setProgress(
+              'pieces:models',
+              generation,
+              total > 0 ? loaded / total : 0
+            )
+        );
+        if (generation !== this.generation) {
+          Object.values(result.models).forEach(disposeObject3D);
+          return;
+        }
+        Object.assign(this.pieceModels, result.models);
+        if (result.error) {
+          fail('pieces:models', result.error);
+        }
+      }
+      if (this.pieceSpecs.every(spec => this.pieceModels[spec.id])) {
+        this.piecesLoaded.add('pieces:models');
+        this.modelProgress.set('pieces:models', 1);
+      }
+
+      // Lo que la construcción necesita de la decoración y de la alfombra.
+      await Promise.allSettled(
+        ['decor3', 'decor:vase', 'decor:clock', 'tex:rug']
+          .map(key => this.pending.get(key))
+          .filter((p): p is Promise<void> => !!p)
+      );
+      if (generation !== this.generation) return;
+
+      try {
+        if (!this.piecesBuild) this.buildPieces(mod, builder);
+        // Los glTF que llegan en un reintento se añaden a una escena ya montada.
+        this.addPieceModels(mod);
+        this.piecesLoaded.add('pieces:build');
+        this.modelProgress.set('pieces:build', 1);
+        this.requestRender(true);
+      } catch (error) {
+        fail('pieces:build', error);
+      }
+    });
+  }
+
+  private buildPieces(
+    mod: typeof ScenePieces,
+    builder: ScenePieces.PiecesBuilderService
+  ): void {
+    const textures = this.roomBuilderService.rugTextures();
+    let build: ScenePieces.PiecesBuild;
+    try {
+      build = builder.build(mod.PIECES, textures, {
+        ...(this.decorObjects.get('vase')
+          ? { vase: this.decorObjects.get('vase') }
+          : {}),
+        ...(mod.asWebGLRenderer(this.renderer)
+          ? { renderer: mod.asWebGLRenderer(this.renderer) }
+          : {}),
+      });
+    } catch (error) {
+      Object.values(textures).forEach(texture => texture.dispose());
+      throw error;
+    }
+    const frames = mod.buildPlateFrames(this.plateTextures);
+    const plates = mod.buildPlates(this.artTextures, this.plateTextures);
+    const runtime = new mod.PieceActionsRuntime({
+      state: this.state,
+      messages: () => this.locale.pieceMessages(),
+      plates,
+      floorLight: mod.findFloorLight(this.scene),
+      // El `AudioContext` se crea dentro del gesto (`start()`); el chunk ya está cargado.
+      audio: new mod.TurntableAudio(),
+      onWake: () => this.requestRender(),
+      onAudioError: error => console.warn('Audio unavailable:', error.code),
+    });
+    runtime.attach(build.group);
+    const animated = new Set<Object3D | undefined>([
+      build.named('turntable:platter'),
+      build.named('turntable:arm'),
+    ]);
+    freezeMatrices(build.group, object => animated.has(object));
+    this.scene.add(build.group, frames.group);
+    this.piecesBuild = build;
+    this.plateFrames = frames;
+    this.runtime = runtime;
+    mod.registerProxyPieces(this.objectInteractionService, build, {
+      clock: this.decorObjects.get('clock'),
+      vase: this.decorObjects.get('vase'),
+    });
+  }
+
+  /** Añade a la escena los glTF cargados que aún no estén y los registra. */
+  private addPieceModels(mod: typeof ScenePieces): void {
+    const build = this.piecesBuild;
+    if (!build) return;
+    const added: Record<string, Object3D> = {};
+    for (const spec of this.pieceSpecs) {
+      const model = this.pieceModels[spec.id];
+      if (!model || model.parent) continue;
+      this.scene.add(model);
+      added[spec.id] = model;
+    }
+    if (Object.keys(added).length > 0) {
+      mod.registerModelPieces(
+        this.objectInteractionService,
+        added,
+        this.pieceSpecs
+      );
+    }
+  }
+
+  private disposePieces(): void {
+    this.runtime?.dispose();
+    this.runtime = null;
+    this.piecesBuild?.group.removeFromParent();
+    this.piecesBuild?.dispose();
+    this.piecesBuild = null;
+    this.plateFrames?.group.removeFromParent();
+    this.plateFrames?.dispose();
+    this.plateFrames = null;
+    Object.values(this.pieceModels).forEach(model => {
+      model.removeFromParent();
+      disposeObject3D(model);
+    });
+    this.pieceModels = {};
+    this.pieceSpecs = [];
+    Object.values(this.plateTextures).forEach(texture => texture?.dispose());
+    this.plateTextures = {};
+    this.piecesLoaded.clear();
+    this.pieceConfigs = null;
   }
 
   /** Progreso agregado 0-100 sin dividir entre totales desconocidos. */
@@ -712,32 +1048,164 @@ export class SceneService {
 
   // ── API para la UI ────────────────────────────────────────────────
 
+  /** Los ids seleccionables ahora: muebles cargados y, con las piezas, el resto. */
   getObjectList(): { id: string }[] {
-    return [...this.models.keys()].map(id => ({ id }));
+    const withPieces = this.piecesLoaded.has('pieces:build');
+    return PIECE_IDS.filter(id =>
+      id in MODEL_CONFIGURATIONS ? this.models.has(id as ModelId) : withPieces
+    ).map(id => ({ id }));
   }
 
-  /** Selecciona un mueble por id: abre su ficha y acerca la cámara (D-04). */
-  selectObject(id: string): void {
+  /**
+   * Selecciona por id (mueble, pieza o pared/techo): abre su ficha y encuadra.
+   * `pointer`: el origen es un clic o toque sobre la pieza; solo entonces se
+   * ejecuta su acción principal si está apagada (decisión 7). Desde la lista o
+   * el teclado solo se selecciona.
+   */
+  selectObject(id: string, options: { pointer?: boolean } = {}): void {
+    if (SURFACE_SET.has(id)) {
+      this.viewSurface(id as SurfaceId);
+      return;
+    }
     const entry = this.models.get(id as ModelId);
-    if (!entry) return;
-    this.objectInteractionService.selectObject(entry.object);
-    this.state.selected.set(entry.info);
-    const obstacles = [
+    if (entry) {
+      this.objectInteractionService.selectObject(entry.object);
+      this.state.selected.set(entry.info);
+      this.state.selectedKind.set('furniture');
+      this.state.surfaceTramo.set(null);
+      this.requestRender();
+      const obstacles = this.focusObstacles(entry.object);
+      // Frente de la pieza (+Z local en el mundo): el encuadre no depende de
+      // dónde estaba la cámara.
+      entry.object.updateWorldMatrix(true, false);
+      const front = new Vector3(0, 0, 1).transformDirection(
+        entry.object.matrixWorld
+      );
+      void this.cameraService.focusOn(entry.object, obstacles, front);
+      return;
+    }
+    this.selectPiece(id, options.pointer === true);
+  }
+
+  /** Pieza nueva o decorativa: caja unión de sus proxies y frente de la config. */
+  private selectPiece(id: string, pointer: boolean): void {
+    const config = this.pieceConfigs?.find(piece => piece.id === id);
+    if (!config || !this.piecesLoaded.has('pieces:build')) return;
+    const interaction = this.objectInteractionService;
+    const group = interaction.groupOf(id as SelectableIdOf);
+    if (group.length > 0) interaction.selectObject(group[0]);
+    else interaction.clearSelection();
+    this.state.selected.set({ id: config.id, kind: 'piece' } as SelectedInfo);
+    this.state.selectedKind.set('piece');
+    this.state.surfaceTramo.set(null);
+
+    const frame = this.frameProxy(config);
+    const front = new Vector3(...config.facing);
+    const own = new Set<Object3D>(group);
+    void this.cameraService.focusOn(frame, this.focusObstacles(...own), front);
+
+    // Acción principal: solo con puntero y la pieza apagada.
+    const actionId = PRIMARY_ACTION[id as ActionPieceId];
+    if (pointer && actionId && this.runtime) {
+      const state = this.state.pieceState()[id as ActionPieceId];
+      const off = actionId === 'spin' ? !state.spin : !state.power;
+      if (off) this.runtime.run(id as ActionPieceId, actionId);
+    }
+    this.requestRender();
+  }
+
+  /** Caja (sin dibujar) con la unión de los proxies de la config, para el encuadre. */
+  private frameProxy(config: {
+    proxies: readonly {
+      position: readonly [number, number, number];
+      size: readonly [number, number, number];
+      rotationY: number;
+    }[];
+  }): Object3D {
+    const union = new Box3();
+    for (const proxy of config.proxies) {
+      const [w, h, d] = proxy.size;
+      const cos = Math.abs(Math.cos(proxy.rotationY));
+      const sin = Math.abs(Math.sin(proxy.rotationY));
+      const half = new Vector3(
+        (w * cos + d * sin) / 2,
+        h / 2,
+        (w * sin + d * cos) / 2
+      );
+      const center = new Vector3(...proxy.position);
+      union.union(new Box3(center.clone().sub(half), center.clone().add(half)));
+    }
+    const size = union.getSize(new Vector3());
+    const mesh = new Mesh(new BoxGeometry(size.x, size.y, size.z));
+    union.getCenter(mesh.position);
+    mesh.updateMatrixWorld(true);
+    return mesh;
+  }
+
+  /** Lo que puede tapar un encuadre: muebles, decoración y glTF nuevos (salvo `except`). */
+  private focusObstacles(...except: Object3D[]): Object3D[] {
+    return [
       ...[...this.models.values()]
-        .filter(other => other !== entry)
-        .map(other => other.object),
+        .map(other => other.object)
+        .filter(object => !except.includes(object)),
       // La decoración (jarrón, reloj) también puede tapar el encuadre.
       ...(this.decorGroup?.children ?? []),
+      ...Object.values(this.pieceModels).filter(
+        object => !except.includes(object)
+      ),
       // Lámpara de pie, cortinas y apliques (decoración 3), solo para la oclusión.
       ...this.decor3Obstacles(),
     ];
-    // Frente de la pieza (+Z local en el mundo): el encuadre no depende de
-    // dónde estaba la cámara.
-    entry.object.updateWorldMatrix(true, false);
-    const front = new Vector3(0, 0, 1).transformDirection(
-      entry.object.matrixWorld
-    );
-    void this.cameraService.focusOn(entry.object, obstacles, front);
+  }
+
+  /**
+   * Encuadra una pared (tramo `tramo`, por defecto el más cercano a `point`)
+   * o el techo y abre su ficha. No cierra una ficha abierta: la sustituye.
+   */
+  viewSurface(id: SurfaceId, tramo?: number, point?: Vector3): void {
+    if (!this.isInitialized) return;
+    const aspect = this.containerAspect();
+    const count = this.cameraService.surfaceTramos(aspect);
+    const wanted =
+      tramo ??
+      (point ? this.cameraService.surfaceTramoAt(id, point, aspect) : 1);
+    const clamped = Math.min(Math.max(1, wanted), id === 'ceiling' ? 1 : count);
+    this.objectInteractionService.clearSelection();
+    this.state.selected.set({ id, kind: 'surface' });
+    this.state.selectedKind.set('surface');
+    this.state.surfaceTramo.set({
+      tramo: clamped,
+      count: id === 'ceiling' ? 1 : count,
+    });
+    void this.cameraService.focusSurface(id, clamped, aspect);
+    this.requestRender();
+  }
+
+  /** Va al tramo `tramo` de la pared encuadrada (botones de la ficha). */
+  focusSurfaceTramo(tramo: number): void {
+    const id = this.state.selected();
+    if (id?.kind === 'surface') this.viewSurface(id.id, tramo);
+  }
+
+  /** Av Pág / Re Pág: tramo siguiente o anterior (acotado) de la pared encuadrada. */
+  stepSurfaceSection(delta: number): void {
+    const current = this.state.surfaceTramo();
+    if (current) this.focusSurfaceTramo(current.tramo + delta);
+  }
+
+  /** Alias de `runPieceAction` para la ficha. */
+  runAction(id: ActionPieceId, action: ActionId): ActionResult {
+    return this.runPieceAction(id, action);
+  }
+
+  /** Ejecuta una acción de la ficha (botón): TV, monitor, lámparas, tocadiscos. */
+  runPieceAction(id: ActionPieceId, action: ActionId): ActionResult {
+    const result = this.runtime?.run(id, action) ?? {
+      changed: false,
+      announcement: null,
+    };
+    if (result.changed) this.requestRender();
+    return result;
   }
 
   /**
@@ -762,10 +1230,14 @@ export class SceneService {
   clearSelection(): void {
     this.objectInteractionService.clearSelection();
     this.state.selected.set(null);
+    this.state.selectedKind.set(null);
+    this.state.surfaceTramo.set(null);
+    this.requestRender();
   }
 
   resetView(): void {
     void this.cameraService.reset();
+    this.requestRender();
   }
 
   /** Clic/toque sobre el canvas: suelo → caminar; mueble → seleccionar. */
@@ -780,14 +1252,21 @@ export class SceneService {
     );
     if (generation !== this.generation) return;
 
+    this.requestRender();
+    const info = result.objectInfo;
     if (result.floorPoint) {
       this.state.selected.set(null);
+      this.state.selectedKind.set(null);
+      this.state.surfaceTramo.set(null);
       void this.cameraService.teleportTo(result.floorPoint);
-    } else if (result.object && this.objectIds.has(result.object)) {
-      this.selectObject(this.objectIds.get(result.object) as ModelId);
+    } else if (info?.kind === 'surface') {
+      // Una pared con la ficha abierta encuadra y la ficha sigue abierta (decisión 5).
+      this.viewSurface(info.id, undefined, result.surfacePoint);
+    } else if (info) {
+      this.selectObject(info.id, { pointer: true });
     } else {
       // Sin acierto (o fallo del raycast) no debe quedar una ficha abierta.
-      this.state.selected.set(null);
+      this.clearSelection();
     }
   }
 
