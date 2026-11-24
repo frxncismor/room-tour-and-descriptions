@@ -198,9 +198,9 @@ const PIECES_ES = {
         'Una puerta de paneles con manilla de latón, en la pared de la tele cerca de la esquina derecha.',
     },
     archMirror: {
-      name: 'Espejo de arco',
+      name: 'Cianotipo de arco',
       description:
-        'Un espejo alto con forma de arco y marco fino de latón, en el extremo izquierdo de la pared de la tele.',
+        'Un cianotipo alto rematado en arco, con el helecho Osmunda y marco fino, en el extremo izquierdo de la pared de la tele.',
     },
     // Pared del escritorio
     diptych: {
@@ -304,7 +304,7 @@ const PIECES_ES = {
     wallTv: {
       name: 'Pared de la tele',
       description:
-        'La pared de la tele: televisión sobre aparador de nogal con láminas botánicas a los lados; puerta y espejo de arco en los extremos.',
+        'La pared de la tele: televisión sobre aparador de nogal con láminas botánicas a los lados; puerta y una lámina de arco en los extremos.',
     },
     wallDesk: {
       name: 'Pared del escritorio',

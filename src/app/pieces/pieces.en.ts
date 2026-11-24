@@ -195,9 +195,9 @@ const PIECES_EN = {
         'A panel door with a brass handle, set into the TV wall near the right corner.',
     },
     archMirror: {
-      name: 'Arched mirror',
+      name: 'Arched cyanotype',
       description:
-        'A tall arched mirror in a thin brass frame, at the left end of the TV wall.',
+        'A tall arch-topped cyanotype of Osmunda fern in a thin frame, at the left end of the TV wall.',
     },
     // Pared del escritorio
     diptych: {
@@ -300,7 +300,7 @@ const PIECES_EN = {
     wallTv: {
       name: 'TV wall',
       description:
-        'The TV wall: television over a walnut sideboard, flanked by botanical prints; door and arched mirror at the sides.',
+        'The TV wall: television over a walnut sideboard, flanked by botanical prints; door and an arched print at the sides.',
     },
     wallDesk: {
       name: 'Desk wall',
