@@ -55,7 +55,7 @@ export { ZONE_IDS };
  * Acabado del vidrio del espejo de arco (decisión del informe de la pista:
  * `env` con un PMREM de `RoomEnvironment` si hay renderer; si no, ahumado).
  */
-export const MIRROR_FINISH: MirrorFinish = 'env';
+export const MIRROR_FINISH: MirrorFinish = 'smoked';
 
 /** Opciones de `build`. */
 export interface PiecesBuildOptions {
@@ -246,7 +246,7 @@ export function pieceModelSpecs(
   add('sideboard', 'sideboard', 'vintage_wooden_drawer_01', { scale: 0.6 });
   add('tallCabinet', 'tallCabinet', 'painted_wooden_cabinet_02', {
     castShadow: true,
-    tint: { color: 0xe6dcc6, roughness: 0.6 },
+    tint: { color: 0xc4986a, roughness: 0.6 },
   });
   if (deskChair) {
     add('desk', 'deskChair', 'painted_wooden_chair_02', {

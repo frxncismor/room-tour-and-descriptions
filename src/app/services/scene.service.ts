@@ -976,7 +976,10 @@ export class SceneService {
     mod: typeof ScenePieces,
     builder: ScenePieces.PiecesBuilderService
   ): void {
-    const textures = this.roomBuilderService.rugTextures();
+    const textures: Record<string, Texture> =
+      this.roomBuilderService.rugTextures();
+    const mirrorArt = this.artTextures.get('art:osmunda');
+    if (mirrorArt) textures['mirror:art'] = mirrorArt.clone();
     let build: ScenePieces.PiecesBuild;
     try {
       build = builder.build(mod.PIECES, textures, {
