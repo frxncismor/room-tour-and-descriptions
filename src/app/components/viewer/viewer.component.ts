@@ -9,9 +9,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { collator } from '../../i18n/format';
 import { LocaleService } from '../../i18n/locale.service';
-import { FurnitureId } from '../../i18n/messages';
 import { SceneService } from '../../services/scene.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
 import { BrandLabelComponent } from '../brand-label/brand-label.component';
@@ -21,10 +19,19 @@ import { ErrorOverlayComponent } from '../error-overlay/error-overlay.component'
 import { HelpPanelComponent } from '../help-panel/help-panel.component';
 import { LanguageSwitcherComponent } from '../language-switcher/language-switcher.component';
 import { LoadingScreenComponent } from '../loading-screen/loading-screen.component';
-import { ObjectListComponent } from '../object-list/object-list.component';
+import { ObjectListPanelComponent } from '../object-list/object-list-panel.component';
 
 /** Distancia (px) a partir de la cual un gesto es arrastre y no clic (C10). */
 const DRAG_THRESHOLD_PX = 5;
+
+/**
+ * Lo que `SceneService` ofrecerá para paredes y techo (cableado de F3). Se
+ * llama por interfaz opcional: hasta entonces no hace nada.
+ */
+interface SurfaceNavigation {
+  viewSurface?(id: string): void;
+  stepSurfaceSection?(delta: -1 | 1): void;
+}
 
 const BLOCKING_ERRORS = ['webgl-unavailable', 'webgl-context-lost'];
 
@@ -39,7 +46,7 @@ const BLOCKING_ERRORS = ['webgl-unavailable', 'webgl-context-lost'];
     HelpPanelComponent,
     LanguageSwitcherComponent,
     LoadingScreenComponent,
-    ObjectListComponent,
+    ObjectListPanelComponent,
   ],
   templateUrl: './viewer.component.html',
   styleUrls: ['./viewer.component.scss'],
@@ -79,18 +86,6 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   protected readonly bannerError = computed(() => {
     const error = this.state.error();
     return error && !BLOCKING_ERRORS.includes(error.code) ? error : null;
-  });
-
-  protected readonly objects = computed(() => {
-    // El listado del servicio no es una señal: se recalcula con el estado.
-    this.state.sceneReady();
-    this.state.loadStatus();
-    const { furniture } = this.i18n.messages();
-    const compare = collator(this.i18n.locale()).compare;
-    return this.sceneService
-      .getObjectList()
-      .map(({ id }) => ({ id, name: furniture[id as FurnitureId].name }))
-      .sort((a, b) => compare(a.name, b.name));
   });
 
   private readonly pointers = new Map<number, { x: number; y: number }>();
@@ -204,6 +199,16 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
 
   protected onCanvasKey(event: KeyboardEvent): void {
     if (event.key !== 'Tab' && event.key !== 'Shift') this.interacted.set(true);
+    // Av Pág / Re Pág recorren los tramos de una pared encuadrada.
+    if (
+      (event.key === 'PageDown' || event.key === 'PageUp') &&
+      this.state.selectedKind() === 'surface'
+    ) {
+      event.preventDefault();
+      (this.sceneService as SurfaceNavigation).stepSurfaceSection?.(
+        event.key === 'PageDown' ? 1 : -1
+      );
+    }
   }
 
   protected onHome(event: Event): void {
@@ -220,6 +225,11 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   protected selectObject(id: string): void {
     this.interacted.set(true);
     this.sceneService.selectObject(id);
+  }
+
+  protected viewSurface(id: string): void {
+    this.interacted.set(true);
+    (this.sceneService as SurfaceNavigation).viewSurface?.(id);
   }
 
   protected resetView(): void {

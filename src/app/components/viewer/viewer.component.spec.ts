@@ -1,4 +1,10 @@
-import { TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  DeferBlockState,
+  TestBed,
+} from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { ObjectListComponent } from '../object-list/object-list.component';
 import { LocaleService } from '../../i18n/locale.service';
 import { localeReady, provideLocale } from '../../i18n/testing';
 import { EN } from '../../i18n/en';
@@ -25,12 +31,15 @@ describe('ViewerComponent', () => {
     selectObject: vi.fn(),
     resetView: vi.fn(),
     retryLoad: vi.fn(() => Promise.resolve()),
+    viewSurface: vi.fn(),
+    stepSurfaceSection: vi.fn(),
   };
 
   beforeEach(() => {
     Object.values(scene).forEach(fn => fn.mockClear());
     localStorage.setItem('room-tour.help-dismissed', '1');
     TestBed.configureTestingModule({
+      imports: [ViewerComponent],
       providers: [
         { provide: SceneService, useValue: scene },
         provideLocale('en'),
@@ -39,10 +48,20 @@ describe('ViewerComponent', () => {
   });
 
   beforeEach(async () => {
+    // `@defer` (la lista): sus dependencias se resuelven de forma asíncrona.
+    await TestBed.compileComponents();
     await localeReady();
   });
 
   afterEach(() => localStorage.removeItem('room-tour.help-dismissed'));
+
+  /** La lista va en un `@defer (on idle)`: se fuerza a mostrarse. */
+  async function showList(fixture: ComponentFixture<ViewerComponent>) {
+    for (const block of await fixture.getDeferBlocks()) {
+      await block.render(DeferBlockState.Complete);
+    }
+    await fixture.whenStable();
+  }
 
   function pointer(type: string, init: PointerEventInit): PointerEvent {
     return new PointerEvent(type, { bubbles: true, pointerId: 1, ...init });
@@ -222,6 +241,7 @@ describe('ViewerComponent', () => {
     it('lists the pieces sorted for the active language', async () => {
       const fixture = TestBed.createComponent(ViewerComponent);
       await fixture.whenStable();
+      await showList(fixture);
       const el = fixture.nativeElement as HTMLElement;
       expect(names(el)).toEqual(
         [
@@ -346,6 +366,7 @@ describe('ViewerComponent', () => {
     it('is dismissed by using the object list', async () => {
       const fixture = TestBed.createComponent(ViewerComponent);
       await fixture.whenStable();
+      await showList(fixture);
       const el = fixture.nativeElement as HTMLElement;
       (el.querySelector('nav button.chip') as HTMLButtonElement).click();
       await fixture.whenStable();
@@ -363,6 +384,114 @@ describe('ViewerComponent', () => {
       canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
       await fixture.whenStable();
       expect(el.querySelector('.sheet')).toBeNull();
+    });
+  });
+
+  describe('grouped list and surfaces (spec 004 D, E)', () => {
+    it('passes the five current furniture as one group, with no «View wall» yet', async () => {
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      await showList(fixture);
+      const el = fixture.nativeElement as HTMLElement;
+      const groups = Array.from(el.querySelectorAll('button.gh'));
+      expect(groups.map(g => g.getAttribute('data-group'))).toEqual([
+        'greenWall',
+      ]);
+      expect(el.querySelector('.wallview')).toBeNull();
+    });
+
+    it('routes «View wall» to the scene and counts it as use of the list', async () => {
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      await showList(fixture);
+      const list = fixture.debugElement.query(By.directive(ObjectListComponent))
+        .componentInstance as ObjectListComponent;
+      list.viewSurface.emit('wallTv');
+      expect(scene.viewSurface).toHaveBeenCalledWith('wallTv');
+    });
+
+    it('does not fail when the scene has no surface support yet', async () => {
+      const { viewSurface, stepSurfaceSection, ...bare } = scene;
+      void viewSurface;
+      void stepSurfaceSection;
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [ViewerComponent],
+        providers: [
+          { provide: SceneService, useValue: bare },
+          provideLocale('en'),
+        ],
+      });
+      await TestBed.compileComponents();
+      await localeReady();
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      await showList(fixture);
+      const list = fixture.debugElement.query(By.directive(ObjectListComponent))
+        .componentInstance as ObjectListComponent;
+      expect(() => list.viewSurface.emit('wallTv')).not.toThrow();
+    });
+
+    it('steps through the sections of a framed wall with PageDown / PageUp', async () => {
+      const state = TestBed.inject(ViewerStateService);
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      const canvas = fixture.nativeElement.querySelector('canvas');
+      const press = (key: string) =>
+        canvas.dispatchEvent(
+          new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+        );
+      press('PageDown');
+      expect(scene.stepSurfaceSection).not.toHaveBeenCalled();
+      state.selectedKind.set('surface');
+      press('PageDown');
+      press('PageUp');
+      expect(scene.stepSurfaceSection.mock.calls).toEqual([[1], [-1]]);
+    });
+  });
+
+  describe('viewer container clipping (FR-430)', () => {
+    it('clips instead of only hiding, keeping hidden as the fallback', async () => {
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      const css = Array.from(document.querySelectorAll('style'))
+        .map(style => style.textContent ?? '')
+        .join('\n');
+      const rule = /\.viewer-container(?:\[[^\]]*\])*\s*\{([^}]*)\}/.exec(css);
+      expect(rule).not.toBeNull();
+      const body = rule![1];
+      expect(body.indexOf('overflow: hidden')).toBeGreaterThan(-1);
+      expect(body.indexOf('overflow: clip')).toBeGreaterThan(
+        body.indexOf('overflow: hidden')
+      );
+      const container =
+        fixture.nativeElement.querySelector('.viewer-container');
+      expect(['hidden', 'clip']).toContain(
+        getComputedStyle(container).overflow
+      );
+    });
+
+    it('does not scroll the container when the list reveals the active piece', async () => {
+      const state = TestBed.inject(ViewerStateService);
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      const container = fixture.nativeElement.querySelector(
+        '.viewer-container'
+      ) as HTMLElement;
+      const scrollIntoView = vi.fn();
+      (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView =
+        scrollIntoView;
+      try {
+        state.selected.set({ id: 'bookshelf' });
+        await fixture.whenStable();
+        await Promise.resolve();
+        expect(scrollIntoView).not.toHaveBeenCalled();
+        expect(container.scrollTop).toBe(0);
+        expect(container.scrollLeft).toBe(0);
+      } finally {
+        delete (HTMLElement.prototype as { scrollIntoView?: unknown })
+          .scrollIntoView;
+      }
     });
   });
 });
