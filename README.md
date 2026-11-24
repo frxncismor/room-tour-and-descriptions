@@ -18,10 +18,15 @@ An interactive 3D living room that runs entirely in the browser. Walk around by 
 |              ![Desktop view of the room](docs/media/desktop-overview-1280x800.png)               |          ![Mobile view of the room](docs/media/mobile-overview-390x844.png)          |
 | ![A selected piece of furniture with its description](docs/media/desktop-furniture-1280x800.png) | ![A selected piece of furniture on a phone](docs/media/mobile-furniture-390x844.png) |
 
+The interface is available in English and Spanish ([Languages](#languages)); here the same view in Spanish:
+
+![The sofa selected, with the interface in Spanish](docs/media/desktop-furniture-es-1280x800.png)
+
 ## Table of contents
 
 - [Features](#features)
 - [Controls](#controls)
+- [Languages](#languages)
 - [Tech stack](#tech-stack)
 - [Getting started](#getting-started)
 - [Scripts](#scripts)
@@ -40,9 +45,10 @@ An interactive 3D living room that runs entirely in the browser. Walk around by 
 - **Orbit, pan and zoom** with mouse, touch (one-finger rotate, two-finger pan and pinch) or the arrow keys.
 - **Accessible alternative**: a list of the furniture (plus an _Initial view_ button) works with the keyboard and screen readers; the description panel is announced as a dialog and closes with `Esc`.
 - **Responsive**: the initial framing adapts to portrait screens so all three pieces stay visible on a phone.
-- **Realistic lighting**: soft shadows, matte walls and tuned material for the sofa.
+- **Cozy, finished room**: sage accent wall, wall prints, curtains, lamps and soft textiles, with warm light and soft shadows.
+- **English and Spanish**: detected from the browser and switchable with the EN | ES selector.
 - **Loading and error states**: a progress screen while models download, and clear messages (with a retry button) if WebGL is unavailable, the context is lost or a model fails to load.
-- **Light assets**: the three original models were reduced from about 51 MB to about 2.4 MB, and the whole `src/assets` folder (seven models, room textures, fonts) weighs about 3.7 MB (see [Performance](#performance)).
+- **Light assets**: the three original models were reduced from about 51 MB to about 2.4 MB, and the whole `src/assets` folder (seven models, textures, fonts, social image) weighs about 3.9 MB (see [Performance](#performance)).
 
 ## Controls
 
@@ -57,6 +63,17 @@ An interactive 3D living room that runs entirely in the browser. Walk around by 
 | `Home`                                      | Return to the initial view |
 
 The **? Help** button in the corner reopens these instructions at any time.
+
+## Languages
+
+The interface is available in English and Spanish.
+
+- **Detection.** On the first visit the language is the first one in the browser's preference list that the app supports (`navigator.languages`); anything else falls back to English.
+- **Selector.** The **EN | ES** switch next to the title changes the language at once and remembers it in `localStorage` (key `room-tour.locale`), so it wins over detection on later visits. It also updates `<html lang>`, the page title and the meta description.
+- **Dictionaries.** All user-facing text lives in `src/app/i18n/`: `en.ts` is bundled with the app, `es.ts` is a separate chunk loaded only when needed. Both implement the `Messages` type in `messages.ts`, so a missing key is a compile error. If the Spanish chunk fails to load, the app stays in English and shows a non-blocking notice.
+- **Add or change a string.** Add the key to the `Messages` type, then to `en.ts` and `es.ts`, and use it through `LocaleService.messages()`. `npm test` checks that both dictionaries have the same keys.
+- **Add a language.** Add its code to `Locale`, `LOCALES` and `LOCALE_OPTIONS` in `messages.ts`, create a dictionary (copy `es.ts`) and register its lazy import in `locale.service.ts`.
+- **Social preview.** The Open Graph and Twitter tags in `src/index.html` and `src/assets/brand/og.png` are static, so they stay in English.
 
 ## Tech stack
 
@@ -119,7 +136,8 @@ Services (providedIn root, idempotent dispose)
   RoomBuilderService       floor, walls, ceiling and lights from configuration
   ViewerStateService       signals: load progress/status, error, selected, hovered
 
-config/   scene.config.ts (room, lights, models)  ·  ui-text.ts (all user-facing text)
+config/   scene.config.ts (room, lights, models)  ·  decor.config.ts (decor pieces)
+i18n/     LocaleService  ·  en.ts / es.ts (all user-facing text)
 ```
 
 Source layout:
@@ -128,14 +146,15 @@ Source layout:
 src/app/
 ├── components/   UI components
 ├── services/     3D and state services, each with its spec
-├── config/       scene configuration and UI text
+├── config/       scene and decor configuration
+├── i18n/         EN and ES dictionaries and the locale service
 └── interfaces/   shared types
 src/assets/
 ├── models/       optimized glTF models (sofa, poker_table, bookshelf, landscape_painting, wall_clock, succulent, ceramic_vase)
-├── textures/     floor and rug textures (WebP)
+├── textures/     floor, rug, wall print and linen textures (WebP)
 ├── fonts/        Fraunces and Hanken Grotesk (WOFF2) and their OFL license
 └── brand/        favicon, touch icon and social preview image
-docs/             assets pipeline, screenshots and baseline captures
+docs/             assets pipeline, README images and baseline captures
 ```
 
 ## Technical decisions
@@ -146,21 +165,31 @@ docs/             assets pipeline, screenshots and baseline captures
 - **Camera moves to what you click.** Floor clicks teleport with an eased animation clamped to the room bounds; furniture clicks frame the piece.
 - **Assets optimized in place.** WebP textures and meshopt-compressed geometry, without KTX2 (no extra transcoder to ship). The originals are kept in git history. See [docs/assets-pipeline.md](docs/assets-pipeline.md) for how to regenerate them.
 - **No UI component library.** The interface is a few small custom components, which keeps the bundle small and the visuals consistent.
-- **English UI, centralized text.** All user-facing strings live in `src/app/config/ui-text.ts`.
+- **Two languages, centralized text.** All user-facing strings live in typed dictionaries in `src/app/i18n/`; Spanish loads on demand, so English users never download it.
 
 ## Performance
 
 Measured on a production build (`npm run build`):
 
-| Metric                    | Value                                |
-| ------------------------- | ------------------------------------ |
-| Initial JavaScript bundle | 873 kB raw, about 195 kB transferred |
-| 3D models (all seven)     | 3,100,101 B (about 3.1 MB)           |
-| Room textures             | 400,862 B (about 0.4 MB)             |
-| Fonts                     | 106,659 B (about 0.1 MB)             |
-| `src/assets` in total     | 3,717,013 B (about 3.7 MB)           |
+| Metric                         | Value                                     |
+| ------------------------------ | ----------------------------------------- |
+| Initial JavaScript bundle      | 886.94 kB raw, about 202.5 kB transferred |
+| 3D models (all seven)          | 3,100,101 B (about 3.1 MB)                |
+| Textures (room, prints, linen) | 687,388 B (about 0.7 MB)                  |
+| Fonts                          | 106,659 B (about 0.1 MB)                  |
+| `src/assets` in total          | 4,044,814 B (about 3.9 MB)                |
 
 The three original models went from about 51 MB to about 2.4 MB. Per-model sizes before and after are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
+
+The Spanish dictionary (3.71 kB) and the decor builder (8.30 kB) load as separate chunks. Other measurements on the final build:
+
+| Metric                                                   | Value                                                                   |
+| -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Frame time, mobile CPU throttled 4×                      | 14.05 ms median (gate: under 16.7 ms); desktop 1.75 ms                  |
+| Lighthouse accessibility (EN and ES, mobile and desktop) | 100 in all four runs                                                    |
+| Lighthouse performance                                   | 28 mobile / 56 desktop in EN, 27 / 54 in ES (throttled, shared machine) |
+| Colour contrast (WCAG AA)                                | 12 of 12 token pairs pass                                               |
+| Lights                                                   | 7, only one casts shadows                                               |
 
 ### How the assets are optimized
 
@@ -193,6 +222,20 @@ The decor and the floor and rug textures come from [Poly Haven](https://polyhave
 | Laminate Floor 02      | Dario Barresi, Charlotte Baglioni | [Poly Haven](https://polyhaven.com/a/laminate_floor_02)      |
 | Poly Wool Herringbone  | colormass, Rico Cilliers          | [Poly Haven](https://polyhaven.com/a/poly_wool_herringbone)  |
 
+### Wall prints and fabric
+
+The four botanical prints hanging in the room are public-domain works, reproduced from [Wikimedia Commons](https://commons.wikimedia.org/) (resized and converted to WebP). The linen texture is CC0.
+
+| Piece                         | Author                   | Date    | Source and license                                                                                                                     |
+| ----------------------------- | ------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| _Spiraea aruncus (Tyrol)_     | Anna Atkins              | 1851–54 | [Commons](<https://commons.wikimedia.org/wiki/File:Spiraea_aruncus_(Tyrol)_MET_DT5664.jpg>), cyanotype, The Met, CC0                   |
+| _Osmunda regalis (Australia)_ | Anna Atkins              | c. 1850 | [Commons](<https://commons.wikimedia.org/wiki/File:Anna_Atkins_-_Osmunda_Rigalis_(Australia)_-_Google_Art_Project.jpg>), public domain |
+| _Pteris aquilina_             | Anna Atkins              | c. 1850 | [Commons](https://commons.wikimedia.org/wiki/File:Anna_Atkins_-_Pteris_aquilina_-_Google_Art_Project.jpg), cyanotype, public domain    |
+| _Felce_                       | William Henry Fox Talbot | 1839    | [Commons](https://commons.wikimedia.org/wiki/File:Felce_MET_DP202191.jpg), salted paper print, The Met, CC0                            |
+| Rough Linen (fabric texture)  | colormass, Rico Cilliers |         | [Poly Haven](https://polyhaven.com/a/rough_linen), CC0                                                                                 |
+
+Atkins and Fox Talbot died in 1871 and 1877, so their work is in the public domain; the Met releases its scans under CC0. None of the assets in the project require attribution (there are no CC-BY pieces); they are credited as a courtesy. Sources, exact files and the commands that reproduce the textures are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
+
 ### Fonts
 
 [Fraunces](https://github.com/undercasetype/Fraunces) (headings) and [Hanken Grotesk](https://github.com/marcologous/hanken-grotesk) (interface text) are licensed under the SIL Open Font License 1.1. The license text is in [src/assets/fonts/OFL.txt](src/assets/fonts/OFL.txt).
@@ -203,7 +246,7 @@ Setup, commands, code standards and the commit format are in [CONTRIBUTING.md](C
 
 ## License
 
-The source code is released under the [MIT License](LICENSE). The 3D models, textures and fonts keep their own licenses (see above).
+The source code is released under the [MIT License](LICENSE). The 3D models, textures, prints and fonts keep their own licenses (see above).
 
 ## Author
 
