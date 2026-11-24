@@ -187,6 +187,18 @@ export interface DecorBooksConfig {
   palette: number[];
   jarColor: number;
   tiers: DecorBookTierConfig[];
+  /**
+   * Fondo de la estantería (el glTF tiene el dorso abierto): tapa los huecos para
+   * que el contorno de selección no dibuje las baldas a través de ellos.
+   */
+  back: {
+    halfWidth: number;
+    bottom: number;
+    top: number;
+    z: number;
+    thickness: number;
+    color: number;
+  };
 }
 
 export interface Decor3Config {
@@ -322,31 +334,29 @@ export const DECOR3: Decor3Config = {
     cushionThickness: 0.12,
     cushionPuff: 0.045,
     cushionCorner: 0.055,
-    // Colocación fina (T-343) con la AABB REAL del sofá cargado (ver SOFA_REAL
-    // en decor-builder.service.spec.ts). Medidas en el marco del sofá (x ancho,
-    // z fondo, +z hacia la sala; el sofá gira π/4 en (-3, -3)): asiento a
-    // 0,585 m, cojines de respaldo inclinados 45° con su frente en z ≈ -0,70 y
-    // -0,88; asiento libre entre z -0,70 y el borde delantero (-0,22).
-    // Los cojines se apoyan en el asiento reclinados contra el respaldo
-    // (41°) y la manta cae sobre el borde delantero del asiento.
+    // Colocación fina con la AABB REAL del sofá procedural (scripts/generate-sofa.mjs,
+    // ver SOFA en decor-builder.service.spec.ts). Marco del sofá: x ancho, z fondo,
+    // +z hacia la sala; gira π/4 en (-3, -3). Asiento a 0,55 m; cojines de respaldo
+    // con el frente en z = -0,08 (local). Los cojines se apoyan reclinados contra
+    // ellos (41°) y la manta cae sobre el borde delantero del asiento.
     cushions: [
       {
         id: 'cushion-cream',
         color: 0xfff4e0,
-        position: new Vector3(-3.933, 0.8, -3.156),
+        position: new Vector3(-4.294, 0.77, -2.597),
         rotation: new Euler(-0.72, Math.PI / 4 + 0.06, 0, 'YXZ'),
       },
       {
         id: 'cushion-sage',
         color: 0x9fbab2,
-        position: new Vector3(-2.66, 0.8, -4.64),
+        position: new Vector3(-2.597, 0.77, -4.435),
         rotation: new Euler(-0.72, Math.PI / 4 - 0.08, 0, 'YXZ'),
       },
     ],
     throw: {
       id: 'throw',
       color: 0xe6d2ab,
-      position: new Vector3(-2.894, 0.6, -3.601),
+      position: new Vector3(-3.219, 0.57, -3.502),
       rotationY: Math.PI / 4 + 0.06,
       width: 0.95,
       depth: 0.75,
@@ -369,6 +379,14 @@ export const DECOR3: Decor3Config = {
       0x7a4a36, 0x9a7b4b, 0x4f6552, 0x35505f, 0xa65f49, 0xc2a67a, 0x6d5a7a,
     ],
     jarColor: 0xa9b8a0,
+    back: {
+      halfWidth: 0.62,
+      bottom: 0.08,
+      top: 2.03,
+      z: -7.965,
+      thickness: 0.012,
+      color: 0x3a2417,
+    },
     tiers: [
       {
         top: 0.39,

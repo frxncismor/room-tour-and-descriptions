@@ -412,6 +412,16 @@ export function createBooks(config: DecorBooksConfig): BufferGeometry[] {
   return result;
 }
 
+/** Fondo liso de la estantería: una placa fina (el color va en su material). */
+export function createShelfBack(config: DecorBooksConfig): BufferGeometry {
+  const { halfWidth, bottom, top, z, thickness } = config.back;
+  return new BoxGeometry(halfWidth * 2, top - bottom, thickness).translate(
+    0,
+    (bottom + top) / 2,
+    z
+  );
+}
+
 /** Cilindro con el eje en Z, centrado (placas y brazos de los apliques, barra). */
 function cylinderAlongZ(
   radiusTop: number,
@@ -1025,6 +1035,12 @@ export class DecorBuilderService {
     createBooks(config.books).forEach(geometry =>
       collector.add(booksKey, geometry, new Matrix4())
     );
+    const shelfBackKey = material('shelfBack', () => {
+      const made = standard(config.books.back.color, 0.9);
+      silhouettes.bookshelf.push(made);
+      return made;
+    });
+    collector.add(shelfBackKey, createShelfBack(config.books), new Matrix4());
 
     // ── ensamblado: una malla por material, en su grupo ────────────────────
     const group = new Group();

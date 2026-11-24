@@ -20,17 +20,16 @@ import {
 } from './decor-builder.service';
 
 /**
- * AABB REAL del sofá cargado (T-343): medida con GLTFLoader sobre
+ * AABB REAL del sofá procedural cargado: medida con GLTFLoader sobre
  * assets/models/sofa (rotación π/4 en Y, centrado en (-3, -3), base en y = 0),
- * el mismo cálculo que ModelLoaderService.applyTransformations. La aproximada
- * (-5,65…-0,35) sobreestimaba la caja en 0,5 m por lado.
+ * el mismo cálculo que ModelLoaderService.applyTransformations.
  */
 const SOFA = new Box3(
-  new Vector3(-5.16, 0, -5.595),
-  new Vector3(-0.84, 1.332, -0.405)
+  new Vector3(-5.263, 0, -5.263),
+  new Vector3(-0.737, 1.0, -0.737)
 );
 /** Altura del asiento del sofá (cojines de asiento, medida en el glTF). */
-const SEAT_TOP = 0.585;
+const SEAT_TOP = 0.55;
 /** AABB aproximadas del resto de muebles (plan §1). */
 const FURNITURE: Record<string, Box3> = {
   sofa: SOFA,
@@ -165,12 +164,14 @@ describe('DecorBuilderService', () => {
       other.dispose();
     });
 
-    it('al construir, solo cojines, manta y libros escriben stencil = 1 (silueta de su mueble)', () => {
+    it('al construir, solo cojines, manta, libros y fondo de la estantería escriben stencil = 1 (silueta de su mueble)', () => {
       const textureSet = service.build(DECOR3, fakeTextures());
       for (const mesh of meshes(textureSet.group)) {
         const m = mesh.material as Material;
         const hosted =
-          mesh.name.startsWith('textile:') || mesh.name === 'books';
+          mesh.name.startsWith('textile:') ||
+          mesh.name === 'books' ||
+          mesh.name === 'shelfBack';
         expect(m.stencilWrite, mesh.name).toBe(hosted);
         if (hosted) {
           expect(m.stencilRef, mesh.name).toBe(1);
@@ -615,6 +616,23 @@ describe('DecorBuilderService', () => {
       expect(box.max.y).toBeLessThanOrEqual(shelf.max.y - 0.03);
       const tops = DECOR3.books.tiers.map(t => t.top);
       expect(box.min.y).toBeGreaterThanOrEqual(Math.min(...tops) - 1e-6);
+    });
+
+    it('el fondo tapa el hueco entre los montantes, detrás de los libros, y escribe silueta', () => {
+      const back = meshes(service.build(DECOR3, {}).group).find(
+        m => m.name === 'shelfBack'
+      )!;
+      back.geometry.computeBoundingBox();
+      const box = back.geometry.boundingBox!;
+      const shelf = FURNITURE['bookshelf'];
+      expect(box.min.x).toBeGreaterThanOrEqual(shelf.min.x);
+      expect(box.max.x).toBeLessThanOrEqual(shelf.max.x);
+      expect(box.min.z).toBeGreaterThanOrEqual(shelf.min.z);
+      expect(box.max.z).toBeLessThan(
+        DECOR3.books.zCenter - DECOR3.books.depth / 2
+      );
+      expect(box.max.y).toBeLessThanOrEqual(shelf.max.y);
+      expect((back.material as Material).stencilWrite).toBe(true);
     });
 
     it('es determinista (misma entrada, misma geometría)', () => {

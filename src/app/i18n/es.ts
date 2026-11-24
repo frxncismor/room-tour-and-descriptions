@@ -127,8 +127,8 @@ const ES = {
     sofa: {
       name: 'Sofá rinconera',
       description:
-        'Sofá rinconera con cojines sueltos en el respaldo y un puf independiente, en tono terracota. Define la zona de estar a la izquierda.',
-      details: 'Modelo: «Sofa Set», de FREEDomplant, vía Sketchfab.',
+        'Sofá rinconera con chaise longue, cuatro cojines de respaldo y un puf independiente, en una tela terracota apagada. Define la zona de estar a la izquierda.',
+      details: 'Modelo: procedural, hecho para este proyecto.',
     },
     pokerTable: {
       name: 'Mesa redonda',

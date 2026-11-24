@@ -96,7 +96,7 @@ describe('warm lighting and 1.60 m axis (T-331)', () => {
  * aplicada. T-250 las contrasta con las reales de T-214.
  */
 const SIZES: Record<string, { w: number; d: number; h: number }> = {
-  sofa: { w: 3.6, d: 1, h: 0.95 },
+  sofa: { w: 3.7, d: 2.7, h: 1 },
   pokerTable: { w: 1.33, d: 1.33, h: 0.95 },
   bookshelf: { w: 1.37, d: 0.58, h: 2.06 },
   landscapePainting: { w: 1.21, d: 0.04, h: 0.93 },

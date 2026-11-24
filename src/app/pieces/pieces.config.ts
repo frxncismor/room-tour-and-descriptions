@@ -487,9 +487,9 @@ export const PIECES: readonly PieceConfig[] = buildPieces([
     origin: 'existing',
     mount: 'floor',
     pick: 'object',
-    position: [-3, 0.67, -3],
+    position: [-3, 0.5, -3],
     rotationY: PI / 4,
-    size: [3.9, 1.33, 3.6],
+    size: [3.7, 1.0, 2.7],
   },
   {
     id: 'cushionsThrow',
@@ -497,9 +497,9 @@ export const PIECES: readonly PieceConfig[] = buildPieces([
     origin: 'existing',
     mount: 'on',
     pick: 'proxy',
-    position: [-3.3, 0.7, -3.9],
+    position: [-3.45, 0.8, -3.5],
     rotationY: 0,
-    size: [2, 0.5, 1.6],
+    size: [2.3, 0.5, 2.3],
   },
   {
     id: 'pokerTable',
