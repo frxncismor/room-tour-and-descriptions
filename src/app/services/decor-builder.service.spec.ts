@@ -33,7 +33,7 @@ const SEAT_TOP = 0.55;
 /** AABB aproximadas del resto de muebles (plan §1). */
 const FURNITURE: Record<string, Box3> = {
   sofa: SOFA,
-  pokerTable: new Box3(
+  roundTable: new Box3(
     new Vector3(3 - 0.665, 0, -3 - 0.665),
     new Vector3(3 + 0.665, 0.955, -3 + 0.665)
   ),

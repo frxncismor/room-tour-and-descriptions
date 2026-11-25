@@ -16,7 +16,7 @@ describe('scene config (T-231)', () => {
     expect(models.sort()).toEqual([
       'bookshelf',
       'landscapePainting',
-      'pokerTable',
+      'roundTable',
       'sofa',
       'succulent',
     ]);
@@ -97,7 +97,7 @@ describe('warm lighting and 1.60 m axis (T-331)', () => {
  */
 const SIZES: Record<string, { w: number; d: number; h: number }> = {
   sofa: { w: 3.7, d: 2.7, h: 1 },
-  pokerTable: { w: 1.33, d: 1.33, h: 0.95 },
+  roundTable: { w: 1.33, d: 1.33, h: 0.95 },
   bookshelf: { w: 1.37, d: 0.58, h: 2.06 },
   landscapePainting: { w: 1.21, d: 0.04, h: 0.93 },
   clock: { w: 0.64, d: 0.06, h: 0.64 },
@@ -131,7 +131,7 @@ describe('placement (SC-203, T-236)', () => {
   const furniture: Record<string, Box3> = {};
   const wall: Record<string, Box3> = {};
   const floorDecor: Record<string, Box3> = {};
-  for (const id of ['sofa', 'pokerTable', 'bookshelf'] as const) {
+  for (const id of ['sofa', 'roundTable', 'bookshelf'] as const) {
     const c = MODEL_CONFIGURATIONS[id];
     furniture[id] = boxOf(id, c.position, c.yOffset, c.rotation.y);
   }
@@ -226,7 +226,7 @@ describe('placement (SC-203, T-236)', () => {
       new Vector3(center.x + hx, y, center.y + hz)
     );
     expect(rug.min.y).toBeLessThanOrEqual(0.01);
-    expect(rug.intersectsBox(furniture['pokerTable'])).toBe(false);
+    expect(rug.intersectsBox(furniture['roundTable'])).toBe(false);
     expect(rug.intersectsBox(furniture['sofa'])).toBe(true);
     const { minX, maxX, minZ, maxZ } = DEFAULT_SCENE_CONFIG.room.limits;
     expect(rug.min.x).toBeGreaterThanOrEqual(minX);

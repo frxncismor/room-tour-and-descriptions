@@ -25,14 +25,14 @@ export const LOCALE_OPTIONS: readonly {
 /** Ids de los muebles interactivos (claves de `MODEL_CONFIGURATIONS`). */
 export type FurnitureId =
   | 'sofa'
-  | 'pokerTable'
+  | 'roundTable'
   | 'bookshelf'
   | 'landscapePainting'
   | 'succulent';
 
 export const FURNITURE_IDS: readonly FurnitureId[] = [
   'sofa',
-  'pokerTable',
+  'roundTable',
   'bookshelf',
   'landscapePainting',
   'succulent',

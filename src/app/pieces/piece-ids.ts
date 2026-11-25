@@ -11,7 +11,7 @@
 export const PIECE_IDS = [
   // Pared verde
   'sofa',
-  'pokerTable',
+  'roundTable',
   'bookshelf',
   'landscapePainting',
   'succulent',

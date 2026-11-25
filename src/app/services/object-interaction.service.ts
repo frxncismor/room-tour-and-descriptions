@@ -974,7 +974,7 @@ if ( outlineLen > 1e-5 ) gl_Position.xy += outlineDir / outlineLen * uOutlineOff
       this.hoverStencil = stencil;
     }
     if (!same) {
-      this.restartPulse();
+      // El hover no reinicia el pulso de la selección (R10-M2): solo `select`.
       this.onHoverChange?.(target);
     }
   }

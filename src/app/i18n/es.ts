@@ -130,7 +130,7 @@ const ES = {
         'Sofá rinconera con chaise longue, cuatro cojines de respaldo y un puf independiente, en una tela terracota apagada. Define la zona de estar a la izquierda.',
       details: 'Modelo: procedural, hecho para este proyecto.',
     },
-    pokerTable: {
+    roundTable: {
       name: 'Mesa redonda',
       description:
         'Mesa redonda de pie central en madera oscura barnizada, con columna torneada y cuatro patas curvas. Está a la derecha, frente al sofá.',
