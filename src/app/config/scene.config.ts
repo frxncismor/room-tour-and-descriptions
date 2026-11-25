@@ -1,6 +1,11 @@
 import { Euler, Vector3 } from 'three';
-import { SceneConfiguration } from '../interfaces/scene.interface';
-import { FURNITURE_TEXT } from './ui-text';
+import {
+  DecorConfiguration,
+  FloorTextures,
+  RugTextures,
+  SceneConfiguration,
+  TrimConfiguration,
+} from '../interfaces/scene.interface';
 
 export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
   camera: {
@@ -19,7 +24,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
       mainWall: 0xf5e6d3,
       accentWall: 0x6f8f8c,
       secondaryWall: 0xe6d5c9,
-      ceiling: 0xfaf4ec,
+      ceiling: 0xf1e2cf,
     },
     limits: {
       minX: -8,
@@ -30,12 +35,17 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
   },
   lighting: {
     ambient: {
-      color: 0xfff6ec,
-      intensity: 0.7,
+      color: 0xfff1e4,
+      intensity: 0.4,
+    },
+    hemisphere: {
+      skyColor: 0xfff6ea,
+      groundColor: 0xf0d9bd,
+      intensity: 1.2,
     },
     directional: {
-      color: 0xfff1de,
-      intensity: 1.3,
+      color: 0xffe2c4,
+      intensity: 1.15,
       position: new Vector3(5, 6, 5),
       castShadow: true,
       shadowExtent: 10,
@@ -46,7 +56,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
     // Puntos de luz sin sombra: solo dan calidez y realzan la pared de acento.
     spotlights: [
       {
-        color: 0xfff4e6,
+        color: 0xffd9b0,
         intensity: 10,
         position: new Vector3(0, 3.9, 0),
         target: new Vector3(0, 0, 0),
@@ -57,7 +67,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
         castShadow: false,
       },
       {
-        color: 0xffffff,
+        color: 0xffcf9f,
         intensity: 6,
         position: new Vector3(-4, 3.8, -7),
         target: new Vector3(-4, 0, -8),
@@ -68,7 +78,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
         castShadow: false,
       },
       {
-        color: 0xffffff,
+        color: 0xffcf9f,
         intensity: 6,
         position: new Vector3(4, 3.8, -7),
         target: new Vector3(4, 0, -8),
@@ -79,7 +89,19 @@ export const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
         castShadow: false,
       },
     ],
+    // Lámpara de pie: única luz puntual, sin sombra (2700 K).
+    point: [
+      {
+        color: 0xffb878,
+        intensity: 2.2,
+        position: new Vector3(-7.2, 1.45, -7.2),
+        distance: 6,
+        decay: 2,
+        castShadow: false,
+      },
+    ],
   },
+  renderer: { toneMapping: 'neutral', exposure: 1.1 },
 };
 
 export const MODEL_CONFIGURATIONS = {
@@ -90,22 +112,93 @@ export const MODEL_CONFIGURATIONS = {
     rotation: new Euler(0, Math.PI / 4, 0),
     yOffset: 0,
     materialOverride: { color: 0xa65f3a, roughness: 0.9, metalness: 0 },
-    metadata: FURNITURE_TEXT.sofa,
+    metadata: { id: 'sofa' as const },
   },
-  pokerTable: {
-    path: 'assets/models/poker_table/scene.gltf',
+  roundTable: {
+    path: 'assets/models/round_wooden_table_01/scene.gltf',
     position: new Vector3(3, 0, -3),
-    scale: 1,
+    scale: 0.95,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: FURNITURE_TEXT.pokerTable,
+    metadata: { id: 'roundTable' as const },
   },
   bookshelf: {
-    path: 'assets/models/bookshelf/scene.gltf',
-    position: new Vector3(0, 0, -7.6),
+    path: 'assets/models/wooden_bookshelf_worn/scene.gltf',
+    position: new Vector3(0, 0, -7.69),
     scale: 1,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: FURNITURE_TEXT.bookshelf,
+    metadata: { id: 'bookshelf' as const },
   },
+  landscapePainting: {
+    path: 'assets/models/landscape_painting/scene.gltf',
+    position: new Vector3(-4, 0, -7.975),
+    scale: 2,
+    rotation: new Euler(),
+    yOffset: 1.14,
+    castShadow: false,
+    mergeMeshes: true,
+    metadata: { id: 'landscapePainting' as const },
+  },
+  succulent: {
+    path: 'assets/models/succulent/scene.gltf',
+    position: new Vector3(1.85, 0, -7.55),
+    scale: 2.2,
+    rotation: new Euler(0, Math.PI / 6, 0),
+    yOffset: 0,
+    castShadow: false,
+    mergeMeshes: true,
+    metadata: { id: 'succulent' as const },
+  },
+};
+
+/** Decoración real no interactiva: el clic y el hover la atraviesan. */
+export const DECOR_CONFIGURATIONS = {
+  clock: {
+    path: 'assets/models/wall_clock/scene.gltf',
+    position: new Vector3(4, 0, -7.95),
+    scale: 2,
+    rotation: new Euler(),
+    yOffset: 1.28,
+    castShadow: false,
+    mergeMeshes: true,
+  },
+  vase: {
+    path: 'assets/models/ceramic_vase/scene.gltf',
+    position: new Vector3(-1.85, 0, -7.55),
+    scale: 2.2,
+    rotation: new Euler(),
+    yOffset: 0,
+    castShadow: false,
+    mergeMeshes: true,
+  },
+} satisfies Record<string, DecorConfiguration>;
+
+export const FLOOR_TEXTURES: FloorTextures = {
+  diffuse: 'assets/textures/floor/diff.webp',
+  normal: 'assets/textures/floor/nor.webp',
+  arm: 'assets/textures/floor/arm.webp',
+  repeat: { x: 16 / 1.7, y: 16 / 1.7 },
+  normalScale: 0.6,
+};
+
+export const RUG_TEXTURES: RugTextures = {
+  diffuse: 'assets/textures/rug/diff.webp',
+  normal: 'assets/textures/rug/nor.webp',
+  tint: 0xffd9b3,
+  borderColor: 0xd8c7ad,
+  borderWidth: 0.12,
+  width: 4.2,
+  depth: 3.0,
+  center: { x: -1.5, y: -1.5 },
+  y: 0.004,
+  rotationY: Math.PI / 4,
+  repeat: { x: 4.2 / 0.5, y: 3.0 / 0.5 },
+};
+
+export const TRIM: TrimConfiguration = {
+  height: 0.12,
+  depth: 0.02,
+  color: 0xf3ece1,
+  roughness: 0.8,
 };

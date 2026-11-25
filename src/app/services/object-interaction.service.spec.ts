@@ -2,6 +2,8 @@ import {
   AlwaysStencilFunc,
   BoxGeometry,
   KeepStencilOp,
+  LineBasicMaterial,
+  LineSegments,
   NotEqualStencilFunc,
   ReplaceStencilOp,
   Box3,
@@ -19,7 +21,9 @@ import {
   ensureOutlineNormals,
   isTranslucent,
   ObjectInteractionService,
+  OUTLINE_COLOR,
   OUTLINE_DEPTH_PUSH,
+  OUTLINE_PULSE_DURATION_MS,
   OUTLINE_POLYGON_OFFSET,
   OUTLINE_NORMAL_ATTRIBUTE,
   OUTLINE_THICKNESS_PX,
@@ -64,7 +68,7 @@ describe('ObjectInteractionService', () => {
     furniture = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial());
     furniture.position.set(0, 0.5, 0);
     scene.add(furniture);
-    service.addObject(furniture, { name: 'Box', description: 'A box' });
+    service.addObject(furniture, { id: 'sofa', kind: 'furniture' });
   });
 
   afterEach(() => service.dispose());
@@ -72,7 +76,7 @@ describe('ObjectInteractionService', () => {
   it('returns the object on a furniture click', async () => {
     const result = await click(100, 100);
     expect(result.success).toBe(true);
-    expect(result.objectInfo?.name).toBe('Box');
+    expect(result.objectInfo?.id).toBe('sofa');
     expect(result.object).toBe(furniture);
     expect(result.floorPoint).toBeUndefined();
   });
@@ -99,7 +103,7 @@ describe('ObjectInteractionService', () => {
       expect(exact.object).toBeUndefined();
       const result = await touch(miss + 6, 100);
       expect(result.object).toBe(furniture);
-      expect(result.objectInfo?.name).toBe('Box');
+      expect(result.objectInfo?.id).toBe('sofa');
       expect(result.floorPoint).toBeUndefined();
       expect(service.getSelected()).toBe(furniture);
     });
@@ -204,6 +208,63 @@ describe('ObjectInteractionService', () => {
     const a = material.color.getHex();
     service.update(Math.PI / 2 / 0.003);
     expect(material.color.getHex()).not.toBe(a);
+  });
+
+  it('stops pulsing ~12 s after selecting, leaving a fixed outline, and restarts on a new selection only (R9-M12, R10-M2)', async () => {
+    await click(100, 100);
+    const material = (furniture.children[0].children[0] as Mesh)
+      .material as MeshBasicMaterial;
+    service.update(1000);
+    expect(service.isPulsing()).toBe(true);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS - 1);
+    expect(service.isPulsing()).toBe(true);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS);
+    expect(service.isPulsing()).toBe(true); // un frame más para dibujar el contorno fijo
+    expect(material.color.getHex()).toBe(OUTLINE_COLOR);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS + 16);
+    expect(service.isPulsing()).toBe(false);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS + 1234);
+    expect(material.color.getHex()).toBe(OUTLINE_COLOR);
+
+    // Un hover nuevo NO reinicia el pulso ni hace saltar el color (R10-M2).
+    service.setContext(camera, scene);
+    service.setHover({ x: 0, y: 0 });
+    service.update(20000);
+    service.setHover({ x: 0.99, y: 0.99 });
+    service.update(20016);
+    service.setHover({ x: 0, y: 0 });
+    service.update(20032);
+    expect(service.isPulsing()).toBe(false);
+    expect(material.color.getHex()).toBe(OUTLINE_COLOR);
+
+    // Una selección nueva sí lo reinicia.
+    service.clearSelection();
+    await click(100, 100);
+    service.update(20048);
+    expect(service.isPulsing()).toBe(true);
+    service.update(20048 + OUTLINE_PULSE_DURATION_MS + 100);
+    service.update(20048 + OUTLINE_PULSE_DURATION_MS + 116);
+    expect(service.isPulsing()).toBe(false);
+    service.clearSelection();
+    await click(100, 100);
+    service.update(40000);
+    expect(service.isPulsing()).toBe(true);
+    service.clearSelection();
+    expect(service.isPulsing()).toBe(false);
+  });
+
+  it('does not restart the 12 s pulse when the hover changes mid-pulse (R10-M2)', async () => {
+    await click(100, 100);
+    service.update(1000);
+    service.setContext(camera, scene);
+    service.setHover({ x: 0.99, y: 0.99 });
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS - 100);
+    service.setHover({ x: 0, y: 0 });
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS - 50);
+    // El hover no movió el inicio: el pulso termina a los 12 s de la selección.
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS + 1);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS + 17);
+    expect(service.isPulsing()).toBe(false);
   });
 
   it('skips transparent meshes (glass, cups) so their hull is not seen through', () => {
@@ -319,12 +380,12 @@ describe('ObjectInteractionService', () => {
     material.emissiveIntensity = 0.7;
     const before = snapshot(material);
     const changes: (string | null)[] = [];
-    service.onHoverChange = t => changes.push(t?.info.name ?? null);
+    service.onHoverChange = t => changes.push(t?.info.id ?? null);
     service.setContext(camera, scene);
 
     service.setHover({ x: 0, y: 0 });
     service.update(16);
-    expect(service.getHovered()?.info.name).toBe('Box');
+    expect(service.getHovered()?.info.id).toBe('sofa');
     const hover = furniture.children.find(c => c.name === '__hover-outline')!;
     expect(hover).toBeDefined();
     const hull = (hover.children[0] as Mesh).material as MeshBasicMaterial;
@@ -339,7 +400,7 @@ describe('ObjectInteractionService', () => {
       false
     );
     expect(snapshot(material)).toEqual(before);
-    expect(changes).toEqual(['Box', null]);
+    expect(changes).toEqual(['sofa', null]);
   });
 
   it('keeps materials identical with hover and selection, and swaps outlines', async () => {
@@ -370,7 +431,7 @@ describe('ObjectInteractionService', () => {
     );
     root.add(child);
     scene.add(root);
-    service.addObject(root, { name: 'Group', description: '' });
+    service.addObject(root, { id: 'sofa' });
     service.selectObject(root);
     const outline = root.children.find(c => c.name === '__selection-outline')!;
     expect(outline.children.length).toBe(2);
@@ -428,6 +489,34 @@ describe('ObjectInteractionService', () => {
     expect(snapshot(material)).toEqual(before);
   });
 
+  it('keeps stencil consistent when two pieces share a material (R9-I1)', async () => {
+    const shared = furniture.material as MeshStandardMaterial;
+    const other = new Mesh(new BoxGeometry(1, 1, 1), shared);
+    other.position.set(-2, 0.5, 0);
+    scene.add(other);
+    service.addObject(other, { id: 'floorLamp', kind: 'piece' });
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    const ndc = other.getWorldPosition(new Vector3()).project(camera);
+    const px = ((ndc.x + 1) / 2) * 200;
+    const py = ((1 - ndc.y) / 2) * 200;
+
+    await click(100, 100); // A seleccionada
+    expect(service.getSelected()).toBe(furniture);
+    service.setContext(camera, scene);
+    service.setHover({ x: ndc.x, y: ndc.y });
+    service.update(16); // hover en B (mismo material)
+    await click(px, py); // clic en B
+    expect(service.getSelected()).toBe(other);
+    service.clearSelection();
+    service.setHover(null);
+    service.update(64);
+    expect(shared.stencilWrite).toBe(false);
+    expect(shared.stencilRef).toBe(0);
+    expect(shared.stencilFunc).toBe(AlwaysStencilFunc);
+    expect(shared.stencilZPass).toBe(KeepStencilOp);
+  });
+
   it('uses a pixel-space stroke direction so thickness is isotropic', async () => {
     await click(100, 100);
     const material = (furniture.children[0].children[0] as Mesh)
@@ -453,7 +542,7 @@ describe('ObjectInteractionService', () => {
       expect(isTranslucent(mixed)).toBe(false);
       mixed.position.set(2, 0.5, 0);
       scene.add(mixed);
-      service.addObject(mixed, { name: 'Mixed', description: '' });
+      service.addObject(mixed, { id: 'sofa' });
       service.selectObject(mixed);
       const outline = mixed.children.find(
         c => c.name === '__selection-outline'
@@ -470,7 +559,7 @@ describe('ObjectInteractionService', () => {
       const mixed = new Mesh(geometry, [new MeshStandardMaterial(), glass()]);
       mixed.position.set(2, 0.5, 0);
       scene.add(mixed);
-      service.addObject(mixed, { name: 'Mixed', description: '' });
+      service.addObject(mixed, { id: 'sofa' });
 
       service.selectObject(mixed);
       const hullGeometry = (
@@ -520,5 +609,292 @@ describe('ObjectInteractionService', () => {
     expect(furniture.children.length).toBe(0);
     expect(material.emissive.getHex()).toBe(original);
     expect(service.getObjectInfo(furniture)).toBeUndefined();
+  });
+
+  describe('pickables, pieces and surfaces', () => {
+    const invisible = new MeshBasicMaterial({ visible: false });
+
+    /** Posición en px (canvas de 200×200) de un punto 3D. */
+    const screenOf = (point: Vector3): { x: number; y: number } => {
+      camera.updateMatrixWorld();
+      camera.updateProjectionMatrix();
+      const ndc = point.clone().project(camera);
+      return { x: ((ndc.x + 1) / 2) * 200, y: ((1 - ndc.y) / 2) * 200 };
+    };
+
+    const makeProxy = (x: number, y: number, z: number, size = 0.4): Mesh => {
+      const proxy = new Mesh(new BoxGeometry(size, size, size), invisible);
+      proxy.position.set(x, y, z);
+      proxy.visible = false;
+      scene.add(proxy);
+      return proxy;
+    };
+
+    const makeWall = (): Mesh => {
+      const wall = new Mesh(
+        new PlaneGeometry(40, 10),
+        new MeshStandardMaterial()
+      );
+      wall.position.set(0, 5, -3);
+      scene.add(wall);
+      service.registerSurface(wall, 'wallGreen');
+      return wall;
+    };
+
+    it('an invisible proxy (visible = false) receives the ray', async () => {
+      const proxy = makeProxy(3, 0.5, 0);
+      service.registerPiece({ id: 'tv', kind: 'piece' }, [proxy]);
+      const p = screenOf(proxy.position);
+      const result = await click(p.x, p.y);
+      expect(result.objectInfo).toEqual({ id: 'tv', kind: 'piece' });
+      expect(result.object).toBe(proxy);
+    });
+
+    it('unregistered meshes do not receive the ray', async () => {
+      const decor = new Mesh(
+        new BoxGeometry(1, 1, 1),
+        new MeshStandardMaterial()
+      );
+      decor.position.set(3, 0.5, 0);
+      scene.add(decor);
+      const p = screenOf(decor.position);
+      const result = await click(p.x, p.y);
+      expect(result.objectInfo).toBeNull();
+      expect(result.floorPoint).toBeDefined();
+    });
+
+    it('keeps filtering the outlines: they are never picked', async () => {
+      const proxy = makeProxy(3, 0.5, 0, 1);
+      service.registerPiece({ id: 'tv', kind: 'piece' }, [proxy]);
+      const p = screenOf(proxy.position);
+      await click(p.x, p.y);
+      expect(proxy.children.length).toBe(0); // invisible: el casco cuelga del padre
+      expect(scene.children.some(c => c.name === '__selection-outline')).toBe(
+        true
+      );
+      const again = await click(p.x, p.y);
+      expect(again.object).toBe(proxy);
+    });
+
+    it('a piece without its own mesh is outlined by box edges, never a filled hull', async () => {
+      const proxy = makeProxy(3, 0.5, 0, 1);
+      service.registerPiece({ id: 'cushionsThrow', kind: 'piece' }, [proxy]);
+      service.selectObject(proxy);
+      const outline = scene.children.find(
+        c => c.name === '__selection-outline'
+      );
+      expect(outline).toBeDefined();
+      expect(outline!.children.length).toBeGreaterThan(0);
+      for (const child of outline!.children) {
+        expect((child as Mesh).isMesh).toBeFalsy();
+        expect((child as LineSegments).isLineSegments).toBe(true);
+        expect(
+          ((child as LineSegments).material as LineBasicMaterial).toneMapped
+        ).toBe(false);
+      }
+      service.clearSelection();
+      expect(scene.children.some(c => c.name === '__selection-outline')).toBe(
+        false
+      );
+    });
+
+    it('with partial visuals it draws the hull of the visual and the proxy edges', () => {
+      const proxy = makeProxy(3, 0.5, 0, 1);
+      const shade = new Mesh(
+        new BoxGeometry(1, 1, 1),
+        new MeshStandardMaterial()
+      );
+      shade.position.set(3, 1, 0);
+      scene.add(shade);
+      service.registerPiece({ id: 'floorLamp', kind: 'piece' }, [proxy], {
+        visuals: [shade],
+        withProxyEdges: true,
+      });
+      service.selectObject(proxy);
+      const kinds: boolean[] = [];
+      scene.traverse(o => {
+        if (o.name === '__selection-outline') {
+          o.children.forEach(c => kinds.push((c as Mesh).isMesh === true));
+        }
+      });
+      expect(kinds).toContain(true);
+      expect(kinds).toContain(false);
+    });
+
+    it('40+ proxies do not change the floor result', async () => {
+      const before = await click(40, 160);
+      for (let i = 0; i < 45; i++) {
+        const proxy = makeProxy(
+          -6 + (i % 9) * 1.5,
+          0.3,
+          -2 - Math.floor(i / 9)
+        );
+        service.registerPiece({ id: 'vase', kind: 'piece' }, [proxy]);
+      }
+      const after = await click(40, 160);
+      expect(before.floorPoint).toBeDefined();
+      expect(after.floorPoint?.toArray()).toEqual(before.floorPoint?.toArray());
+    });
+
+    it('a click on a wall without a piece returns the surface and its hit point', async () => {
+      const wall = makeWall();
+      const p = screenOf(new Vector3(-2, 3, -3));
+      const result = await click(p.x, p.y);
+      expect(result.objectInfo).toEqual({ id: 'wallGreen', kind: 'surface' });
+      expect(result.object).toBe(wall);
+      expect(result.surfacePoint?.z).toBeCloseTo(-3, 3);
+      expect(result.surfacePoint?.x).toBeCloseTo(-2, 1);
+      expect(service.getSelected()).toBeNull(); // las paredes no se contornean
+    });
+
+    it('a click on the floor or the rug still returns the floorPoint with walls registered', async () => {
+      makeWall();
+      const result = await click(100, 170);
+      expect(result.floorPoint).toBeDefined();
+      expect(result.objectInfo).toBeNull();
+    });
+
+    it('a piece in front of a wall wins over the wall by distance', async () => {
+      makeWall();
+      const lamp = makeProxy(2, 2, -2.5);
+      service.registerPiece({ id: 'readingLamp', kind: 'piece' }, [lamp]);
+      const p = screenOf(lamp.position);
+      const result = await click(p.x, p.y);
+      expect(result.objectInfo?.id).toBe('readingLamp');
+    });
+
+    describe('touch priority piece > wall > floor', () => {
+      const tap = (x: number, y: number) =>
+        service.handleClick(
+          { clientX: x, clientY: y, pointerType: 'touch' },
+          camera,
+          scene
+        );
+
+      it('a tap 10 px from a lamp over a wall returns the lamp', async () => {
+        makeWall();
+        const lamp = makeProxy(2, 2, -2.5, 0.3);
+        service.registerPiece({ id: 'readingLamp', kind: 'piece' }, [lamp]);
+        const p = screenOf(lamp.position);
+        // El proxy mide unos 8 px: a 18 px del centro quedan 10 px de hueco.
+        const mouse = await click(p.x + 18, p.y);
+        expect(mouse.objectInfo?.id).toBe('wallGreen');
+        const result = await tap(p.x + 18, p.y);
+        expect(result.objectInfo?.id).toBe('readingLamp');
+        expect(result.object).toBe(lamp);
+      });
+
+      it('a tap on a wall with no piece nearby returns the wall', async () => {
+        makeWall();
+        const p = screenOf(new Vector3(-6, 3, -3));
+        const result = await tap(p.x, p.y);
+        expect(result.objectInfo?.id).toBe('wallGreen');
+      });
+
+      it('a tap on the floor returns the floorPoint', async () => {
+        makeWall();
+        const result = await tap(100, 170);
+        expect(result.floorPoint).toBeDefined();
+      });
+    });
+
+    it('a piece with several boxes highlights them all and groupOf returns them', async () => {
+      const a = makeProxy(3, 0.5, 0);
+      const b = makeProxy(3.5, 0.5, 0);
+      service.registerPiece({ id: 'sconcesBack', kind: 'piece' }, [a, b]);
+      expect(service.groupOf('sconcesBack')).toEqual([a, b]);
+      expect(service.groupOf('sofa')).toEqual([furniture]);
+      expect(service.groupOf('tv')).toEqual([]);
+      const p = screenOf(a.position);
+      const result = await click(p.x, p.y);
+      expect(result.objectInfo?.id).toBe('sconcesBack');
+      expect(
+        scene.children.filter(c => c.name === '__selection-outline')
+      ).toHaveLength(2);
+      expect(service.getObjectInfo(service.getSelected()!)).toEqual({
+        id: 'sconcesBack',
+        kind: 'piece',
+      });
+      service.clearSelection();
+      expect(
+        scene.children.filter(c => c.name === '__selection-outline')
+      ).toHaveLength(0);
+    });
+
+    it('outlines the visuals instead of the proxies when given', async () => {
+      const proxy = makeProxy(3, 0.5, 0);
+      const visual = new Mesh(
+        new BoxGeometry(0.4, 0.4, 0.4),
+        new MeshStandardMaterial()
+      );
+      visual.position.copy(proxy.position);
+      scene.add(visual);
+      service.registerPiece({ id: 'tv', kind: 'piece' }, [proxy], {
+        visuals: [visual],
+      });
+      const p = screenOf(proxy.position);
+      await click(p.x, p.y);
+      expect(visual.children.some(c => c.name === '__selection-outline')).toBe(
+        true
+      );
+    });
+
+    it('selectObject on one box of a piece selects every box', () => {
+      const a = makeProxy(3, 0.5, 0);
+      const b = makeProxy(3.5, 0.5, 0);
+      service.registerPiece({ id: 'sconcesBack', kind: 'piece' }, [a, b]);
+      service.selectObject(b);
+      expect(service.getSelected()).toBe(b);
+      expect(
+        scene.children.filter(c => c.name === '__selection-outline')
+      ).toHaveLength(2);
+    });
+
+    it('removeObject drops one box and the whole group once empty', () => {
+      const a = makeProxy(3, 0.5, 0);
+      const b = makeProxy(3.5, 0.5, 0);
+      service.registerPiece({ id: 'sconcesBack', kind: 'piece' }, [a, b]);
+      service.removeObject(a);
+      expect(service.groupOf('sconcesBack')).toEqual([b]);
+      service.removeObject(b);
+      expect(service.groupOf('sconcesBack')).toEqual([]);
+    });
+
+    it('hovering a piece reports its kind; hovering a wall draws no outline', () => {
+      const proxy = makeProxy(3, 0.5, 0);
+      service.registerPiece({ id: 'tv', kind: 'piece' }, [proxy]);
+      const wall = makeWall();
+      const ndcOf = (v: Vector3) => {
+        const p = screenOf(v);
+        return { x: (p.x / 200) * 2 - 1, y: -((p.y / 200) * 2 - 1) };
+      };
+      service.setContext(camera, scene);
+      const seen: (string | undefined)[] = [];
+      service.onHoverChange = t => seen.push(t?.info.kind);
+      service.setHover(ndcOf(proxy.position));
+      service.update(16);
+      expect(seen).toEqual(['piece']);
+      service.setHover(ndcOf(new Vector3(-6, 3, -3)));
+      service.update(32);
+      expect(seen).toEqual(['piece', 'surface']);
+      expect(wall.children).toHaveLength(0);
+      expect(scene.children.some(c => c.name === '__hover-outline')).toBe(
+        false
+      );
+    });
+
+    it('the selection and hover outline materials skip tone mapping (R8-M8)', async () => {
+      await click(100, 100);
+      const hull = furniture.children.find(
+        c => c.name === '__selection-outline'
+      )?.children[0] as Mesh;
+      expect((hull.material as MeshBasicMaterial).toneMapped).toBe(false);
+      service.clearSelection();
+      service.setHover({ x: 0, y: 0 });
+      service.update(16);
+      const hover = furniture.children.find(c => c.name === '__hover-outline')
+        ?.children[0] as Mesh;
+      expect((hover.material as MeshBasicMaterial).toneMapped).toBe(false);
+    });
   });
 });

@@ -1,16 +1,22 @@
 <div class="viewer-container">
-  <!-- DOM order = Tab order: help -> list -> "Initial view" -> canvas.
+  <!-- DOM order = Tab order: corner (language, brand) -> help -> list -> "Initial view" -> canvas.
        All three are absolutely positioned, so their DOM position does not
        change the layout. -->
   @if (!blockingError()) {
-    <app-brand-label />
+    <div class="corner">
+      <app-language-switcher />
+      <app-brand-label />
+    </div>
     <app-help-panel [suppressed]="!!state.selected()" [seen]="interacted()" />
-    <app-object-list
-      [items]="objects()"
-      [selectedName]="state.selected()?.name ?? null"
-      (selectItem)="selectObject($event)"
-      (resetView)="resetView()"
-    />
+    <!-- La lista va en un chunk propio: la carga inicial no la paga y la
+         pantalla de carga la cubre hasta que llega. -->
+    @defer (on idle) {
+      <app-object-list-panel
+        (selectItem)="selectObject($event)"
+        (viewSurface)="viewSurface($event)"
+        (resetView)="resetView()"
+      />
+    }
   }
 
   <canvas
@@ -18,7 +24,7 @@
     class="scene-canvas"
     role="img"
     tabindex="0"
-    [attr.aria-label]="canvasLabel"
+    [attr.aria-label]="canvasLabel()"
     [style.cursor]="cursor()"
     (pointerdown)="onPointerDown($event)"
     (pointermove)="onPointerMove($event)"
@@ -31,14 +37,21 @@
   ></canvas>
 
   @if (blockingError(); as error) {
-    <app-error-overlay [error]="error" />
+    <!-- Los avisos y la ficha van en chunks propios: el inicial no los paga. -->
+    @defer (on idle) {
+      <app-error-overlay [error]="error" />
+    } @placeholder {}
   } @else {
     <app-loading-screen />
 
     @if (bannerError(); as error) {
-      <app-error-banner [error]="error" (retry)="retry()" />
+      @defer (on idle) {
+        <app-error-banner [error]="error" (retry)="retry()" />
+      } @placeholder {}
     }
 
-    <app-description-panel [info]="panelInfo()" (closed)="closePanel()" />
+    @defer (on idle) {
+      <app-description-panel [info]="panelInfo()" (closed)="closePanel()" />
+    } @placeholder {}
   }
 </div>

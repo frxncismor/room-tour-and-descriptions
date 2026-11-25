@@ -1,9 +1,12 @@
 import { Injectable } from '@angular/core';
 import {
   Box3,
+  BufferGeometry,
   Color,
+  Float32BufferAttribute,
   LoadingManager,
   Material,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -11,7 +14,7 @@ import {
   Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   LoadProgressCallback,
   MaterialOverride,
@@ -40,6 +43,130 @@ export function disposeObject3D(root: Object3D): void {
   });
 }
 
+/** Hace que ninguna malla del árbol reciba clics ni hover (la decoración). */
+export function disableRaycast(root: Object3D): void {
+  root.traverse(child => {
+    if ((child as Mesh).isMesh) child.raycast = () => undefined;
+  });
+}
+
+/** Copia de la geometría solo con position/normal/uv en float, en el espacio de `matrix`. */
+function toFloatGeometry(
+  source: BufferGeometry,
+  matrix: Matrix4
+): BufferGeometry {
+  const geometry = new BufferGeometry();
+  for (const [name, size] of [
+    ['position', 3],
+    ['normal', 3],
+    ['uv', 2],
+  ] as const) {
+    const attribute = source.getAttribute(name);
+    if (!attribute) continue;
+    const values = new Float32Array(attribute.count * size);
+    for (let i = 0; i < attribute.count; i++) {
+      values[i * size] = attribute.getX(i);
+      values[i * size + 1] = attribute.getY(i);
+      if (size === 3) values[i * size + 2] = attribute.getZ(i);
+    }
+    geometry.setAttribute(name, new Float32BufferAttribute(values, size));
+  }
+  const index = source.getIndex();
+  if (index) geometry.setIndex(Array.from(index.array));
+  geometry.applyMatrix4(matrix);
+  return geometry;
+}
+
+/**
+ * Funde las mallas de un modelo que comparten material (una llamada de dibujo
+ * por material). Solo mallas de un único material y sin grupos; el resultado
+ * queda en el espacio local de `root`. Devuelve cuántas mallas desaparecen.
+ */
+export function mergeMeshesByMaterial(root: Object3D): number {
+  root.updateMatrixWorld(true);
+  const inverse = new Matrix4().copy(root.matrixWorld).invert();
+  const buckets = new Map<Material, Mesh[]>();
+  root.traverse(child => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+    if (
+      mesh.geometry.groups.length > 0 ||
+      (mesh as { isSkinnedMesh?: boolean }).isSkinnedMesh
+    )
+      return;
+    const list = buckets.get(mesh.material) ?? [];
+    list.push(mesh);
+    buckets.set(mesh.material, list);
+  });
+  let removed = 0;
+  for (const [material, meshes] of buckets) {
+    if (meshes.length < 2) continue;
+    const geometries = meshes.map(mesh =>
+      toFloatGeometry(
+        mesh.geometry,
+        new Matrix4().multiplyMatrices(inverse, mesh.matrixWorld)
+      )
+    );
+    const merged = mergeGeometries(geometries);
+    geometries.forEach(g => g.dispose());
+    if (!merged) continue;
+    const result = new Mesh(merged, material);
+    result.name = meshes[0].name;
+    result.castShadow = meshes[0].castShadow;
+    result.receiveShadow = meshes[0].receiveShadow;
+    root.add(result);
+    for (const mesh of meshes) {
+      mesh.parent?.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    removed += meshes.length - 1;
+  }
+  return removed;
+}
+
+/**
+ * Congela las matrices de lo estático (`matrixAutoUpdate = false`) tras
+ * calcularlas una vez; lo que se anime (`keep`) se deja como está.
+ */
+export function freezeMatrices(
+  root: Object3D,
+  keep?: (object: Object3D) => boolean
+): void {
+  root.updateMatrixWorld(true);
+  root.traverse(object => {
+    if (keep?.(object)) return;
+    object.updateMatrix();
+    object.matrixAutoUpdate = false;
+  });
+}
+
+/**
+ * Carga perezosa y cacheada de una promesa. Si falla, se olvida (R9-M1): una
+ * promesa rechazada cacheada impediría que «Reintentar» funcione nunca.
+ */
+export function cacheUnlessRejected<T>(
+  load: () => Promise<T>
+): () => Promise<T> {
+  let cached: Promise<T> | null = null;
+  return () => {
+    if (!cached) {
+      const attempt: Promise<T> = load().catch((error: unknown) => {
+        if (cached === attempt) cached = null;
+        throw error;
+      });
+      cached = attempt;
+    }
+    return cached;
+  };
+}
+
+/** Decodificador meshopt: chunk perezoso (R8-M5), cargado una vez. */
+const loadMeshoptDecoder = cacheUnlessRejected<unknown>(() =>
+  import('three/addons/libs/meshopt_decoder.module.js').then(
+    module => module.MeshoptDecoder
+  )
+);
+
 /** Anisotropía pedida a las texturas (la GPU la limita a su máximo). */
 export const TEXTURE_ANISOTROPY = 8;
 
@@ -66,6 +193,10 @@ export function applyMaterialOverride(
       if (override?.metalness !== undefined) {
         standard.metalness = override.metalness;
       }
+      if (override?.clearMap) {
+        standard.map?.dispose();
+        standard.map = null;
+      }
       for (const value of Object.values(standard)) {
         if (value && (value as Texture).isTexture) {
           (value as Texture).anisotropy = TEXTURE_ANISOTROPY;
@@ -81,9 +212,13 @@ export function applyMaterialOverride(
 })
 export class ModelLoaderService {
   /** Cada carga usa su propio `LoadingManager` para contar .bin y texturas de ese modelo. */
-  private createLoader(manager: LoadingManager): GLTFLoader {
+  private async createLoader(manager: LoadingManager): Promise<GLTFLoader> {
     const loader = new GLTFLoader(manager);
-    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.setMeshoptDecoder(
+      (await loadMeshoptDecoder()) as Parameters<
+        GLTFLoader['setMeshoptDecoder']
+      >[0]
+    );
     return loader;
   }
 
@@ -95,7 +230,7 @@ export class ModelLoaderService {
    * ficheros secundarios y no salta al final. `total` crece al descubrirlos.
    */
   async loadModel(
-    config: ModelConfiguration,
+    config: Omit<ModelConfiguration, 'metadata'>,
     onProgress?: LoadProgressCallback
   ): Promise<Object3D> {
     const cleanPath = config.path.replace(/^\/+/, '');
@@ -120,20 +255,21 @@ export class ModelLoaderService {
       report();
     };
 
-    const gltf = await this.createLoader(manager).loadAsync(
-      cleanPath,
-      event => {
-        mainFraction =
-          event.lengthComputable && event.total > 0
-            ? Math.min(event.loaded / event.total, 1)
-            : 0;
-        report();
-      }
-    );
+    const gltf = await (
+      await this.createLoader(manager)
+    ).loadAsync(cleanPath, event => {
+      mainFraction =
+        event.lengthComputable && event.total > 0
+          ? Math.min(event.loaded / event.total, 1)
+          : 0;
+      report();
+    });
     const model = gltf.scene;
     applyMaterialOverride(model, config.materialOverride);
+    if (config.mergeMeshes) mergeMeshesByMaterial(model);
     this.applyTransformations(model, config);
-    this.setupShadows(model);
+    this.setupShadows(model, config.castShadow ?? true);
+    freezeMatrices(model);
     return model;
   }
 
@@ -143,7 +279,7 @@ export class ModelLoaderService {
    */
   private applyTransformations(
     model: Object3D,
-    config: ModelConfiguration
+    config: Omit<ModelConfiguration, 'metadata'>
   ): void {
     model.position.set(0, 0, 0);
     model.rotation.copy(config.rotation);
@@ -161,14 +297,14 @@ export class ModelLoaderService {
   }
 
   /** Proyecta/recibe sombras solo en mallas opacas (las transparentes no proyectan). */
-  private setupShadows(model: Object3D): void {
+  private setupShadows(model: Object3D, cast: boolean): void {
     model.traverse(child => {
       const mesh = child as Mesh;
       if (!mesh.isMesh) return;
       const materials = Array.isArray(mesh.material)
         ? mesh.material
         : [mesh.material];
-      mesh.castShadow = !materials.some(m => m?.transparent);
+      mesh.castShadow = cast && !materials.some(m => m?.transparent);
       mesh.receiveShadow = true;
     });
   }

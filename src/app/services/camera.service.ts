@@ -2,7 +2,11 @@ import { Injectable } from '@angular/core';
 import { Box3, Object3D, PerspectiveCamera, Ray, Sphere, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { DEFAULT_SCENE_CONFIG } from '../config/scene.config';
-import { CameraConfiguration, RoomLimits } from '../interfaces/scene.interface';
+import {
+  CameraConfiguration,
+  RoomLimits,
+  SurfaceId,
+} from '../interfaces/scene.interface';
 
 /** Margen (m) entre la cámara y las paredes. */
 const WALL_MARGIN = 0.5;
@@ -28,6 +32,12 @@ const FOCUS_DURATION_MS = 900;
 const FOCUS_YAW_OFFSETS = [0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9, Math.PI];
 /** Altura extra (m) sobre la de ojos para ver por encima de lo que tapa. */
 const FOCUS_RAISED_EXTRA = 1;
+/** Puntos de oclusión que cuesta cada radián fuera del frente al elegir la pose. */
+const FOCUS_OFF_AXIS_PENALTY = 4;
+/** Múltiplos de la distancia de ajuste probados al enfocar (el 1.º es el de siempre). */
+const FOCUS_BACKOFF_SCALES = [1, 1.5, 2.2];
+/** Puntos de oclusión que cuesta cada escalón de distancia extra. */
+const FOCUS_BACKOFF_PENALTY = 0.5;
 /** Holgura (m) con la que se encoge la caja del mueble al muestrear su oclusión. */
 const OCCLUSION_INSET = 0.05;
 /** Margen (fracción de NDC) alrededor del mueble enfocado. */
@@ -35,6 +45,83 @@ const FOCUS_MARGIN = 0.12;
 /** En retrato: borde superior de la ficha inferior (~30 % del alto) y bajo la barra de botones (NDC). */
 const SHEET_BOTTOM_NDC = -0.32;
 const TOP_BAR_NDC = 0.78;
+/**
+ * En apaisado la ficha ocupa una columna a la derecha: ancho de la ficha
+ * (360 px, ver description-panel) + margen derecho (16 px) + holgura (16 px).
+ * Debe coincidir con el CSS de `description-panel`.
+ */
+const SHEET_COLUMN_PX = 392;
+/** Grosor máximo (m) para tratar una pieza como plana y colgada (cuadro, reloj). */
+const FLAT_PIECE_MAX_THICKNESS = 0.1;
+/** Inclinación máxima (grados) de la vista hacia abajo al enfocar un objeto. */
+const FOCUS_MAX_PITCH_DEG = 30;
+/** Holgura mínima entre la cámara y cualquier obstáculo (m). */
+const CAMERA_CLEARANCE = 0.4;
+/** Ancho (px) que se asume si el canvas aún no tiene medida (p. ej. en tests). */
+const FALLBACK_VIEWPORT_WIDTH = 1280;
+/** Zoom libre (spec C.3): distancia mínima y máxima de la órbita (m). */
+const DEFAULT_MAX_POLAR = Math.PI / 2.1;
+const MIN_ORBIT_DISTANCE = 0.8;
+const MAX_ORBIT_DISTANCE = 12;
+/** Altura máxima (m) de cámara y objetivo: la sala mide 4 m, nunca se atraviesa el techo. */
+const MAX_CAMERA_HEIGHT = 3.9;
+/** Pared: alto (m) a encuadrar con holgura (4 + 0,4), margen lateral por lado y tope de distancia (m). */
+const SURFACE_FIT_HEIGHT = 4.4;
+const SURFACE_SIDE_MARGIN = 0.4;
+const SURFACE_MAX_DISTANCE = 9;
+/** Margen (×) sobre el ancho de la pared al repartirla en tramos. */
+const SURFACE_SPAN_FACTOR = 1.04;
+/** El objetivo se coloca delante de la pared para que el límite de sala no lo desplace (m). */
+const SURFACE_TARGET_OFFSET = 0.5;
+/** Pose fija del techo: pitch (grados) y distancia (m) al objetivo. */
+const CEILING_PITCH_DEG = 23;
+const CEILING_TARGET_DISTANCE = 5;
+/** Grados sobre la horizontal que se permiten al mirar paredes y techo. */
+const RELAXED_POLAR_EXTRA_DEG = 30;
+
+/** Pared (sala 16 × 16 × 4): centro, normal hacia dentro y eje a lo largo de ella. */
+interface WallSpec {
+  center: Vector3;
+  normal: Vector3;
+  along: Vector3;
+}
+
+const WALL_LENGTH = 16;
+const WALL_HEIGHT = 4;
+const WALL_SPECS: Readonly<Record<Exclude<SurfaceId, 'ceiling'>, WallSpec>> = {
+  wallGreen: {
+    center: new Vector3(0, 0, -8),
+    normal: new Vector3(0, 0, 1),
+    along: new Vector3(1, 0, 0),
+  },
+  wallWindow: {
+    center: new Vector3(-8, 0, 0),
+    normal: new Vector3(1, 0, 0),
+    along: new Vector3(0, 0, -1),
+  },
+  wallTv: {
+    center: new Vector3(0, 0, 8),
+    normal: new Vector3(0, 0, -1),
+    along: new Vector3(-1, 0, 0),
+  },
+  wallDesk: {
+    center: new Vector3(8, 0, 0),
+    normal: new Vector3(-1, 0, 0),
+    along: new Vector3(0, 0, 1),
+  },
+};
+
+/** Pose (cámara y objetivo) de una superficie y reparto de la pared en tramos. */
+export interface SurfacePose {
+  position: Vector3;
+  target: Vector3;
+  /** Nº de tramos de la pared (1 en el techo). */
+  tramos: number;
+  /** Tramo (1…tramos) al que corresponde la pose. */
+  tramo: number;
+  /** Ancho (m) de un tramo. */
+  tramoWidth: number;
+}
 
 interface Tween {
   fromPosition: Vector3;
@@ -43,6 +130,8 @@ interface Tween {
   toTarget: Vector3;
   duration: number;
   elapsed: number;
+  /** Límite polar abierto (paredes y techo) al terminar; si no, el de siempre. */
+  relaxPolar: boolean;
   resolve: (completed: boolean) => void;
 }
 
@@ -161,9 +250,11 @@ export class CameraService {
     const controls = new OrbitControls(this.camera, domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
-    controls.minDistance = 1;
+    controls.minDistance = MIN_ORBIT_DISTANCE;
     controls.minPolarAngle = 0.1;
-    controls.maxPolarAngle = Math.PI / 2.1;
+    controls.maxPolarAngle = DEFAULT_MAX_POLAR;
+    // Zoom libre (spec C.3): rueda y pellizco acercan al punto señalado.
+    controls.zoomToCursor = true;
     controls.rotateSpeed = 0.7;
     // El paneo (botón derecho, dos dedos, flechas) queda en el plano horizontal.
     controls.enablePan = true;
@@ -180,18 +271,18 @@ export class CameraService {
     this.applyDistanceLimit();
   }
 
-  /** `maxDistance` derivado de la sala: nunca más lejos que su semi-lado menor. */
+  /**
+   * `maxDistance` 12 m (spec C.3), sin quedar nunca por debajo de lo que pide
+   * la vista inicial en retrato (algo más lejos que el semi-lado de la sala).
+   */
   private applyDistanceLimit(): void {
     if (!this.controls) return;
-    const halfWidth = (this.limits.maxX - this.limits.minX) / 2;
-    const halfDepth = (this.limits.maxZ - this.limits.minZ) / 2;
-    // La vista inicial (retrato) puede quedar algo más lejos que el semi-lado.
     const framed = this.camera
       ? this.framedPosition().distanceTo(this.framedTarget()) + 0.1
       : 0;
     this.controls.maxDistance = Math.max(
       this.controls.minDistance + 1,
-      Math.min(halfWidth, halfDepth),
+      MAX_ORBIT_DISTANCE,
       framed
     );
   }
@@ -200,8 +291,16 @@ export class CameraService {
   clampToRoom(): void {
     if (!this.camera) return;
     this.clampPoint(this.camera.position);
+    this.camera.position.y = Math.min(
+      this.camera.position.y,
+      MAX_CAMERA_HEIGHT
+    );
     if (this.controls) {
       this.clampPoint(this.controls.target);
+      this.controls.target.y = Math.min(
+        this.controls.target.y,
+        MAX_CAMERA_HEIGHT
+      );
     }
   }
 
@@ -243,11 +342,14 @@ export class CameraService {
    * Acerca la cámara a `object` para verlo entero (D-04). Entre varios ángulos
    * elige el primero (el actual tiene prioridad) que quede dentro de la sala y
    * sin otro mueble de `obstacles` entre la cámara y el objetivo; si todos
-   * tapan, el de menor oclusión.
+   * tapan, el de menor oclusión. Con `approach` (dirección horizontal del
+   * frente de la pieza) el encuadre es frontal venga la cámara de donde venga;
+   * sin él, el lado de la cámara actual.
    */
   focusOn(
     object: Object3D,
-    obstacles: readonly Object3D[] = []
+    obstacles: readonly Object3D[] = [],
+    approach?: Vector3
   ): Promise<boolean> {
     if (!this.camera) return Promise.resolve(false);
     const box = new Box3().setFromObject(object);
@@ -263,10 +365,27 @@ export class CameraService {
       maxDistance
     );
 
-    const away = this.camera.position.clone().sub(sphere.center);
+    const away = approach
+      ? approach.clone()
+      : this.camera.position.clone().sub(sphere.center);
     away.y = 0;
     if (away.lengthSq() < 1e-6) away.set(0, 0, 1);
     away.normalize();
+    // Una pieza plana se enfoca de frente (por su normal, del lado de la cámara).
+    const size = box.getSize(new Vector3());
+    const thinAxis = size.x < size.z ? 'x' : 'z';
+    const wide = thinAxis === 'x' ? size.z : size.x;
+    if (
+      size[thinAxis] <= FLAT_PIECE_MAX_THICKNESS &&
+      size[thinAxis] < wide / 4
+    ) {
+      const normal = new Vector3(
+        thinAxis === 'x' ? 1 : 0,
+        0,
+        thinAxis === 'z' ? 1 : 0
+      );
+      away.copy(normal.multiplyScalar(Math.sign(away.dot(normal)) || 1));
+    }
 
     const pose = this.pickFocusPose(
       box,
@@ -278,10 +397,112 @@ export class CameraService {
     return this.startTween(pose.position, pose.target, FOCUS_DURATION_MS);
   }
 
+  /** Nº de tramos en que se reparte una pared con ese aspecto (spec C.2). */
+  surfaceTramos(aspect: number): number {
+    const reach = 2 * SURFACE_MAX_DISTANCE * this.tanHalfHorizontalFov(aspect);
+    return Math.max(
+      1,
+      Math.ceil((WALL_LENGTH * SURFACE_SPAN_FACTOR) / reach - 1e-9)
+    );
+  }
+
+  /** Tramo (1…n) de la pared más cercano al punto pulsado. */
+  surfaceTramoAt(surface: SurfaceId, point: Vector3, aspect: number): number {
+    if (surface === 'ceiling') return 1;
+    const n = this.surfaceTramos(aspect);
+    const wall = WALL_SPECS[surface];
+    const offset = point.clone().sub(wall.center).dot(wall.along);
+    const index = Math.floor((offset + WALL_LENGTH / 2) / (WALL_LENGTH / n));
+    return this.clamp(index + 1, 1, n);
+  }
+
+  /**
+   * Pose de cámara y objetivo para ver una pared de frente (≤ 9 m) o el techo
+   * (pose fija). `tramo` va de 1 a `surfaceTramos(aspect)`.
+   */
+  surfacePose(surface: SurfaceId, tramo: number, aspect: number): SurfacePose {
+    if (surface === 'ceiling') return this.ceilingPose();
+    const wall = WALL_SPECS[surface];
+    const n = this.surfaceTramos(aspect);
+    const index = this.clamp(Math.round(tramo), 1, n);
+    const width = WALL_LENGTH / n;
+    const along = -WALL_LENGTH / 2 + width * (index - 0.5);
+    const tanV = Math.tan((this.fovFor(aspect) * Math.PI) / 360);
+    const distance = Math.min(
+      SURFACE_MAX_DISTANCE,
+      Math.max(
+        SURFACE_FIT_HEIGHT / (2 * tanV),
+        (width + 2 * SURFACE_SIDE_MARGIN) /
+          (2 * this.tanHalfHorizontalFov(aspect))
+      )
+    );
+    const middle = wall.center.clone().addScaledVector(wall.along, along);
+    const target = middle
+      .clone()
+      .addScaledVector(wall.normal, SURFACE_TARGET_OFFSET);
+    target.y = WALL_HEIGHT / 2;
+    const position = middle.clone().addScaledVector(wall.normal, distance);
+    position.y = WALL_HEIGHT / 2;
+    return { position, target, tramos: n, tramo: index, tramoWidth: width };
+  }
+
+  /** Techo: desde el centro, 23° hacia arriba y hacia la zona de la TV (cornisa y colgante). */
+  private ceilingPose(): SurfacePose {
+    const pitch = (CEILING_PITCH_DEG * Math.PI) / 180;
+    const position = new Vector3(0, this.initialHeight, 0);
+    const target = position
+      .clone()
+      .add(
+        new Vector3(
+          0,
+          Math.sin(pitch) * CEILING_TARGET_DISTANCE,
+          Math.cos(pitch) * CEILING_TARGET_DISTANCE
+        )
+      );
+    return { position, target, tramos: 1, tramo: 1, tramoWidth: WALL_LENGTH };
+  }
+
+  private tanHalfHorizontalFov(aspect: number): number {
+    return Math.tan((this.fovFor(aspect) * Math.PI) / 360) * aspect;
+  }
+
+  /**
+   * Encuadra una pared (tramo `tramo`) o el techo. Resuelve `false` si algo
+   * corta el movimiento; con `prefers-reduced-motion` salta sin transición.
+   */
+  focusSurface(
+    surface: SurfaceId,
+    tramo = 1,
+    aspect = this.aspect
+  ): Promise<boolean> {
+    if (!this.camera) return Promise.resolve(false);
+    const pose = this.surfacePose(surface, tramo, aspect);
+    return this.startTween(pose.position, pose.target, FOCUS_DURATION_MS, true);
+  }
+
   /** Zona de pantalla (NDC) libre de ficha y botones; en retrato deja sitio abajo a la ficha. */
-  private visibleBand(): { bottom: number; top: number } {
+  private visibleBand(): {
+    bottom: number;
+    top: number;
+    left: number;
+    right: number;
+  } {
     const blend = this.clamp((1 - this.aspect) / 0.3, 0, 1);
+    const width =
+      this.controls?.domElement?.clientWidth || FALLBACK_VIEWPORT_WIDTH;
+    // Solo en apaisado (aspect > 1, donde la ficha va a la derecha): la zona
+    // libre acaba donde empieza la columna de la ficha.
+    const sheetRight =
+      this.aspect > 1
+        ? this.clamp(
+            1 - (2 * SHEET_COLUMN_PX) / width,
+            -1 + 2 * FOCUS_MARGIN,
+            1
+          )
+        : 1;
     return {
+      left: -(1 - FOCUS_MARGIN),
+      right: Math.min(1 - FOCUS_MARGIN, sheetRight),
       bottom: -(1 - FOCUS_MARGIN) * (1 - blend) + SHEET_BOTTOM_NDC * blend,
       top: (1 - FOCUS_MARGIN) * (1 - blend) + TOP_BAR_NDC * blend,
     };
@@ -315,6 +536,7 @@ export class CameraService {
     const targetFor = (k: number): Vector3 =>
       lookAt.clone().addScaledVector(dir, k);
 
+    const band = this.visibleBand();
     let target = lookAt;
     if (desiredY !== 0) {
       let lo = 0;
@@ -326,14 +548,33 @@ export class CameraService {
       }
       target = targetFor(lo);
     }
-    const band = this.visibleBand();
-    const limitX = 1 - FOCUS_MARGIN;
+    if (band.right < 1 - FOCUS_MARGIN - 1e-3) {
+      // La ficha ocupa la derecha: si el mueble invade su columna, se desplaza
+      // el objetivo hacia la derecha de la cámara lo justo para que no la pise.
+      const right = new Vector3(dir.z, 0, -dir.x);
+      const base = target;
+      const maxX = (shift: number): number => {
+        const shifted = base.clone().addScaledVector(right, shift);
+        return Math.max(...corners.map(c => project(shifted, c).x));
+      };
+      if (maxX(0) > band.right) {
+        let lo = 0;
+        let hi = horizontal * 0.5;
+        for (let i = 0; i < 16; i++) {
+          const mid = (lo + hi) / 2;
+          if (maxX(mid) > band.right) lo = mid;
+          else hi = mid;
+        }
+        target = base.clone().addScaledVector(right, hi);
+      }
+    }
     let overflow = 0;
     for (const corner of corners) {
       const ndc = project(target, corner);
       overflow = Math.max(
         overflow,
-        Math.abs(ndc.x) - limitX,
+        ndc.x - band.right,
+        band.left - ndc.x,
         ndc.y - band.top,
         band.bottom - ndc.y
       );
@@ -391,33 +632,53 @@ export class CameraService {
             probe,
             center,
             dir,
-            height,
+            // Sin mirar demasiado desde arriba objetos pequeños y cercanos.
+            Math.min(
+              height,
+              center.y +
+                distance * Math.tan((FOCUS_MAX_PITCH_DEG * Math.PI) / 180)
+            ),
             distance,
             desiredY,
             corners
           );
-        const distance = this.fitDistance(
+        const fitted = this.fitDistance(
           d => at(d).overflow,
           range.baseDistance,
           range.maxDistance
         );
-        const pose = at(distance);
-        const raw = pose.position.clone();
-        this.clampPoint(pose.position);
-        // El candidato por defecto conserva su clamp de siempre; el resto
-        // se descarta si la sala los obliga a moverse.
-        if (!isDefault && pose.position.distanceToSquared(raw) > 1e-4) continue;
+        // Con un obstáculo delante (la silla del monitor) se prueba también
+        // más lejos: de frente y algo más atrás gana a de canto (R9-I2).
+        for (let step = 0; step < FOCUS_BACKOFF_SCALES.length; step++) {
+          const distance = Math.min(
+            range.maxDistance,
+            fitted * FOCUS_BACKOFF_SCALES[step]
+          );
+          if (step > 0 && distance <= fitted + 1e-6) break;
+          const pose = at(distance);
+          const raw = pose.position.clone();
+          this.clampPoint(pose.position);
+          // El candidato por defecto conserva su clamp de siempre; el resto
+          // se descarta si la sala los obliga a moverse.
+          if (
+            !(isDefault && step === 0) &&
+            pose.position.distanceToSquared(raw) > 1e-4
+          )
+            continue;
 
-        const score = this.occlusionScore(
-          pose.position,
-          samples,
-          obstacleBoxes
-        );
-        if (score < bestScore) {
-          best = pose;
-          bestScore = score;
+          // La oclusión manda, pero un ángulo fuera de eje y la lejanía
+          // también cuestan (R9-I2): mejor el monitor de frente con la silla
+          // delante que de canto.
+          const score =
+            this.occlusionScore(pose.position, samples, obstacleBoxes) +
+            Math.abs(yaw) * FOCUS_OFF_AXIS_PENALTY +
+            step * FOCUS_BACKOFF_PENALTY;
+          if (score < bestScore) {
+            best = pose;
+            bestScore = score;
+          }
+          if (score === 0) return pose;
         }
-        if (score === 0) return pose;
       }
     }
     return (
@@ -456,7 +717,13 @@ export class CameraService {
     obstacleBoxes: readonly Box3[]
   ): number {
     if (obstacleBoxes.length === 0) return 0;
-    let hidden = 0;
+    // Un obstáculo pegado a la cámara (margen del frustum cercano) tapa la
+    // vista aunque no corte ningún rayo: descarta el candidato.
+    let hidden = obstacleBoxes.some(
+      b => b.distanceToPoint(from) < CAMERA_CLEARANCE
+    )
+      ? samples.length + 1
+      : 0;
     const ray = new Ray();
     const hit = new Vector3();
     for (const sample of samples) {
@@ -502,15 +769,19 @@ export class CameraService {
   private startTween(
     toPosition: Vector3,
     toTarget: Vector3,
-    duration: number
+    duration: number,
+    relaxPolar = false
   ): Promise<boolean> {
     this.cancelAnimation();
     this.atFramedPose = false;
     const target = this.controls?.target ?? new Vector3();
+    // Mirar una pared de frente o el techo pide un polo más abierto que el normal.
+    if (relaxPolar) this.setMaxPolar(true);
 
     if (this.prefersReducedMotion()) {
       this.camera.position.copy(toPosition);
       target.copy(toTarget);
+      this.setMaxPolar(relaxPolar);
       this.updateControls();
       return Promise.resolve(true);
     }
@@ -523,10 +794,19 @@ export class CameraService {
         toTarget,
         duration,
         elapsed: 0,
+        relaxPolar,
         resolve,
       };
       // Los controles siguen activos: un arrastre dispara start y cancela el tween.
     });
+  }
+
+  /** Límite polar de OrbitControls: el de siempre o el abierto de paredes y techo. */
+  private setMaxPolar(relaxed: boolean): void {
+    if (!this.controls) return;
+    this.controls.maxPolarAngle = relaxed
+      ? Math.PI / 2 + (RELAXED_POLAR_EXTRA_DEG * Math.PI) / 180
+      : DEFAULT_MAX_POLAR;
   }
 
   private currentHeading(): Vector3 {
@@ -569,6 +849,7 @@ export class CameraService {
       );
       if (progress >= 1) {
         this.tween = null;
+        this.setMaxPolar(tween.relaxPolar);
         tween.resolve(true);
       }
     }

@@ -25,7 +25,6 @@ import {
   readFileSync,
   rmSync,
   statSync,
-  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, extname, join, resolve } from 'node:path';
@@ -36,109 +35,42 @@ const MAX_TEXTURE = 1024;
 const MAX_TEXTURE_WOOD = 2048;
 // Textures whose name matches keep up to MAX_TEXTURE_WOOD (table wood grain).
 const LARGE_TEXTURE = /wood/i;
+// WebP quality for every texture (`gltf-transform webp --quality`).
+const WEBP_QUALITY = 85;
+// Per-model texture resolution for the decor pieces (spec 002). Models not listed here
+// (the procedural sofa) use the defaults above. `large` names the textures that
+// get `largeSize`; every other texture is capped at `size`.
+// Matches nothing: used as `large` to disable the wood rule for a model.
+const NEVER = /(?!)/;
+const TEXTURE_POLICY = {
+  landscape_painting: { large: /canvas_diff/i, largeSize: 1024, size: 512 },
+  wall_clock: { size: 512 },
+  // The Poly Haven originals have 8.9k (succulent) and 11.1k (vase) triangles, well above
+  // the plan (6.1k / 2.8k): `simplify` brings them within the SC-202 triangle budget.
+  succulent: { size: 512, simplify: { ratio: 0.7, error: 0.005 } },
+  ceramic_vase: { size: 512, simplify: { ratio: 0.25, error: 0.01 } },
+  // Spec 004 pieces (Poly Haven 1k originals): 512 px for the armchairs and the sideboard,
+  // 256 px for the rest. `large: NEVER` stops the wood rule (names like painted_wooden_*)
+  // from keeping 2048 px.
+  mid_century_lounge_chair: { large: NEVER, size: 512 },
+  modern_arm_chair_01: { large: NEVER, size: 512 },
+  vintage_wooden_drawer_01: { large: NEVER, size: 512 },
+  side_table_01: { large: NEVER, size: 256 },
+  modern_coffee_table_01: { large: NEVER, size: 256 },
+  painted_wooden_chair_02: { large: NEVER, size: 256 },
+  wooden_display_shelves_01: { large: NEVER, size: 256 },
+  painted_wooden_cabinet_02: { large: NEVER, size: 256 },
+  modern_ceiling_lamp_01: { large: NEVER, size: 256 },
+  // Poly Haven CC0 bookshelf and round table (R9-I5).
+  wooden_bookshelf_worn: { large: NEVER, size: 512 },
+  round_wooden_table_01: { large: NEVER, size: 512 },
+};
 
 function gt(...args) {
   execFileSync('npx', ['-y', CLI, ...args], {
     stdio: 'inherit',
     shell: process.platform === 'win32',
   });
-}
-
-/**
- * The Sketchfab "BookShelf" ships with broken source geometry: the central divider is
- * sheared into a diagonal "crack" (32 triangles with diagonal normals, inner vertices at
- * 16 different x values) and the material is BLEND, so it reads as a dark glass box.
- * The four tiers are also separate boxes with a 5 cm air gap between them, so from an oblique
- * angle the unit reads as four loose slabs instead of one piece of furniture.
- * This repairs the ORIGINAL export in place (the files in `dir`, which must be a copy of the
- * original: the script works in place, it does not make its own copy):
- *   1. drops the diagonal triangles (normal has both x and z components),
- *   2. snaps the inner vertices (|x| < 0.87) to a single central divider line (x = -0.1),
- *   3. closes the gaps between tiers (each tier grows half a gap up/down, so sides, back and
- *      boards of neighbouring tiers meet and the carcass reads as one closed box),
- *   4. makes the material opaque (no alphaMode).
- * Skipped when the model is already compressed (nothing to repair on optimized output) or
- * already repaired (marker `asset.extras.repaired`, so a re-run after a failed pipeline step
- * leaves the .bin byte-identical instead of deforming it a second time).
- */
-function repairBookshelf(dir) {
-  const gltfPath = join(dir, 'scene.gltf');
-  const gltf = JSON.parse(readFileSync(gltfPath, 'utf8'));
-  if ((gltf.extensionsUsed ?? []).includes('EXT_meshopt_compression')) return;
-  if (gltf.asset?.extras?.repaired) return;
-  const binPath = join(dir, gltf.buffers[0].uri);
-  const bin = Buffer.from(readFileSync(binPath));
-  const primitive = gltf.meshes[0].primitives[0];
-  const positions = gltf.accessors[primitive.attributes.POSITION];
-  const normals = gltf.accessors[primitive.attributes.NORMAL];
-  const indices = gltf.accessors[primitive.indices];
-  if (
-    positions.componentType !== 5126 ||
-    indices.componentType !== 5125 ||
-    positions.count !== 384
-  ) {
-    throw new Error(
-      'Unexpected bookshelf layout: restore the original export first (docs/assets-pipeline.md).'
-    );
-  }
-  const floats = acc => {
-    const view = gltf.bufferViews[acc.bufferView];
-    return new Float32Array(
-      bin.buffer,
-      bin.byteOffset + (view.byteOffset ?? 0) + (acc.byteOffset ?? 0),
-      acc.count * 3
-    );
-  };
-  const pos = floats(positions);
-  const nor = floats(normals);
-  const indexView = gltf.bufferViews[indices.bufferView];
-  const idx = new Uint32Array(
-    bin.buffer,
-    bin.byteOffset + (indexView.byteOffset ?? 0) + (indices.byteOffset ?? 0),
-    indices.count
-  );
-  const kept = [];
-  for (let t = 0; t < idx.length; t += 3) {
-    const v = idx[t];
-    const diagonal =
-      Math.abs(nor[v * 3]) > 0.05 && Math.abs(nor[v * 3 + 2]) > 0.05;
-    if (!diagonal) kept.push(idx[t], idx[t + 1], idx[t + 2]);
-  }
-  new Uint32Array(
-    bin.buffer,
-    bin.byteOffset + (indexView.byteOffset ?? 0),
-    kept.length
-  ).set(kept);
-  indices.count = kept.length;
-  indexView.byteLength = kept.length * 4;
-  for (let i = 0; i < positions.count; i++) {
-    const x = pos[i * 3];
-    if (Math.abs(x) < 0.87) pos[i * 3] = -0.1;
-  }
-  // Tiers (z, source units): the vertices of each one stretch to the middle of the gap
-  // above/below, so neighbouring tiers touch.
-  const TIERS = [
-    [0, 0.508],
-    [0.559, 1.041],
-    [1.092, 1.575],
-    [1.626, 2.1336],
-  ];
-  for (let i = 0; i < positions.count; i++) {
-    const z = pos[i * 3 + 2];
-    const k = TIERS.findIndex(([lo, hi]) => z >= lo - 1e-3 && z <= hi + 1e-3);
-    if (k < 0) continue;
-    const [lo, hi] = TIERS[k];
-    const newLo = k === 0 ? lo : (TIERS[k - 1][1] + lo) / 2;
-    const newHi = k === TIERS.length - 1 ? hi : (hi + TIERS[k + 1][0]) / 2;
-    pos[i * 3 + 2] = newLo + ((z - lo) / (hi - lo)) * (newHi - newLo);
-  }
-  delete gltf.materials[0].alphaMode;
-  gltf.asset.extras = { ...gltf.asset.extras, repaired: true };
-  writeFileSync(binPath, bin);
-  writeFileSync(gltfPath, JSON.stringify(gltf));
-  console.log(
-    `bookshelf repaired: ${kept.length / 3} triangles kept, opaque material`
-  );
 }
 
 function dirSize(dir) {
@@ -158,12 +90,18 @@ const work = mkdtempSync(join(tmpdir(), 'rtad-models-'));
 try {
   for (const name of models) {
     const dir = join(MODELS_DIR, name);
+    // Already optimized output is left byte-identical (re-running is not idempotent).
+    const source = JSON.parse(readFileSync(join(dir, 'scene.gltf'), 'utf8'));
+    if ((source.extensionsUsed ?? []).includes('EXT_meshopt_compression')) {
+      console.log(`${name}: already optimized, skipped`);
+      continue;
+    }
     const before = dirSize(dir);
+    const policy = TEXTURE_POLICY[name];
     const step = n => join(work, name, `${n}`, 'scene.gltf');
-    for (const n of ['1', '2', '3', '4', '5', '6'])
+    for (const n of ['1', '2', '3', '3s', '4', '5', '6'])
       mkdirSync(join(work, name, n), { recursive: true });
 
-    if (name === 'bookshelf') repairBookshelf(dir);
     gt('dedup', join(dir, 'scene.gltf'), step(1));
     gt('weld', step(1), step(2));
     // Unused attributes (e.g. UVs on the untextured sofa) are dropped here.
@@ -175,9 +113,22 @@ try {
     const names = images.map(i =>
       basename(decodeURIComponent(i.uri ?? ''), extname(i.uri ?? ''))
     );
-    const large = names.filter(n => LARGE_TEXTURE.test(n));
-    const rest = names.filter(n => n && !LARGE_TEXTURE.test(n));
+    const largeRe = policy?.large ?? LARGE_TEXTURE;
+    const large = names.filter(n => largeRe.test(n));
+    const rest = names.filter(n => n && !largeRe.test(n));
     let current = step(3);
+    if (policy?.simplify) {
+      gt(
+        'simplify',
+        current,
+        step('3s'),
+        '--ratio',
+        String(policy.simplify.ratio),
+        '--error',
+        String(policy.simplify.error)
+      );
+      current = step('3s');
+    }
     const resize = (out, size, list) => {
       if (!list.length) {
         gt('copy', current, step(out));
@@ -197,9 +148,9 @@ try {
       );
       current = step(out);
     };
-    resize(4, MAX_TEXTURE_WOOD, large);
-    resize(5, MAX_TEXTURE, rest);
-    gt('webp', current, step(6));
+    resize(4, policy?.largeSize ?? MAX_TEXTURE_WOOD, large);
+    resize(5, policy?.size ?? MAX_TEXTURE, rest);
+    gt('webp', current, step(6), '--quality', String(WEBP_QUALITY));
     const final = join(work, name, 'final');
     mkdirSync(final, { recursive: true });
     gt('meshopt', step(6), join(final, 'scene.gltf'), '--level', 'high');

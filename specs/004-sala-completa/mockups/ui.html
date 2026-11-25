@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Room Tour — UI mockup (spec 004)</title>
+    <!--
+      Maqueta estática (no es la app; la escena es un esquema plano). Parámetros:
+      ?lang=en|es  &s=list|tv   (desktop >600 px; móvil ≤600 px: usar mobile-frame.html para 390×844).
+      Tokens reales de src/styles.scss.
+    -->
+    <style>
+      @font-face {
+        font-family: 'Fraunces';
+        font-weight: 300 700;
+        src: url('../../002-decoracion-y-ui/mockups/fonts/fraunces-var-latin.woff2')
+          format('woff2');
+      }
+      @font-face {
+        font-family: 'Hanken Grotesk';
+        font-weight: 400 600;
+        src: url('../../002-decoracion-y-ui/mockups/fonts/hanken-grotesk-var-latin.woff2')
+          format('woff2');
+      }
+      :root {
+        --paper: #f6efe4;
+        --paper-sunk: #ece2d1;
+        --ink: #2a2420;
+        --ink-muted: #5c5046;
+        --rule: #d8cab6;
+        --rule-strong: #8c7d6e;
+        --clay: #8a4426;
+        --teal: #35544f;
+        --focus: var(--teal);
+        --hit: 44px;
+        --shadow-panel:
+          0 1px 2px rgb(42 36 32 / 0.08), 0 12px 28px -14px rgb(42 36 32 / 0.35);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        font:
+          0.9375rem/1.5 'Hanken Grotesk',
+          system-ui,
+          sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+      }
+      h2 {
+        margin: 0;
+        font-family: 'Fraunces', Georgia, serif;
+        font-weight: 500;
+        line-height: 1.2;
+      }
+      p {
+        margin: 0;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      /* ---- escena esquemática: pared de la tele ---- */
+      .scene {
+        position: fixed;
+        inset: 0;
+        background: #a98763;
+        overflow: hidden;
+      }
+      .scene > * {
+        position: absolute;
+      }
+      .wall {
+        inset: 0 0 38% 0;
+        background: #f1dfc8;
+      }
+      .ceil {
+        inset: 0 0 90% 0;
+        background: #b69f86;
+      }
+      .floor {
+        inset: 62% 0 0 0;
+        background: linear-gradient(#b08e63, #8f7050);
+      }
+      .rug {
+        left: 22%;
+        right: 22%;
+        top: 74%;
+        height: 26%;
+        background: #a8896a;
+        border: 5px solid #d8c7ad;
+      }
+      .cred {
+        left: 36%;
+        right: 36%;
+        top: 52%;
+        height: 10%;
+        background: repeating-linear-gradient(
+          90deg,
+          #5a4333 0 5px,
+          #3b2a20 5px 7px
+        );
+      }
+      .tv {
+        left: 39%;
+        right: 39%;
+        top: 22%;
+        height: 25%;
+        background: #3b2a20;
+        padding: 6px;
+        box-shadow: 0 0 80px 24px rgb(255 224 180 / 0.55);
+      }
+      .tv i {
+        display: block;
+        height: 100%;
+        background: #f4efe6
+          url('../../003-paredes-cozy-i18n/mockups/art/pteris.webp') center /
+          auto 92% no-repeat;
+      }
+      .pr {
+        top: 24%;
+        width: 5%;
+        height: 20%;
+        background: #f4efe6 center / 70% 78% no-repeat;
+        outline: 4px solid #1f1b18;
+        outline-offset: -1px;
+      }
+      .pr.a {
+        left: 26%;
+        background-image: url('../../003-paredes-cozy-i18n/mockups/art/osmunda.webp');
+      }
+      .pr.b {
+        right: 26%;
+        background-image: url('../../003-paredes-cozy-i18n/mockups/art/spiraea.webp');
+      }
+      .arm {
+        left: 55%;
+        top: 60%;
+        width: 9%;
+        height: 20%;
+        background: #2b2623;
+        border-radius: 8px;
+        transform: skewX(-8deg);
+      }
+      .plant {
+        right: 20%;
+        top: 40%;
+        width: 6%;
+        height: 20%;
+        background: radial-gradient(
+          ellipse at 50% 35%,
+          #4d7048 0 60%,
+          transparent 61%
+        );
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
+      /* ---- lista agrupada ---- */
+      .list {
+        position: fixed;
+        left: 16px;
+        top: 16px;
+        width: 264px;
+        max-height: calc(100% - 96px);
+        display: flex;
+        flex-direction: column;
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        box-shadow: var(--shadow-panel);
+      }
+      .list h2 {
+        padding: 12px 16px 6px;
+        font:
+          600 0.75rem 'Hanken Grotesk',
+          sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+      .search {
+        margin: 0 12px 8px;
+        padding: 0 10px;
+        height: 36px;
+        border: 1px solid var(--rule-strong);
+        border-radius: 2px;
+        background: #fffaf2;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.8125rem;
+        color: var(--ink-muted);
+      }
+      .scroll {
+        overflow-y: auto;
+        flex: 1;
+        border-top: 1px solid var(--rule);
+      }
+      .grp > button.gh {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 16px;
+        background: none;
+        border: 0;
+        border-bottom: 1px solid var(--rule);
+        font-weight: 600;
+        text-align: left;
+      }
+      .gh .n {
+        margin-left: auto;
+        font-weight: 400;
+        font-size: 0.8125rem;
+        color: var(--ink-muted);
+      }
+      .gh svg {
+        transition: transform 0.15s;
+      }
+      .grp.open .gh svg {
+        transform: rotate(90deg);
+      }
+      .grp ul {
+        display: none;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        background: #fbf6ec;
+        border-bottom: 1px solid var(--rule);
+      }
+      .grp.open ul {
+        display: block;
+      }
+      .chip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 36px;
+        padding: 0 16px 0 28px;
+        background: none;
+        border: 0;
+        border-left: 3px solid transparent;
+        text-align: left;
+      }
+      .chip[aria-pressed='true'] {
+        border-left-color: var(--clay);
+        background: var(--paper-sunk);
+        font-weight: 600;
+      }
+      .chip.wallview {
+        color: var(--clay);
+        font-weight: 500;
+      }
+      .chip .tag {
+        margin-left: auto;
+        font-size: 0.6875rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--teal);
+        font-weight: 600;
+      }
+      .reset {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 16px;
+        border-top: 1px solid var(--rule);
+        color: var(--clay);
+        font-weight: 500;
+      }
+      /* ---- ficha ---- */
+      .panel {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        width: 372px;
+        padding: 24px;
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        box-shadow: var(--shadow-panel);
+      }
+      .panel h2 {
+        font-size: 1.375rem;
+        padding-right: 40px;
+      }
+      .panel .body {
+        margin-top: 12px;
+      }
+      .panel .credit {
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px solid var(--rule);
+        font-size: 0.8125rem;
+        color: var(--ink-muted);
+      }
+      .close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: var(--hit);
+        height: var(--hit);
+        background: none;
+        border: 0;
+        font-size: 20px;
+      }
+      .acts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .act {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: var(--hit);
+        padding: 0 16px;
+        background: var(--paper);
+        border: 1px solid var(--rule-strong);
+        border-radius: 2px;
+        font-weight: 600;
+      }
+      .act[aria-pressed='true'] {
+        background: var(--teal);
+        border-color: var(--teal);
+        color: var(--paper);
+      }
+      .act .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: 0.55;
+      }
+      .act[aria-pressed='true'] .dot {
+        opacity: 1;
+        box-shadow: 0 0 0 3px rgb(246 239 228 / 0.3);
+      }
+      .now {
+        margin-top: 12px;
+        font-size: 0.8125rem;
+        color: var(--ink-muted);
+      }
+      .corner {
+        position: fixed;
+        left: 16px;
+        bottom: 16px;
+        display: flex;
+        gap: 8px;
+      }
+      .brand {
+        padding: 8px 12px;
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        box-shadow: var(--shadow-panel);
+      }
+      .brand b {
+        display: block;
+        font:
+          500 1.125rem 'Fraunces',
+          serif;
+      }
+      .brand span {
+        font-size: 0.6875rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+      .lang {
+        display: flex;
+        border: 1px solid var(--rule-strong);
+      }
+      .lang button {
+        min-width: var(--hit);
+        background: var(--paper);
+        border: 0;
+        font-weight: 600;
+      }
+      .lang button[aria-pressed='true'] {
+        background: var(--teal);
+        color: var(--paper);
+      }
+      .controls {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        min-height: var(--hit);
+        padding: 0 16px;
+        display: flex;
+        align-items: center;
+        background: var(--paper);
+        border: 1px solid var(--rule-strong);
+        border-radius: 2px;
+      }
+      .caption {
+        position: fixed;
+        right: 8px;
+        bottom: 64px;
+        font-size: 10px;
+        color: rgb(255 255 255 / 0.7);
+      }
+
+      /* ---- móvil: tira de zonas + tira de piezas ---- */
+      .mtop {
+        display: none;
+      }
+      @media (max-width: 600px) {
+        .list,
+        .scene .caption {
+          display: none;
+        }
+        .mtop {
+          display: block;
+          position: fixed;
+          inset: 0 0 auto 0;
+          background: var(--paper);
+          border-bottom: 1px solid var(--rule);
+        }
+        .mtop ul {
+          display: flex;
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .mtop li {
+          flex: none;
+        }
+        .mtop .tab,
+        .mtop .chip {
+          width: auto;
+          min-height: var(--hit);
+          padding: 0 14px;
+          white-space: nowrap;
+          background: none;
+          border: 0;
+          border-bottom: 3px solid transparent;
+        }
+        .mtop .tab {
+          font-weight: 600;
+          font-size: 0.8125rem;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: var(--ink-muted);
+        }
+        .mtop .tab[aria-selected='true'] {
+          color: var(--ink);
+          border-bottom-color: var(--teal);
+        }
+        .mtop .row2 {
+          border-top: 1px solid var(--rule);
+          background: #fbf6ec;
+        }
+        .mtop .chip[aria-pressed='true'] {
+          background: none;
+          font-weight: 600;
+          border-left: 0;
+          border-bottom-color: var(--clay);
+        }
+        .mtop .chip.wallview {
+          border-right: 1px solid var(--rule);
+        }
+        .panel {
+          left: 0;
+          right: 0;
+          top: auto;
+          bottom: 0;
+          width: auto;
+          padding: 16px 16px 20px;
+          border-width: 1px 0 0;
+          max-height: 40dvh;
+          overflow: auto;
+        }
+        .panel h2 {
+          font-size: 1.25rem;
+        }
+        .corner {
+          left: 12px;
+          bottom: 12px;
+          flex-direction: column;
+        }
+        body.has-panel .corner,
+        body.has-panel .controls {
+          display: none;
+        }
+        .controls {
+          right: 12px;
+          bottom: 12px;
+        }
+        .scene .tv {
+          left: 20%;
+          right: 20%;
+          top: 20%;
+          height: 17%;
+        }
+        .scene .pr,
+        .scene .plant {
+          display: none;
+        }
+        .scene .cred {
+          left: 14%;
+          right: 14%;
+          top: 40%;
+        }
+        .scene .wall {
+          bottom: 52%;
+        }
+        .scene .floor {
+          top: 50%;
+        }
+        .scene .arm {
+          left: 62%;
+          top: 46%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="scene" aria-hidden="true">
+      <div class="wall"></div>
+      <div class="ceil"></div>
+      <div class="floor"></div>
+      <div class="rug"></div>
+      <div class="cred"></div>
+      <div class="tv"><i></i></div>
+      <div class="pr a"></div>
+      <div class="pr b"></div>
+      <div class="plant"></div>
+      <div class="arm"></div>
+      <div class="caption">Schematic backdrop, not the real render</div>
+    </div>
+    <div id="ui"></div>
+    <script>
+      const q = new URLSearchParams(location.search);
+      const lang = q.get('lang') === 'es' ? 'es' : 'en';
+      const screen = q.get('s') || 'list';
+      document.documentElement.lang = lang;
+      const T = {
+        en: {
+          title: 'Pieces',
+          search: 'Find a piece',
+          view: 'View wall',
+          reset: 'Reset view',
+          close: 'Close',
+          lang: 'Language',
+          brand: 'Room Tour',
+          by: 'by Francisco Moreno',
+          controls: 'Controls',
+          groups: [
+            ['Green wall', 8, null],
+            ['Window wall', 8, null],
+            ['TV wall', 6, 'tv'],
+            ['Desk wall', 7, null],
+            ['Floor & seating', 5, null],
+            ['Ceiling', 1, null],
+          ],
+          tvItems: [
+            ['Television', 'tv'],
+            ['Walnut sideboard'],
+            ['Botanical prints (TV wall)'],
+            ['Rubber plant'],
+            ['Panel door'],
+            ['Arched mirror'],
+          ],
+          tvName: 'Television',
+          tvDesc:
+            'A 55-inch screen in a walnut frame, hung low like a picture. In art mode it cycles through the cyanotypes and salt prints in this room, one every eight seconds.',
+          on: 'Turn off',
+          off: 'Turn on',
+          next: 'Next picture',
+          now: 'Showing: Pteris aquilina, Anna Atkins, c. 1850',
+          credit:
+            'Screen content: public-domain plates from this room. Frame and sideboard: procedural.',
+          live: 'Television on. Showing Pteris aquilina.',
+          sections: 'TV wall',
+        },
+        es: {
+          title: 'Piezas',
+          search: 'Buscar una pieza',
+          view: 'Ver pared',
+          reset: 'Restablecer vista',
+          close: 'Cerrar',
+          lang: 'Idioma',
+          brand: 'Room Tour',
+          by: 'por Francisco Moreno',
+          controls: 'Controles',
+          groups: [
+            ['Pared verde', 8, null],
+            ['Pared de la ventana', 8, null],
+            ['Pared de la tele', 6, 'tv'],
+            ['Pared del escritorio', 7, null],
+            ['Suelo y asientos', 5, null],
+            ['Techo', 1, null],
+          ],
+          tvItems: [
+            ['Televisión', 'tv'],
+            ['Aparador de nogal'],
+            ['Láminas botánicas (pared de la tele)'],
+            ['Ficus de hoja grande'],
+            ['Puerta de paneles'],
+            ['Espejo de arco'],
+          ],
+          tvName: 'Televisión',
+          tvDesc:
+            'Una pantalla de 55 pulgadas con marco de nogal, colgada baja como un cuadro. En modo arte repasa los cianotipos y papeles salados de esta sala, uno cada ocho segundos.',
+          on: 'Apagar',
+          off: 'Encender',
+          next: 'Siguiente lámina',
+          now: 'En pantalla: Pteris aquilina, Anna Atkins, h. 1850',
+          credit:
+            'Contenido de la pantalla: láminas de dominio público de esta sala. Marco y aparador: procedurales.',
+          live: 'Televisión encendida. En pantalla: Pteris aquilina.',
+          sections: 'Pared de la tele',
+        },
+      }[lang];
+      const chev =
+        '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg>';
+      const reset =
+        '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 2 1.5 5.5 5 9M1.5 5.5H9.5a3 3 0 0 1 3 3V12"/></svg>';
+      const tag =
+        screen === 'tv'
+          ? '<span class="tag">' +
+            (lang === 'es' ? 'Encendida' : 'On') +
+            '</span>'
+          : '';
+      const sel = screen === 'tv';
+      let html = '';
+      // lista escritorio
+      html +=
+        '<nav class="list" aria-label="' +
+        T.title +
+        '"><h2>' +
+        T.title +
+        '</h2>';
+      html +=
+        '<div class="search" role="search"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>' +
+        T.search +
+        '</div>';
+      html += '<div class="scroll">';
+      T.groups.forEach((g, i) => {
+        const open = i === 2;
+        html +=
+          '<section class="grp' +
+          (open ? ' open' : '') +
+          '"><button class="gh" aria-expanded="' +
+          open +
+          '">' +
+          chev +
+          g[0] +
+          '<span class="n">' +
+          g[1] +
+          '</span></button>';
+        if (open) {
+          html +=
+            '<ul><li><button class="chip wallview">' +
+            reset.replace('M5 2 1.5 5.5', 'M5 2 1.5 5.5') +
+            T.view +
+            '</button></li>';
+          T.tvItems.forEach(it => {
+            html +=
+              '<li><button class="chip" aria-pressed="' +
+              (sel && it[1] === 'tv') +
+              '">' +
+              it[0] +
+              (it[1] && sel ? tag : '') +
+              '</button></li>';
+          });
+          html += '</ul>';
+        }
+        html += '</section>';
+      });
+      html += '</div><div class="reset">' + reset + T.reset + '</div></nav>';
+      // móvil: pestañas + piezas del grupo activo
+      html +=
+        '<nav class="mtop" aria-label="' + T.title + '"><ul role="tablist">';
+      T.groups.forEach(
+        (g, i) =>
+          (html +=
+            '<li><button class="tab" role="tab" aria-selected="' +
+            (i === 2) +
+            '">' +
+            g[0] +
+            '</button></li>')
+      );
+      html +=
+        '</ul><ul class="row2"><li><button class="chip wallview">' +
+        T.view +
+        '</button></li>';
+      T.tvItems.forEach(
+        it =>
+          (html +=
+            '<li><button class="chip" aria-pressed="' +
+            (sel && it[1] === 'tv') +
+            '">' +
+            it[0] +
+            '</button></li>')
+      );
+      html += '</ul></nav>';
+      if (sel) {
+        document.body.classList.add('has-panel');
+        html +=
+          '<section class="panel" role="dialog" aria-labelledby="t"><button class="close" aria-label="' +
+          T.close +
+          '">×</button><h2 id="t">' +
+          T.tvName +
+          '</h2><p class="body">' +
+          T.tvDesc +
+          '</p>';
+        html +=
+          '<div class="acts" role="group" aria-label="' +
+          (lang === 'es' ? 'Acciones' : 'Actions') +
+          '"><button class="act" aria-pressed="true"><span class="dot"></span>' +
+          T.on +
+          '</button><button class="act">' +
+          T.next +
+          '</button></div>';
+        html +=
+          '<p class="now">' +
+          T.now +
+          '</p><p class="credit">' +
+          T.credit +
+          '</p><div class="sr" aria-live="polite">' +
+          T.live +
+          '</div></section>';
+      }
+      html +=
+        '<div class="corner"><div class="lang" role="group" aria-label="' +
+        T.lang +
+        '"><button aria-pressed="' +
+        (lang === 'en') +
+        '">EN</button><button aria-pressed="' +
+        (lang === 'es') +
+        '">ES</button></div><div class="brand"><b>' +
+        T.brand +
+        '</b><span>' +
+        T.by +
+        '</span></div></div>';
+      html += '<div class="controls">' + T.controls + '</div>';
+      document.getElementById('ui').innerHTML = html;
+    </script>
+  </body>
+</html>

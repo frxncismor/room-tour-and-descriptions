@@ -6,6 +6,8 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  Object3D,
+  Raycaster,
   MeshStandardMaterial,
   Texture,
   Vector3,
@@ -16,7 +18,10 @@ import {
   ModelLoaderService,
   TEXTURE_ANISOTROPY,
   applyMaterialOverride,
+  cacheUnlessRejected,
+  disableRaycast,
   disposeObject3D,
+  freezeMatrices,
 } from './model-loader.service';
 
 function config(
@@ -27,7 +32,7 @@ function config(
     position: new Vector3(3, 0.7, -2),
     scale: 1,
     rotation: new Euler(),
-    metadata: { name: 'X', description: 'y' },
+    metadata: { id: 'sofa' },
     ...overrides,
   };
 }
@@ -114,6 +119,85 @@ describe('ModelLoaderService', () => {
     expect((box.min.z + box.max.z) / 2).toBeCloseTo(-2);
   });
 
+  it('does not cast shadows when castShadow is false, but still receives them', async () => {
+    const model = await service.loadModel(config({ castShadow: false }));
+    const meshes: Mesh[] = [];
+    model.traverse(c => (c as Mesh).isMesh && meshes.push(c as Mesh));
+    expect(meshes.length).toBeGreaterThan(0);
+    expect(meshes.every(m => !m.castShadow && m.receiveShadow)).toBe(true);
+  });
+
+  it('casts shadows by default on opaque meshes', async () => {
+    const model = await service.loadModel(config());
+    const mesh = model.children[0] as Mesh;
+    expect(mesh.castShadow).toBe(true);
+  });
+
+  describe('mergeMeshes', () => {
+    function multiMeshScene(): Group {
+      const group = new Group();
+      const shared = new MeshStandardMaterial();
+      const other = new MeshStandardMaterial();
+      const make = (
+        x: number,
+        material: MeshStandardMaterial,
+        name: string
+      ) => {
+        const geometry = new BoxGeometry(1, 1, 1);
+        geometry.clearGroups();
+        // Posiciones cuantizadas (i16 normalizado) como las del pipeline meshopt.
+        const mesh = new Mesh(geometry, material);
+        mesh.name = name;
+        mesh.position.set(x, 0.5, 0);
+        mesh.rotation.y = 0.3;
+        group.add(mesh);
+        return mesh;
+      };
+      make(0, shared, 'a');
+      make(2, shared, 'b');
+      make(4, shared, 'c');
+      make(6, other, 'd');
+      return group;
+    }
+
+    const meshesOf = (root: Group | Object3D) => {
+      const out: Mesh[] = [];
+      root.traverse(c => (c as Mesh).isMesh && out.push(c as Mesh));
+      return out;
+    };
+
+    it('merges meshes that share a material and keeps the overall box', async () => {
+      loadAsync.mockImplementation((() =>
+        Promise.resolve({ scene: multiMeshScene() })) as never);
+      const plain = await service.loadModel(config());
+      const merged = await service.loadModel(config({ mergeMeshes: true }));
+
+      expect(meshesOf(plain)).toHaveLength(4);
+      expect(meshesOf(merged)).toHaveLength(2);
+      const sizeOf = (o: Object3D) =>
+        new Box3().setFromObject(o).getSize(new Vector3());
+      expect(sizeOf(merged).x).toBeCloseTo(sizeOf(plain).x, 4);
+      expect(sizeOf(merged).y).toBeCloseTo(sizeOf(plain).y, 4);
+      const triangles = (o: Object3D) =>
+        meshesOf(o).reduce((n, m) => n + m.geometry.index!.count / 3, 0);
+      expect(triangles(merged)).toBe(triangles(plain));
+    });
+
+    it('keeps shadows, raycast target and a single shared material per merged mesh', async () => {
+      loadAsync.mockImplementation((() =>
+        Promise.resolve({ scene: multiMeshScene() })) as never);
+      const merged = await service.loadModel(
+        config({ mergeMeshes: true, castShadow: false })
+      );
+      const meshes = meshesOf(merged);
+      expect(meshes.every(m => !m.castShadow && m.receiveShadow)).toBe(true);
+      expect(new Set(meshes.map(m => m.material)).size).toBe(2);
+      merged.updateMatrixWorld(true);
+      const ray = new Raycaster(new Vector3(2, 5, -2), new Vector3(0, -1, 0));
+      expect(ray.intersectObject(merged, true).length).toBeGreaterThan(0);
+    });
+  });
+
   it('applies yOffset on top of the floor', async () => {
     const model = await service.loadModel(config({ yOffset: 0.25 }));
     model.updateMatrixWorld(true);
@@ -162,6 +246,19 @@ describe('applyMaterialOverride', () => {
     expect(material.map.anisotropy).toBe(TEXTURE_ANISOTROPY);
   });
 
+  it('clearMap removes the colour map so the colour rules', () => {
+    const material = new MeshStandardMaterial({ color: 0x888888 });
+    const map = new Texture();
+    const dispose = vi.spyOn(map, 'dispose');
+    material.map = map;
+    const root = new Group();
+    root.add(new Mesh(new BoxGeometry(), material));
+    applyMaterialOverride(root, { color: 0xe6dcc6, clearMap: true });
+    expect(material.map).toBeNull();
+    expect(dispose).toHaveBeenCalled();
+    expect(material.color.getHex()).toBe(0xe6dcc6);
+  });
+
   it('keeps the original material when there is no override', () => {
     const material = new MeshStandardMaterial({ color: 0x123456 });
     const root = new Group();
@@ -172,15 +269,74 @@ describe('applyMaterialOverride', () => {
 });
 
 describe('MODEL_CONFIGURATIONS grounding', () => {
-  it('places every model base on the floor (yOffset 0)', async () => {
+  it('places every model base at its yOffset (the floor unless hung)', async () => {
     const { MODEL_CONFIGURATIONS } = await import('../config/scene.config');
     const service = TestBed.inject(ModelLoaderService);
     vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockImplementation((() =>
       Promise.resolve({ scene: fakeScene() })) as never);
     for (const cfg of Object.values(MODEL_CONFIGURATIONS)) {
       const model = await service.loadModel(cfg);
-      expect(new Box3().setFromObject(model).min.y).toBeCloseTo(0, 2);
+      expect(new Box3().setFromObject(model).min.y).toBeCloseTo(
+        cfg.yOffset ?? 0,
+        2
+      );
     }
     vi.restoreAllMocks();
+  });
+});
+
+describe('disableRaycast', () => {
+  it('makes every mesh of the tree invisible to raycasters', () => {
+    const group = fakeScene();
+    const ray = new Raycaster(new Vector3(10, 5, 20), new Vector3(0, 0, -1));
+    group.updateMatrixWorld(true);
+    expect(ray.intersectObject(group, true).length).toBeGreaterThan(0);
+    disableRaycast(group);
+    expect(ray.intersectObject(group, true)).toEqual([]);
+  });
+});
+
+describe('freezeMatrices', () => {
+  it('freezes the tree after computing matrices, except what `keep` spares', () => {
+    const root = new Group();
+    const moving = new Group();
+    const child = new Mesh(new BoxGeometry(), new MeshBasicMaterial());
+    root.position.set(1, 2, 3);
+    moving.add(child);
+    root.add(moving);
+    freezeMatrices(root, o => o === moving);
+    expect(root.matrixAutoUpdate).toBe(false);
+    expect(child.matrixAutoUpdate).toBe(false);
+    expect(moving.matrixAutoUpdate).toBe(true);
+    expect(child.matrixWorld.elements[12]).toBe(1);
+  });
+
+  it('loadModel returns a model with frozen matrices', async () => {
+    vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockResolvedValue({
+      scene: fakeScene(),
+    } as never);
+    const model = await TestBed.inject(ModelLoaderService).loadModel(config());
+    expect(model.matrixAutoUpdate).toBe(false);
+  });
+});
+
+describe('cacheUnlessRejected (R9-M1)', () => {
+  it('caches a resolved load and calls the loader once', async () => {
+    const load = vi.fn().mockResolvedValue('decoder');
+    const get = cacheUnlessRejected(load);
+    expect(await get()).toBe('decoder');
+    expect(await get()).toBe('decoder');
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets a rejected load so a retry can succeed', async () => {
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('chunk failed'))
+      .mockResolvedValueOnce('decoder');
+    const get = cacheUnlessRejected(load);
+    await expect(get()).rejects.toThrow('chunk failed');
+    expect(await get()).toBe('decoder');
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });

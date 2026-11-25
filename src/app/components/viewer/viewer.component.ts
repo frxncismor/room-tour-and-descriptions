@@ -9,7 +9,8 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { UI_TEXT } from '../../config/ui-text';
+import { LocaleService } from '../../i18n/locale.service';
+import type { SurfaceId } from '../../pieces/piece-ids';
 import { SceneService } from '../../services/scene.service';
 import { ViewerStateService } from '../../services/viewer-state.service';
 import { BrandLabelComponent } from '../brand-label/brand-label.component';
@@ -17,8 +18,9 @@ import { DescriptionPanelComponent } from '../description-panel/description-pane
 import { ErrorBannerComponent } from '../error-banner/error-banner.component';
 import { ErrorOverlayComponent } from '../error-overlay/error-overlay.component';
 import { HelpPanelComponent } from '../help-panel/help-panel.component';
+import { LanguageSwitcherComponent } from '../language-switcher/language-switcher.component';
 import { LoadingScreenComponent } from '../loading-screen/loading-screen.component';
-import { ObjectListComponent } from '../object-list/object-list.component';
+import { ObjectListPanelComponent } from '../object-list/object-list-panel.component';
 
 /** Distancia (px) a partir de la cual un gesto es arrastre y no clic (C10). */
 const DRAG_THRESHOLD_PX = 5;
@@ -34,13 +36,16 @@ const BLOCKING_ERRORS = ['webgl-unavailable', 'webgl-context-lost'];
     ErrorBannerComponent,
     ErrorOverlayComponent,
     HelpPanelComponent,
+    LanguageSwitcherComponent,
     LoadingScreenComponent,
-    ObjectListComponent,
+    ObjectListPanelComponent,
   ],
   templateUrl: './viewer.component.html',
   styleUrls: ['./viewer.component.scss'],
   host: {
     '(document:keydown.escape)': 'onEscape()',
+    '(document:keydown)': 'onDocumentKey($event)',
+    '(document:pointerdown)': 'stepFromList = false',
   },
 })
 export class ViewerComponent implements AfterViewInit, OnDestroy {
@@ -49,20 +54,23 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
 
   private readonly sceneService = inject(SceneService);
   protected readonly state = inject(ViewerStateService);
-  protected readonly canvasLabel = UI_TEXT.canvasLabel;
+  private readonly i18n = inject(LocaleService);
+  protected readonly canvasLabel = computed(
+    () => this.i18n.messages().canvasLabel
+  );
 
   protected readonly dragging = signal(false);
   /** Primer gesto de navegación: la ayuda se da por vista (H3). */
   protected readonly interacted = signal(false);
+  /** Tras «Ver pared» Av/Re Pág recorren los tramos aunque el foco siga en la lista. */
+  protected stepFromList = false;
 
   protected readonly cursor = computed(() => {
     if (this.dragging()) return 'grabbing';
     return this.state.hovered() ? 'pointer' : 'grab';
   });
 
-  protected readonly panelInfo = computed(() => {
-    return this.state.selected();
-  });
+  protected readonly panelInfo = computed(() => this.state.selected());
 
   protected readonly blockingError = computed(() => {
     const error = this.state.error();
@@ -72,15 +80,6 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   protected readonly bannerError = computed(() => {
     const error = this.state.error();
     return error && !BLOCKING_ERRORS.includes(error.code) ? error : null;
-  });
-
-  protected readonly objects = computed(() => {
-    // El listado del servicio no es una señal: se recalcula con el estado.
-    this.state.sceneReady();
-    this.state.loadStatus();
-    return this.sceneService
-      .getObjectList()
-      .sort((a, b) => a.name.localeCompare(b.name));
   });
 
   private readonly pointers = new Map<number, { x: number; y: number }>();
@@ -196,8 +195,63 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
     if (event.key !== 'Tab' && event.key !== 'Shift') this.interacted.set(true);
   }
 
+  /**
+   * Av Pág / Re Pág recorren los tramos de una pared encuadrada con el foco
+   * donde esté (tras «Ver pared» sigue en la lista). Solo se intercepta si
+   * hay varios tramos y el foco no está en un campo de texto: sin tramos
+   * que recorrer, la lista se desplaza con normalidad. Tampoco se intercepta
+   * con el foco en el diálogo de ayuda ni en un contenedor que desborda (ficha,
+   * lista), salvo justo tras «Ver pared» (R9-M4), hasta otra tecla o un clic.
+   */
+  protected onDocumentKey(event: KeyboardEvent): void {
+    if (event.key !== 'PageDown' && event.key !== 'PageUp') {
+      this.stepFromList = false;
+      return;
+    }
+    if (
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey
+    )
+      return;
+    if (this.state.selectedKind() !== 'surface') return;
+    if ((this.state.surfaceTramo()?.count ?? 0) < 2) return;
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      target.closest('input, textarea, select, [contenteditable]')
+    ) {
+      return;
+    }
+    if (target instanceof HTMLElement && this.ownsPageKeys(target)) return;
+    event.preventDefault();
+    this.interacted.set(true);
+    this.sceneService.stepSurfaceSection(event.key === 'PageDown' ? 1 : -1);
+  }
+
+  /** Foco en la ayuda o dentro de un contenedor desplazable que desborda. */
+  private ownsPageKeys(target: HTMLElement): boolean {
+    if (target.closest('app-help-panel')) return true;
+    if (this.stepFromList) return false;
+    for (
+      let el: HTMLElement | null = target;
+      el && el !== target.ownerDocument.body;
+      el = el.parentElement
+    ) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        el.scrollHeight > el.clientHeight
+      )
+        return true;
+    }
+    return false;
+  }
+
   protected onHome(event: Event): void {
     event.preventDefault();
+    this.sceneService.clearSelection();
     this.sceneService.resetView();
   }
 
@@ -209,6 +263,12 @@ export class ViewerComponent implements AfterViewInit, OnDestroy {
   protected selectObject(id: string): void {
     this.interacted.set(true);
     this.sceneService.selectObject(id);
+  }
+
+  protected viewSurface(id: SurfaceId): void {
+    this.interacted.set(true);
+    this.stepFromList = true;
+    this.sceneService.viewSurface(id);
   }
 
   protected resetView(): void {
