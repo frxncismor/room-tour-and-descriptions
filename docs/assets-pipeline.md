@@ -125,9 +125,13 @@ All six are CC0 or public domain: no attribution is legally required (they are c
 ## Sofa (procedural)
 
 The sofa is original work: `node scripts/generate-sofa.mjs` writes `src/assets/models/sofa/scene.gltf` + `scene.bin`
-(plain Node, no dependencies) and `node scripts/optimize-models.mjs` compresses it (meshopt + quantization). It is a corner
-sectional with a chaise, four back cushions and a separate ottoman built from rounded boxes: 3.70 × 1.00 × 2.70 m, 9 996 triangles,
-one material (the scene tints it through `materialOverride`, then `tameSofaColor` mutes it), about 40 KB on disk. It replaced a
+(plain Node, no dependencies) and compresses them itself with meshopt + quantization (glTF Transform through `npx`; there is no need to
+run `scripts/optimize-models.mjs`, which skips it). It is a corner sectional with a chaise split into three cushions, three run seats, four back cushions
+and piping on all of them, and a separate ottoman, built from rounded boxes: 3.70 × 1.00 × 2.70 m, 19 912 triangles, 12 206 vertices,
+one mesh and one material (the scene tints it through `materialOverride`, then `tameSofaColor` mutes it), about 175 KB on disk. For the
+close-up it has UVs (box projection, one repeat every 0.2 m) and uses the linen normal map already in the project
+(`textures/fabric/linen-nor.webp`, referenced by URI, no extra texture), ambient occlusion baked per vertex into `COLOR_0`, and twelve
+9 cm walnut legs (vertex colour over the same material, no plinth). It replaced a
 third-party model whose licence did not allow redistribution as an asset (fix 11). The two Poly Haven sofas (`sofa_02`, `sofa_03`)
 were tried and discarded: both are Victorian pieces (black buttoned leather, carved walnut) that do not fit the room.
 The world-space bounding box measured with `GLTFLoader` (rotation π/4 in Y, centred at (-3, -3)) is
@@ -139,17 +143,17 @@ Each source, author and licence below was checked against its own page on 2026-1
 (`https://api.polyhaven.com/info/<id>`, authors; every Poly Haven asset is CC0, <https://polyhaven.com/license>), the Wikimedia Commons API
 (`extmetadata`: `LicenseShortName`, `Artist`) and the Google Fonts metadata (`ofl/<font>/METADATA.pb`). Nothing in `src/assets` needs attribution.
 
-| Asset                                                                      | Author                                                  | Licence                                                | Verified at                                      |
-| -------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------ |
-| `models/sofa` (procedural)                                                 | this project (`scripts/generate-sofa.mjs`)              | MIT, like the code                                     | generated, no third-party geometry               |
-| 15 glTF models (see the README table), 3 floor, 2 rug and 2 linen textures | see the README table                                    | CC0 (Poly Haven)                                       | Poly Haven API, 18 of 18 ids                     |
-| `textures/art/{spiraea,felce}.webp`                                        | Anna Atkins; W. H. Fox Talbot                           | CC0 (The Met Open Access)                              | Commons `LicenseShortName` = CC0                 |
-| `textures/art/{osmunda,pteris,e,f,g,h}.webp`                               | Anna Atkins (d. 1871)                                   | Public domain                                          | Commons `LicenseShortName` = Public domain       |
-| `fonts/fraunces-var-latin.woff2`                                           | Undercase Type, Phaedra Charles, Flavia Zimbardi        | SIL OFL 1.1                                            | Google Fonts `METADATA.pb`: `license: "OFL"`     |
-| `fonts/hanken-grotesk-var-latin.woff2`                                     | Alfredo Marco Pradil, Hanken Design Co.                 | SIL OFL 1.1                                            | Google Fonts `METADATA.pb`: `license: "OFL"`     |
-| `brand/favicon.svg`, `brand/apple-touch-icon.png`, `src/favicon.ico`       | this project (a rectangle and a base on green)          | MIT, like the code                                     | own drawing; the `.ico` is rendered from the SVG |
-| `brand/og.png`, `docs/media/*` (screenshots and `tour.gif`)                | captures of this app                                    | MIT; the scene inside is made only of the assets above | regenerated in fix 11                            |
-| Audio                                                                      | none: the turntable sound is synthesized with Web Audio | n/a                                                    | no audio file in the repo                        |
+| Asset                                                                      | Author                                                  | Licence                                                | Verified at                                       |
+| -------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| `models/sofa` (procedural)                                                 | this project (`scripts/generate-sofa.mjs`)              | MIT, like the code                                     | generated; the linen normal map is Poly Haven CC0 |
+| 15 glTF models (see the README table), 3 floor, 2 rug and 2 linen textures | see the README table                                    | CC0 (Poly Haven)                                       | Poly Haven API, 18 of 18 ids                      |
+| `textures/art/{spiraea,felce}.webp`                                        | Anna Atkins; W. H. Fox Talbot                           | CC0 (The Met Open Access)                              | Commons `LicenseShortName` = CC0                  |
+| `textures/art/{osmunda,pteris,e,f,g,h}.webp`                               | Anna Atkins (d. 1871)                                   | Public domain                                          | Commons `LicenseShortName` = Public domain        |
+| `fonts/fraunces-var-latin.woff2`                                           | Undercase Type, Phaedra Charles, Flavia Zimbardi        | SIL OFL 1.1                                            | Google Fonts `METADATA.pb`: `license: "OFL"`      |
+| `fonts/hanken-grotesk-var-latin.woff2`                                     | Alfredo Marco Pradil, Hanken Design Co.                 | SIL OFL 1.1                                            | Google Fonts `METADATA.pb`: `license: "OFL"`      |
+| `brand/favicon.svg`, `brand/apple-touch-icon.png`, `src/favicon.ico`       | this project (a rectangle and a base on green)          | MIT, like the code                                     | own drawing; the `.ico` is rendered from the SVG  |
+| `brand/og.png`, `docs/media/*` (screenshots and `tour.gif`)                | captures of this app                                    | MIT; the scene inside is made only of the assets above | regenerated in fix 11                             |
+| Audio                                                                      | none: the turntable sound is synthesized with Web Audio | n/a                                                    | no audio file in the repo                         |
 
 Decisions: the only asset that was not CC0, public domain or OFL (a third-party sofa under a standard marketplace licence, which does not allow
 redistributing it as an asset) was replaced by the procedural sofa. The screenshots and the social image that showed the old sofa were retaken. The git history still holds the old
