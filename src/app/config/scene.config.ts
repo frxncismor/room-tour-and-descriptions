@@ -114,13 +114,13 @@ export const MODEL_CONFIGURATIONS = {
     materialOverride: { color: 0xa65f3a, roughness: 0.9, metalness: 0 },
     metadata: { id: 'sofa' as const },
   },
-  pokerTable: {
+  roundTable: {
     path: 'assets/models/round_wooden_table_01/scene.gltf',
     position: new Vector3(3, 0, -3),
     scale: 0.95,
     rotation: new Euler(),
     yOffset: 0,
-    metadata: { id: 'pokerTable' as const },
+    metadata: { id: 'roundTable' as const },
   },
   bookshelf: {
     path: 'assets/models/wooden_bookshelf_worn/scene.gltf',

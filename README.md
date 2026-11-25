@@ -182,7 +182,7 @@ Measured on a production build (`npm run build`) of the full room:
 
 | Metric                         | Value                                      |
 | ------------------------------ | ------------------------------------------ |
-| Initial JavaScript bundle      | 888.04 kB raw, about 206.79 kB transferred |
+| Initial JavaScript bundle      | 888.45 kB raw, about 206.93 kB transferred |
 | Renders while the room is idle | 0 (render on demand)                       |
 | 3D models (all sixteen)        | 1,788,528 B (about 1.8 MB)                 |
 | Textures (room, prints, linen) | 1,003,256 B (about 1.0 MB)                 |
@@ -191,7 +191,7 @@ Measured on a production build (`npm run build`) of the full room:
 
 The procedural sofa weighs 40 KB. The nine Poly Haven models of the full room weigh 797,619 B in total, the bookshelf and the round table weigh 341,727 B, and the four new prints 315,868 B. Per-model sizes are in [docs/assets-pipeline.md](docs/assets-pipeline.md).
 
-The piece builders and models of the full room (`scene-pieces`, 46.20 kB raw, 15.56 kB transferred), the decor builder (11.39 kB) and the English and Spanish piece text (8.58 kB and 9.69 kB) load as separate chunks; the Spanish interface dictionary (4.39 kB) loads only when needed.
+The piece builders and models of the full room (`scene-pieces`, 46.21 kB raw, 15.52 kB transferred), the decor builder (11.64 kB) and the English and Spanish piece text (8.78 kB and 9.86 kB) load as separate chunks; the Spanish interface dictionary (4.51 kB) loads only when needed.
 
 Other measurements on the final build:
 

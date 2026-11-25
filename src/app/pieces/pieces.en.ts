@@ -15,7 +15,7 @@ const PIECES_EN = {
         'Corner sectional with a chaise, four back cushions and a separate ottoman, in a muted terracotta fabric. It anchors the seating area on the left.',
       details: 'Model: procedural, built for this project.',
     },
-    pokerTable: {
+    roundTable: {
       name: 'Round table',
       description:
         'Round pedestal table in dark stained wood, with a turned column and four curved legs. It stands on the right, opposite the sofa.',
@@ -153,7 +153,8 @@ const PIECES_EN = {
       name: 'Botanical print (nook)',
       description:
         'A botanical plate in blue and sepia, on the window wall beside the reading nook.',
-      details: 'Public-domain plate. Credits are in the README.',
+      details:
+        'Public-domain plate. Credits: see “Credits and licenses” in the README.',
     },
     // Pared de la tele
     tv: {
@@ -185,7 +186,8 @@ const PIECES_EN = {
       name: 'Botanical prints (TV wall)',
       description:
         'Two botanical plates in blue and sepia, one on each side of the television.',
-      details: 'Public-domain plates. Credits are in the README.',
+      details:
+        'Public-domain plates. Credits: see “Credits and licenses” in the README.',
     },
     plantFicus: {
       name: 'Rubber plant',
@@ -221,7 +223,8 @@ const PIECES_EN = {
       name: 'Botanical print (desk wall)',
       description:
         'A botanical plate in blue and sepia, between the armoire and the desk.',
-      details: 'Public-domain plate. Credits are in the README.',
+      details:
+        'Public-domain plate. Credits: see “Credits and licenses” in the README.',
     },
     desk: {
       name: 'Oak desk, chair & shelf',
@@ -293,7 +296,7 @@ const PIECES_EN = {
     wallGreen: {
       name: 'Green wall',
       description:
-        'The teal wall: prints, brass sconces, bookshelf and clock around the bookshelf.',
+        'The green wall: botanical prints, brass sconces and a clock arranged around the bookshelf.',
     },
     wallWindow: {
       name: 'Window wall',

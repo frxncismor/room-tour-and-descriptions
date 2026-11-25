@@ -14,7 +14,7 @@ const PIECES_ES = {
         'Sofá rinconera con chaise longue, cuatro cojines de respaldo y un puf independiente, en una tela terracota apagada. Define la zona de estar a la izquierda.',
       details: 'Modelo: procedural, hecho para este proyecto.',
     },
-    pokerTable: {
+    roundTable: {
       name: 'Mesa redonda',
       description:
         'Mesa redonda de pie central en madera oscura barnizada, con columna torneada y cuatro patas curvas. Está a la derecha, frente al sofá.',
@@ -145,7 +145,7 @@ const PIECES_ES = {
       },
     },
     bookcaseLeft: {
-      name: 'Librería del rincón',
+      name: 'Estantería del rincón',
       description:
         'Gemela de la estantería del fondo, junto a la pared de la ventana para cerrar el rincón de lectura.',
       details:
@@ -155,7 +155,8 @@ const PIECES_ES = {
       name: 'Lámina botánica (rincón)',
       description:
         'Una lámina botánica en azul y sepia, en la pared de la ventana junto al rincón de lectura.',
-      details: 'Lámina de dominio público. Los créditos están en el README.',
+      details:
+        'Lámina de dominio público. Créditos: véase «Credits and licenses» en el README.',
     },
     // Pared de la tele
     tv: {
@@ -187,7 +188,8 @@ const PIECES_ES = {
       name: 'Láminas botánicas (tele)',
       description:
         'Dos láminas botánicas en azul y sepia, una a cada lado de la televisión.',
-      details: 'Láminas de dominio público. Los créditos están en el README.',
+      details:
+        'Láminas de dominio público. Créditos: véase «Credits and licenses» en el README.',
     },
     plantFicus: {
       name: 'Ficus de hoja grande',
@@ -223,7 +225,8 @@ const PIECES_ES = {
       name: 'Lámina botánica (escritorio)',
       description:
         'Una lámina botánica en azul y sepia, entre el armario y el escritorio.',
-      details: 'Lámina de dominio público. Los créditos están en el README.',
+      details:
+        'Lámina de dominio público. Créditos: véase «Credits and licenses» en el README.',
     },
     desk: {
       name: 'Escritorio, silla y estante',
@@ -268,7 +271,7 @@ const PIECES_ES = {
     // Suelo y asientos
     cushionsThrow: {
       name: 'Cojines y manta',
-      description: 'Cojines sueltos y una manta sobre el sofá modular.',
+      description: 'Cojines sueltos y una manta sobre el sofá rinconera.',
     },
     armchair: {
       name: 'Sillón de cuero',
@@ -296,7 +299,7 @@ const PIECES_ES = {
     wallGreen: {
       name: 'Pared verde',
       description:
-        'La pared verde: láminas, apliques de latón, estantería y reloj en torno a la librería.',
+        'La pared verde: láminas botánicas, apliques de latón y un reloj en torno a la estantería.',
     },
     wallWindow: {
       name: 'Pared de la ventana',

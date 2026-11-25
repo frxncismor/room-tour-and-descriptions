@@ -210,7 +210,7 @@ describe('ObjectInteractionService', () => {
     expect(material.color.getHex()).not.toBe(a);
   });
 
-  it('stops pulsing ~12 s after selecting, leaving a fixed outline, and restarts on new selection/hover (R9-M12)', async () => {
+  it('stops pulsing ~12 s after selecting, leaving a fixed outline, and restarts on a new selection only (R9-M12, R10-M2)', async () => {
     await click(100, 100);
     const material = (furniture.children[0].children[0] as Mesh)
       .material as MeshBasicMaterial;
@@ -226,7 +226,7 @@ describe('ObjectInteractionService', () => {
     service.update(1000 + OUTLINE_PULSE_DURATION_MS + 1234);
     expect(material.color.getHex()).toBe(OUTLINE_COLOR);
 
-    // Un hover nuevo reinicia el pulso.
+    // Un hover nuevo NO reinicia el pulso ni hace saltar el color (R10-M2).
     service.setContext(camera, scene);
     service.setHover({ x: 0, y: 0 });
     service.update(20000);
@@ -234,10 +234,14 @@ describe('ObjectInteractionService', () => {
     service.update(20016);
     service.setHover({ x: 0, y: 0 });
     service.update(20032);
-    expect(service.isPulsing()).toBe(true);
+    expect(service.isPulsing()).toBe(false);
+    expect(material.color.getHex()).toBe(OUTLINE_COLOR);
 
-    // Y una selección nueva también.
+    // Una selección nueva sí lo reinicia.
+    service.clearSelection();
+    await click(100, 100);
     service.update(20048);
+    expect(service.isPulsing()).toBe(true);
     service.update(20048 + OUTLINE_PULSE_DURATION_MS + 100);
     service.update(20048 + OUTLINE_PULSE_DURATION_MS + 116);
     expect(service.isPulsing()).toBe(false);
@@ -246,6 +250,20 @@ describe('ObjectInteractionService', () => {
     service.update(40000);
     expect(service.isPulsing()).toBe(true);
     service.clearSelection();
+    expect(service.isPulsing()).toBe(false);
+  });
+
+  it('does not restart the 12 s pulse when the hover changes mid-pulse (R10-M2)', async () => {
+    await click(100, 100);
+    service.update(1000);
+    service.setContext(camera, scene);
+    service.setHover({ x: 0.99, y: 0.99 });
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS - 100);
+    service.setHover({ x: 0, y: 0 });
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS - 50);
+    // El hover no movió el inicio: el pulso termina a los 12 s de la selección.
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS + 1);
+    service.update(1000 + OUTLINE_PULSE_DURATION_MS + 17);
     expect(service.isPulsing()).toBe(false);
   });
 

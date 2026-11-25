@@ -364,9 +364,9 @@ describe('ObjectListComponent', () => {
           right: 390,
         });
         el.querySelector<HTMLElement>(
-          '.chip[data-id="pokerTable"]'
+          '.chip[data-id="roundTable"]'
         )!.getBoundingClientRect = rect({ left: 500, right: 640 });
-        fixture.componentRef.setInput('selectedId', 'pokerTable');
+        fixture.componentRef.setInput('selectedId', 'roundTable');
         await fixture.whenStable();
         await Promise.resolve();
         expect(

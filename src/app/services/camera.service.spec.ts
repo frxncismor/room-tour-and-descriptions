@@ -397,13 +397,13 @@ describe('CameraService', () => {
     const aspect = 390 / 844;
 
     /** Piezas que el encuadre inicial debe abarcar (las piezas nuevas del muro del fondo quedan fuera: se ven al caminar). */
-    const FRAMED = ['sofa', 'pokerTable', 'bookshelf'];
+    const FRAMED = ['sofa', 'roundTable', 'bookshelf'];
 
     /** Cajas aproximadas de los 3 muebles (centro x/z de la config). */
     function furnitureBoxes(): Box3[] {
       const sizes: Record<string, { width: number; height: number }> = {
         sofa: { width: 3.6, height: 0.95 },
-        pokerTable: { width: 1.4, height: 0.9 },
+        roundTable: { width: 1.4, height: 0.9 },
         bookshelf: { width: 1.4, height: 2 },
         landscapePainting: { width: 1.21, height: 2.13 },
         succulent: { width: 0.4, height: 0.59 },

@@ -22,7 +22,7 @@ describe('ViewerComponent', () => {
       { id: 'sofa', name: EN.furniture.sofa.name },
       { id: 'succulent', name: EN.furniture.succulent.name },
       { id: 'bookshelf', name: EN.furniture.bookshelf.name },
-      { id: 'pokerTable', name: EN.furniture.pokerTable.name },
+      { id: 'roundTable', name: EN.furniture.roundTable.name },
       { id: 'landscapePainting', name: EN.furniture.landscapePainting.name },
     ]),
     handlePointerSelect: vi.fn(() => Promise.resolve()),
@@ -480,6 +480,82 @@ describe('ViewerComponent', () => {
       state.surfaceTramo.set({ tramo: 1, count: 1 });
       expect(press(button)).toBe(false);
       expect(scene.stepSurfaceSection).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves PageDown / PageUp to scrollable containers and the help dialog (R10-M1)', async () => {
+      const state = TestBed.inject(ViewerStateService);
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      state.selectedKind.set('surface');
+      state.surfaceTramo.set({ tramo: 1, count: 2 });
+      const scroller = document.createElement('div');
+      scroller.style.overflowY = 'auto';
+      Object.defineProperty(scroller, 'scrollHeight', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(scroller, 'clientHeight', { value: 100 });
+      const inner = document.createElement('p');
+      inner.tabIndex = 0;
+      scroller.append(inner);
+      const dialog = document.createElement('app-help-panel');
+      const help = document.createElement('button');
+      dialog.append(help);
+      fixture.nativeElement.append(scroller, dialog);
+      const press = (target: HTMLElement) => {
+        const event = new KeyboardEvent('keydown', {
+          key: 'PageDown',
+          bubbles: true,
+          cancelable: true,
+        });
+        target.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      expect(press(inner)).toBe(false);
+      expect(press(help)).toBe(false);
+      expect(scene.stepSurfaceSection).not.toHaveBeenCalled();
+      // Con el contenido sin desbordar sí se recorren los tramos.
+      Object.defineProperty(scroller, 'scrollHeight', {
+        value: 100,
+        configurable: true,
+      });
+      expect(press(inner)).toBe(true);
+      expect(scene.stepSurfaceSection).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps stepping from a scrollable list right after «View wall» until another key or click (R9-M4, R10-M1)', async () => {
+      const state = TestBed.inject(ViewerStateService);
+      const fixture = TestBed.createComponent(ViewerComponent);
+      await fixture.whenStable();
+      await localeReady();
+      await showList(fixture);
+      const list = fixture.debugElement.query(By.directive(ObjectListComponent))
+        .componentInstance as ObjectListComponent;
+      const scroller = document.createElement('div');
+      scroller.style.overflowY = 'auto';
+      Object.defineProperty(scroller, 'scrollHeight', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(scroller, 'clientHeight', { value: 100 });
+      const button = document.createElement('button');
+      scroller.append(button);
+      fixture.nativeElement.append(scroller);
+      const key = (k: string) => {
+        const event = new KeyboardEvent('keydown', {
+          key: k,
+          bubbles: true,
+          cancelable: true,
+        });
+        button.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      list.viewSurface.emit('wallTv');
+      state.selectedKind.set('surface');
+      state.surfaceTramo.set({ tramo: 1, count: 2 });
+      expect(key('PageDown')).toBe(true);
+      key('ArrowDown'); // otra tecla: la lista vuelve a desplazarse
+      expect(key('PageDown')).toBe(false);
     });
   });
 

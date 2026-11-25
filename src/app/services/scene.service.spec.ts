@@ -325,13 +325,13 @@ describe('SceneService', () => {
   });
 
   it('a partial failure keeps the other models and offers retry', async () => {
-    failing.add('pokerTable');
+    failing.add('roundTable');
     service.initialize(canvas);
     await service.loadAll();
 
     expect(state.loadStatus()).toBe('error');
     expect(state.error()?.code).toBe('model-load-failed');
-    expect(state.error()?.params?.names).toEqual(['pokerTable']);
+    expect(state.error()?.params?.names).toEqual(['roundTable']);
     expect(service.getObjectList()).toHaveLength(OBJECT_COUNT - 1);
     expect(state.sceneReady()).toBe(true);
 
@@ -663,7 +663,7 @@ describe('SceneService', () => {
 
   it('retryLoad(id) reloads only that model', async () => {
     failing.add('sofa');
-    failing.add('pokerTable');
+    failing.add('roundTable');
     service.initialize(canvas);
     await service.loadAll();
     failing.clear();
@@ -1008,7 +1008,7 @@ describe('SceneService', () => {
     });
 
     it('model-load-failed carries ids in params.names, not labels', async () => {
-      failing.add('pokerTable');
+      failing.add('roundTable');
       failing.add('clock');
       textureLoad.mockImplementation(async (path: string) => {
         if (path.includes('/floor/')) throw new Error('404');
@@ -1019,7 +1019,7 @@ describe('SceneService', () => {
       expect(state.error()?.params?.names?.sort()).toEqual([
         'clock',
         'floor',
-        'pokerTable',
+        'roundTable',
       ]);
     });
 

@@ -502,7 +502,7 @@ export const PIECES: readonly PieceConfig[] = buildPieces([
     size: [2.3, 0.5, 2.3],
   },
   {
-    id: 'pokerTable',
+    id: 'roundTable',
     group: 'floor',
     origin: 'existing',
     mount: 'floor',

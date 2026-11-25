@@ -22,10 +22,10 @@ describe('errorText', () => {
     it('translates asset and furniture ids and joins them', () => {
       const text = errorText(messages, locale, {
         code: 'model-load-failed',
-        params: { names: ['pokerTable', 'prints'] },
+        params: { names: ['roundTable', 'prints'] },
       });
       expect(text.toLowerCase()).toContain(
-        messages.furniture.pokerTable.name.toLowerCase()
+        messages.furniture.roundTable.name.toLowerCase()
       );
       expect(text.toLowerCase()).toContain(
         messages.assets.prints.toLowerCase()
@@ -43,7 +43,7 @@ describe('errorText', () => {
   it('EN and ES lists use their own conjunction', () => {
     const error = {
       code: 'model-load-failed',
-      params: { names: ['pokerTable', 'prints'] },
+      params: { names: ['roundTable', 'prints'] },
     };
     expect(errorText(EN, 'en', error)).toBe(
       'Could not load: round table and wall prints.'

@@ -128,7 +128,7 @@ export const EN = {
         'Corner sectional with a chaise, four back cushions and a separate ottoman, in a muted terracotta fabric. It anchors the seating area on the left.',
       details: 'Model: procedural, built for this project.',
     },
-    pokerTable: {
+    roundTable: {
       name: 'Round table',
       description:
         'Round pedestal table in dark stained wood, with a turned column and four curved legs. It stands on the right, opposite the sofa.',
